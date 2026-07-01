@@ -8,3 +8,4 @@ coverage
 *.tsbuildinfo
 apps/admin/.vite
 packages/database/prisma/dev.db
+docs/real-events.local.csv

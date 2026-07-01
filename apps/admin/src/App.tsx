@@ -291,9 +291,30 @@ function EventsPage() {
   useEffect(loadEvents, [query]);
 
   const changeStatus = (event: AdminEvent, path: string, title: string) => {
+    const publishChecks = path === 'publish' ? buildMiniappPublishChecks({ ...event }) : null;
     Modal.confirm({
       title,
-      content: `确认对「${event.eventName}」执行该操作？该操作会写入操作日志。`,
+      content: (
+        <Space direction="vertical" size={12}>
+          <div>确认对「{event.eventName}」执行该操作？该操作会写入操作日志。</div>
+          {publishChecks ? (
+            <Alert
+              type={publishChecks.canPublish ? 'info' : 'warning'}
+              showIcon
+              message={`小程序发布前检查：${publishChecks.canPublish ? '当前可以发布' : '当前不建议发布'}`}
+              description={
+                <Space wrap>
+                  {publishChecks.checks.map((item) => (
+                    <Tag key={item.label} color={item.ok ? 'green' : 'orange'}>
+                      {item.label}：{item.ok ? '已具备' : '待补充/需复核'}
+                    </Tag>
+                  ))}
+                </Space>
+              }
+            />
+          ) : null}
+        </Space>
+      ),
       okText: '确认',
       cancelText: '取消',
       onOk: async () => {
@@ -748,6 +769,32 @@ function ChecklistEditor() {
 }
 
 function MiniappPublishChecks({ values }: { values: Record<string, unknown> }) {
+  const { checks, canPublish } = buildMiniappPublishChecks(values);
+
+  return (
+    <Card size="small" className="miniapp-check-card" title="小程序发布前检查">
+      <Space direction="vertical" size={8}>
+        <Alert
+          type="info"
+          showIcon
+          message="仅作为人工运营发布前提示，不替代后端发布校验，不会自动发布。"
+        />
+        <Space wrap>
+          {checks.map((item) => (
+            <Tag key={item.label} color={item.ok ? 'green' : 'orange'}>
+              {item.label}：{item.ok ? '已具备' : '待补充/需复核'}
+            </Tag>
+          ))}
+          <Tag color={canPublish ? 'green' : 'red'}>
+            当前是否可发布：{canPublish ? '可以' : '不建议'}
+          </Tag>
+        </Space>
+      </Space>
+    </Card>
+  );
+}
+
+function buildMiniappPublishChecks(values: Record<string, unknown>) {
   const judgementReasons = toTextList(values.judgementReasons);
   const checklistItems = Array.isArray(values.checklistItems) ? values.checklistItems : [];
   const textForRiskCheck = [
@@ -776,27 +823,7 @@ function MiniappPublishChecks({ values }: { values: Record<string, unknown> }) {
   ];
   const canPublish = checks.every((item) => item.ok);
 
-  return (
-    <Card size="small" className="miniapp-check-card" title="小程序发布前检查">
-      <Space direction="vertical" size={8}>
-        <Alert
-          type="info"
-          showIcon
-          message="仅作为人工运营发布前提示，不替代后端发布校验，不会自动发布。"
-        />
-        <Space wrap>
-          {checks.map((item) => (
-            <Tag key={item.label} color={item.ok ? 'green' : 'orange'}>
-              {item.label}：{item.ok ? '已具备' : '待补充/需复核'}
-            </Tag>
-          ))}
-          <Tag color={canPublish ? 'green' : 'red'}>
-            当前是否可发布：{canPublish ? '可以' : '不建议'}
-          </Tag>
-        </Space>
-      </Space>
-    </Card>
-  );
+  return { checks, canPublish };
 }
 
 function QualityPage() {

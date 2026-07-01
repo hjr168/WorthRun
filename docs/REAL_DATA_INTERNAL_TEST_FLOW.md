@@ -22,6 +22,15 @@
 pnpm db:import-events -- ./docs/real-events.local.csv --dry-run
 ```
 
+dry-run 也需要数据库连接，因为脚本会读取现有赛事，并按 `eventName + city + eventDate` 判断每一行是“将新增”还是“将更新”。运行 dry-run 前需要先启动 PostgreSQL，确认 `.env` 中的 `DATABASE_URL` 指向可访问的数据库，并执行迁移：
+
+```bash
+docker compose -p worth-running up -d postgres
+pnpm db:migrate
+```
+
+如果 dry-run 报数据库连接失败，先检查 `.env`、PostgreSQL 是否已启动、数据库地址和端口是否正确，再重新执行 dry-run。
+
 检查输出中的将新增、将更新和失败行。失败行必须回到 CSV 修正后再次 dry-run。
 
 ## 3. 正式导入
