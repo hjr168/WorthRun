@@ -1,0 +1,32 @@
+<view class="page">
+  <view class="filters">
+    <input class="search" value="{{search}}" placeholder="搜索赛事名称" confirm-type="search" bindinput="onSearch" bindconfirm="submitSearch" />
+    <button class="primary-button search-button" bindtap="submitSearch">搜索</button>
+    <picker range="{{cities}}" value="{{cityIndex}}" bindchange="onCityChange">
+      <view class="filter-item">城市：{{cities[cityIndex]}}</view>
+    </picker>
+    <picker range="{{distances}}" value="{{distanceIndex}}" bindchange="onDistanceChange">
+      <view class="filter-item">距离：{{distances[distanceIndex]}}</view>
+    </picker>
+    <picker range="{{signupLabels}}" value="{{signupIndex}}" bindchange="onSignupChange">
+      <view class="filter-item">报名：{{signupLabels[signupIndex]}}</view>
+    </picker>
+    <picker range="{{judgementLabels}}" value="{{judgementIndex}}" bindchange="onJudgementChange">
+      <view class="filter-item">判断：{{judgementLabels[judgementIndex]}}</view>
+    </picker>
+  </view>
+
+  <loading-state wx:if="{{loading}}" text="正在加载赛事" />
+  <empty-state wx:elif="{{error}}" title="请求失败" description="{{error}}" />
+  <block wx:else>
+    <event-card
+      wx:for="{{events}}"
+      wx:key="id"
+      class="card-gap"
+      event="{{item}}"
+      bind:open="openEvent"
+      bind:favorite="toggleFavorite"
+    />
+    <empty-state wx:if="{{!events.length}}" title="暂无赛事" description="换个城市、距离或报名状态再试试" />
+  </block>
+</view>

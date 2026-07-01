@@ -1,0 +1,14 @@
+<view class="page">
+  <picker range="{{groups}}" value="{{groupIndex}}" bindchange="onGroupChange">
+    <view class="picker-box">类型：{{groups[groupIndex]}}</view>
+  </picker>
+
+  <view class="section">
+    <loading-state wx:if="{{loading}}" text="正在加载清单" />
+    <empty-state wx:elif="{{error}}" title="请求失败" description="{{error}}" />
+    <block wx:else>
+      <checklist-block items="{{items}}" />
+      <empty-state wx:if="{{!items.length}}" title="暂无清单" description="可以先按官方报名页逐项确认" />
+    </block>
+  </view>
+</view>

@@ -1,0 +1,17 @@
+<view class="page">
+  <loading-state wx:if="{{loading}}" text="正在加载收藏" />
+  <empty-state wx:elif="{{error}}" title="请求失败" description="{{error}}" />
+  <block wx:else>
+    <event-card
+      wx:for="{{events}}"
+      wx:key="id"
+      class="card-gap"
+      event="{{item}}"
+      bind:open="openEvent"
+      bind:favorite="toggleFavorite"
+    />
+    <view wx:if="{{!events.length}}" bindtap="openEvents">
+      <empty-state title="还没有收藏赛事" description="去找一场值得跑的比赛" />
+    </view>
+  </block>
+</view>

@@ -1,0 +1,22 @@
+<view class="event-card" bindtap="onOpen">
+  <view class="event-head">
+    <view class="event-main">
+      <view class="event-name">{{event.eventName}}</view>
+      <view class="event-meta">{{event.city}} · {{dateText}} · {{distanceText}}</view>
+    </view>
+    <button wx:if="{{showFavorite}}" class="favorite {{event.isFavorite ? 'active' : ''}}" catchtap="onFavorite">
+      {{event.isFavorite ? '已藏' : '收藏'}}
+    </button>
+  </view>
+  <view class="status-row">
+    <text class="status">{{signupText}}</text>
+    <text class="judgement">{{judgementText}}</text>
+  </view>
+  <view wx:if="{{event.judgementSummary}}" class="summary">{{event.judgementSummary}}</view>
+  <view wx:if="{{reasons.length}}" class="reasons">
+    <view wx:for="{{reasons}}" wx:key="*this" class="reason">· {{item}}</view>
+  </view>
+  <view wx:if="{{tags.length}}" class="tag-row">
+    <text wx:for="{{tags}}" wx:key="*this" class="tag">{{item}}</text>
+  </view>
+</view>

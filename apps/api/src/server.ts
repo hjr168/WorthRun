@@ -66,7 +66,10 @@ const dateOnlySchema = z
   });
 
 const optionalDateTimeSchema = z
-  .preprocess((value) => (value === '' || value === undefined ? null : value), z.string().nullable())
+  .preprocess(
+    (value) => (value === '' || value === undefined ? null : value),
+    z.string().nullable(),
+  )
   .refine((value) => value === null || !Number.isNaN(new Date(value).getTime()), {
     message: '日期时间格式无效',
   });
@@ -154,6 +157,84 @@ const publicFeedbackSchema = z.object({
   content: z.string().trim().min(1, '反馈内容不能为空').max(2000, '反馈内容过长'),
 });
 
+const queryStringSchema = z.preprocess((value) => {
+  if (Array.isArray(value)) return value[0];
+  if (value === undefined || value === '') return undefined;
+  return String(value).trim();
+}, z.string().optional());
+
+const paginationQuerySchema = z.object({
+  page: z.coerce.number().int('page 必须是整数').min(1, 'page 必须大于等于 1').default(1),
+  pageSize: z.coerce
+    .number()
+    .int('pageSize 必须是整数')
+    .min(1, 'pageSize 必须大于等于 1')
+    .max(100, 'pageSize 不能超过 100')
+    .default(20),
+});
+
+const publicEventsQuerySchema = paginationQuerySchema.extend({
+  search: queryStringSchema,
+  city: queryStringSchema,
+  distance: queryStringSchema,
+  signupStatus: z.enum(signupStatusValues).optional(),
+  runJudgement: z.enum(runJudgementValues).optional(),
+});
+
+const adminEventsQuerySchema = paginationQuerySchema.extend({
+  search: queryStringSchema,
+  city: queryStringSchema,
+  signupStatus: z.enum(signupStatusValues).optional(),
+  publishStatus: z.enum(publishStatusValues).optional(),
+  infoStatus: z.enum(infoStatusValues).optional(),
+  runJudgement: z.enum(runJudgementValues).optional(),
+});
+
+const adminFeedbackQuerySchema = paginationQuerySchema.extend({
+  status: z.enum(feedbackStatusValues).optional(),
+});
+
+const operationLogsQuerySchema = paginationQuerySchema.extend({
+  targetType: queryStringSchema,
+  targetId: queryStringSchema,
+  action: queryStringSchema,
+});
+
+type PublicEventsQuery = {
+  page: number;
+  pageSize: number;
+  search?: string;
+  city?: string;
+  distance?: string;
+  signupStatus?: SignupStatus;
+  runJudgement?: RunJudgement;
+};
+
+type AdminEventsQuery = {
+  page: number;
+  pageSize: number;
+  search?: string;
+  city?: string;
+  signupStatus?: SignupStatus;
+  publishStatus?: PublishStatus;
+  infoStatus?: InfoStatus;
+  runJudgement?: RunJudgement;
+};
+
+type AdminFeedbackQuery = {
+  page: number;
+  pageSize: number;
+  status?: FeedbackStatus;
+};
+
+type OperationLogsQuery = {
+  page: number;
+  pageSize: number;
+  targetType?: string;
+  targetId?: string;
+  action?: string;
+};
+
 function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
   return (req: Request, res: Response, next: NextFunction) => {
     fn(req, res, next).catch(next);
@@ -164,10 +245,8 @@ function validateBody<T>(schema: z.Schema<T>, value: unknown) {
   return schema.parse(value);
 }
 
-function parsePagination(req: Request) {
-  const page = Math.max(Number(req.query.page || 1), 1);
-  const pageSize = Math.min(Math.max(Number(req.query.pageSize || 20), 1), 100);
-  return { page, pageSize };
+function validateQuery<T>(schema: z.Schema<T>, value: unknown) {
+  return schema.parse(value);
 }
 
 function parseDate(value: string | null) {
@@ -333,7 +412,11 @@ app.post(
   asyncHandler(async (req, res) => {
     const input = validateBody(loginSchema, req.body);
     const admin = await prisma.adminUser.findUnique({ where: { username: input.username } });
-    if (!admin || admin.status !== 'active' || !verifyPassword(input.password, admin.passwordHash)) {
+    if (
+      !admin ||
+      admin.status !== 'active' ||
+      !verifyPassword(input.password, admin.passwordHash)
+    ) {
       throw new HttpError(401, '用户名或密码错误');
     }
     const token = signPayload({
@@ -343,7 +426,12 @@ app.post(
     });
     res.json({
       token,
-      admin: { id: admin.id, username: admin.username, displayName: admin.displayName, role: admin.role },
+      admin: {
+        id: admin.id,
+        username: admin.username,
+        displayName: admin.displayName,
+        role: admin.role,
+      },
     });
   }),
 );
@@ -382,15 +470,16 @@ app.get(
   '/api/admin/events',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
-    const { page, pageSize } = parsePagination(req);
+    const query = validateQuery(adminEventsQuerySchema, req.query) as AdminEventsQuery;
+    const { page, pageSize } = query;
     const where: Prisma.EventWhereInput = {};
 
-    if (req.query.search) where.eventName = { contains: String(req.query.search), mode: 'insensitive' };
-    if (req.query.city) where.city = String(req.query.city);
-    if (req.query.signupStatus) where.signupStatus = String(req.query.signupStatus) as SignupStatus;
-    if (req.query.publishStatus) where.publishStatus = String(req.query.publishStatus) as PublishStatus;
-    if (req.query.infoStatus) where.infoStatus = String(req.query.infoStatus) as InfoStatus;
-    if (req.query.runJudgement) where.runJudgement = String(req.query.runJudgement) as RunJudgement;
+    if (query.search) where.eventName = { contains: query.search, mode: 'insensitive' };
+    if (query.city) where.city = query.city;
+    if (query.signupStatus) where.signupStatus = query.signupStatus;
+    if (query.publishStatus) where.publishStatus = query.publishStatus;
+    if (query.infoStatus) where.infoStatus = query.infoStatus;
+    if (query.runJudgement) where.runJudgement = query.runJudgement;
 
     const [items, total] = await Promise.all([
       prisma.event.findMany({
@@ -488,7 +577,7 @@ app.put(
             })),
           },
           eventTags: {
-          create: (input.eventTags || []).map((tag) => ({
+            create: (input.eventTags || []).map((tag) => ({
               tagName: tag.tagName,
               tagType: tag.tagType,
             })),
@@ -567,13 +656,22 @@ app.get(
   '/api/admin/feedback',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
-    const status = req.query.status ? (String(req.query.status) as FeedbackStatus) : undefined;
-    const items = await prisma.feedback.findMany({
-      where: { status },
-      include: { event: { select: { id: true, eventName: true, city: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json({ items });
+    const query = validateQuery(adminFeedbackQuerySchema, req.query) as AdminFeedbackQuery;
+    const { page, pageSize, status } = query;
+    const where: Prisma.FeedbackWhereInput = {};
+    if (status) where.status = status;
+
+    const [items, total] = await Promise.all([
+      prisma.feedback.findMany({
+        where,
+        include: { event: { select: { id: true, eventName: true, city: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.feedback.count({ where }),
+    ]);
+    res.json({ items, total, page, pageSize });
   }),
 );
 
@@ -623,11 +721,12 @@ app.get(
   '/api/admin/operation-logs',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
-    const { page, pageSize } = parsePagination(req);
+    const query = validateQuery(operationLogsQuerySchema, req.query) as OperationLogsQuery;
+    const { page, pageSize } = query;
     const where: Prisma.AdminOperationLogWhereInput = {};
-    if (req.query.targetType) where.targetType = String(req.query.targetType);
-    if (req.query.targetId) where.targetId = String(req.query.targetId);
-    if (req.query.action) where.action = String(req.query.action);
+    if (query.targetType) where.targetType = query.targetType;
+    if (query.targetId) where.targetId = query.targetId;
+    if (query.action) where.action = query.action;
     const [items, total] = await Promise.all([
       prisma.adminOperationLog.findMany({
         where,
@@ -683,13 +782,14 @@ app.put(
 app.get(
   '/api/events',
   asyncHandler(async (req, res) => {
-    const { page, pageSize } = parsePagination(req);
+    const query = validateQuery(publicEventsQuerySchema, req.query) as PublicEventsQuery;
+    const { page, pageSize } = query;
     const where: Prisma.EventWhereInput = { publishStatus: 'published' };
-    if (req.query.city) where.city = String(req.query.city);
-    if (req.query.distance) where.distanceItems = { has: String(req.query.distance) };
-    if (req.query.signupStatus) where.signupStatus = String(req.query.signupStatus) as SignupStatus;
-    if (req.query.runJudgement) where.runJudgement = String(req.query.runJudgement) as RunJudgement;
-    if (req.query.search) where.eventName = { contains: String(req.query.search), mode: 'insensitive' };
+    if (query.city) where.city = query.city;
+    if (query.distance) where.distanceItems = { has: query.distance };
+    if (query.signupStatus) where.signupStatus = query.signupStatus;
+    if (query.runJudgement) where.runJudgement = query.runJudgement;
+    if (query.search) where.eventName = { contains: query.search, mode: 'insensitive' };
 
     const [items, total] = await Promise.all([
       prisma.event.findMany({
@@ -746,7 +846,9 @@ app.post(
 app.get(
   '/api/preferences/:userKey',
   asyncHandler(async (req, res) => {
-    const preference = await prisma.userPreference.findUnique({ where: { userKey: req.params.userKey } });
+    const preference = await prisma.userPreference.findUnique({
+      where: { userKey: req.params.userKey },
+    });
     if (!preference) throw new HttpError(404, '偏好不存在');
     res.json(preference);
   }),
@@ -822,7 +924,12 @@ app.get('/api/checklist/templates', (_req, res) => {
       { groupName: '赛事服务', itemName: '领物时间', itemStatus: 'pending_verify', sortOrder: 4 },
       { groupName: '路线信息', itemName: '官方路线', itemStatus: 'pending_verify', sortOrder: 5 },
       { groupName: '风险提示', itemName: '天气变化', itemStatus: 'pending_verify', sortOrder: 6 },
-      { groupName: '风险提示', itemName: '赛事变更公告', itemStatus: 'pending_verify', sortOrder: 7 },
+      {
+        groupName: '风险提示',
+        itemName: '赛事变更公告',
+        itemStatus: 'pending_verify',
+        sortOrder: 7,
+      },
     ],
   });
 });

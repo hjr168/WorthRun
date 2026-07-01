@@ -1,5 +1,12 @@
 import { pbkdf2Sync, randomBytes } from 'node:crypto';
-import { PrismaClient, RunJudgement, SignupStatus, SourceLevel } from '@prisma/client';
+import {
+  InfoStatus,
+  PrismaClient,
+  PublishStatus,
+  RunJudgement,
+  SignupStatus,
+  SourceLevel,
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -155,42 +162,65 @@ async function main() {
   });
 
   for (const event of events) {
-    const created = await prisma.event.create({
-      data: {
-        ...event,
-        eventDate: new Date(event.eventDate),
-        infoStatus: event.runJudgement === RunJudgement.unverified ? 'pending_verify' : 'verified',
-        publishStatus: 'draft',
-        fieldConfidence: {
-          signupDeadline: 'pending_verify',
-          lottery: 'pending_verify',
-          cutoffTime: 'pending_verify',
-          route: 'pending_verify',
-        },
-        checklistItems: {
-          create: checklist.map(([groupName, itemName, itemStatus], index) => ({
-            groupName,
-            itemName,
-            itemStatus,
-            sortOrder: index + 1,
-          })),
-        },
-        eventTags: {
-          create: event.tags.map((tagName) => ({
-            tagName,
-            tagType: 'experience',
-          })),
-        },
+    const eventDate = new Date(event.eventDate);
+    const eventData = {
+      ...event,
+      eventDate,
+      infoStatus:
+        event.runJudgement === RunJudgement.unverified
+          ? InfoStatus.pending_verify
+          : InfoStatus.verified,
+      publishStatus: PublishStatus.draft,
+      fieldConfidence: {
+        signupDeadline: 'pending_verify',
+        lottery: 'pending_verify',
+        cutoffTime: 'pending_verify',
+        route: 'pending_verify',
       },
+      checklistItems: {
+        create: checklist.map(([groupName, itemName, itemStatus], index) => ({
+          groupName,
+          itemName,
+          itemStatus,
+          sortOrder: index + 1,
+        })),
+      },
+      eventTags: {
+        create: event.tags.map((tagName) => ({
+          tagName,
+          tagType: 'experience',
+        })),
+      },
+    };
+
+    const existing = await prisma.event.findFirst({
+      where: {
+        eventName: event.eventName,
+        city: event.city,
+        eventDate,
+      },
+    });
+
+    const saved = await prisma.$transaction(async (tx) => {
+      if (!existing) {
+        return tx.event.create({ data: eventData });
+      }
+
+      await tx.eventChecklistItem.deleteMany({ where: { eventId: existing.id } });
+      await tx.eventTag.deleteMany({ where: { eventId: existing.id } });
+      return tx.event.update({
+        where: { id: existing.id },
+        data: eventData,
+      });
     });
 
     await prisma.adminOperationLog.create({
       data: {
         adminUserId: 'seed-admin',
-        action: 'event.seed',
+        action: existing ? 'event.seed.update' : 'event.seed.create',
         targetType: 'events',
-        targetId: created.id,
-        afterValue: { eventName: created.eventName, city: created.city },
+        targetId: saved.id,
+        afterValue: { eventName: saved.eventName, city: saved.city },
         note: '导入第一阶段种子赛事',
       },
     });

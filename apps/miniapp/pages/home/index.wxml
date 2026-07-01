@@ -1,0 +1,54 @@
+<view class="page">
+  <view class="hero">
+    <view class="hero-title">近期值得关注的赛事</view>
+    <view class="hero-sub">先看公开赛事，再进详情核对报名信息。</view>
+  </view>
+
+  <loading-state wx:if="{{loading}}" text="正在加载赛事" />
+  <empty-state wx:elif="{{error}}" title="请求失败" description="{{error}}" />
+
+  <block wx:else>
+    <view wx:if="{{!preference}}" class="card preference-card">
+      <view class="preference-title">先选择城市和距离，帮你筛出更适合的赛事</view>
+      <view class="actions">
+        <button class="primary-button" bindtap="openPreference">设置跑赛偏好</button>
+        <button class="secondary-button" bindtap="openEvents">先随便看看</button>
+      </view>
+    </view>
+    <view wx:else class="card preference-card" bindtap="openPreference">
+      <view class="preference-title">偏好摘要</view>
+      <view class="muted">{{preferenceText}}</view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">今日跑前判断</view>
+      <event-card
+        wx:for="{{events}}"
+        wx:key="id"
+        class="card-gap"
+        event="{{item}}"
+        bind:open="openEvent"
+        bind:favorite="toggleFavorite"
+      />
+      <empty-state wx:if="{{!events.length}}" title="暂无赛事" description="后台发布赛事后会出现在这里" />
+    </view>
+
+    <view class="section">
+      <view class="section-title">即将截止</view>
+      <event-card
+        wx:for="{{closingEvents}}"
+        wx:key="id"
+        class="card-gap"
+        event="{{item}}"
+        bind:open="openEvent"
+        bind:favorite="toggleFavorite"
+      />
+      <empty-state wx:if="{{!closingEvents.length}}" title="暂无即将截止赛事" description="可以先到赛事列表继续筛选" />
+    </view>
+
+    <view class="section tool-grid">
+      <button class="secondary-button" bindtap="openEvents">赛事列表</button>
+      <button class="secondary-button" bindtap="openTools">工具</button>
+    </view>
+  </block>
+</view>

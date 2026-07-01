@@ -1,0 +1,20 @@
+.empty {
+  border: 1rpx dashed #cbd5e1;
+  border-radius: 12rpx;
+  background: #ffffff;
+  padding: 48rpx 28rpx;
+  text-align: center;
+}
+
+.title {
+  color: #111827;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.description {
+  margin-top: 12rpx;
+  color: #64748b;
+  font-size: 26rpx;
+  line-height: 1.5;
+}

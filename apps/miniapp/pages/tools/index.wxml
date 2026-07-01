@@ -1,0 +1,10 @@
+<view class="page">
+  <view class="tool-card" bindtap="openPace">
+    <view class="tool-title">配速计算器</view>
+    <view class="muted">根据距离和目标完赛时间估算平均配速。</view>
+  </view>
+  <view class="tool-card" bindtap="openChecklist">
+    <view class="tool-title">赛前清单</view>
+    <view class="muted">查看报名、领物、装备和风险确认项。</view>
+  </view>
+</view>

@@ -1,0 +1,33 @@
+<view class="page">
+  <view class="card">
+    <view class="section-title">匿名标识</view>
+    <view class="muted">V0.1 不强制微信登录，收藏、偏好和反馈使用本地匿名标识保存。</view>
+    <view class="user-key">{{shortUserKey}}</view>
+  </view>
+
+  <view class="card section" bindtap="openPreferences">
+    <view class="section-title">偏好摘要</view>
+    <view class="muted">{{preferenceText}}</view>
+  </view>
+
+  <view class="card section" bindtap="openNextEvent">
+    <view class="section-title">我的下一场</view>
+    <view wx:if="{{nextEvent}}">
+      <view class="next-name">{{nextEvent.eventName}}</view>
+      <view class="muted">{{nextEvent.city}} · {{nextEventDate}}</view>
+    </view>
+    <view wx:else class="muted">先收藏一场赛事，这里会显示最近关注项。</view>
+  </view>
+
+  <view class="menu">
+    <button class="secondary-button" bindtap="openFavorites">我的收藏</button>
+    <button class="secondary-button" bindtap="openFeedback">我的反馈</button>
+    <button class="secondary-button" bindtap="openPreferences">偏好设置</button>
+    <button class="secondary-button" bindtap="openTools">工具</button>
+  </view>
+
+  <view class="card section">
+    <view class="section-title">关于与合规说明</view>
+    <view class="muted">{{complianceNotice}}</view>
+  </view>
+</view>

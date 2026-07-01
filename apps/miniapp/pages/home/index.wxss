@@ -1,0 +1,41 @@
+.hero {
+  border-radius: 12rpx;
+  background: #1e293b;
+  padding: 34rpx 28rpx;
+}
+
+.hero-title {
+  color: #ffffff;
+  font-size: 40rpx;
+  font-weight: 800;
+}
+
+.hero-sub {
+  margin-top: 12rpx;
+  color: #cbd5e1;
+  font-size: 26rpx;
+}
+
+.preference-card {
+  margin-top: 24rpx;
+}
+
+.preference-title {
+  margin-bottom: 14rpx;
+  color: #111827;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.actions,
+.tool-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+}
+
+.card-gap {
+  display: block;
+  margin-bottom: 16rpx;
+}

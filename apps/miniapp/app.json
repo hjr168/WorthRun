@@ -1,0 +1,42 @@
+{
+  "pages": [
+    "pages/home/index",
+    "pages/events/index",
+    "pages/event-detail/index",
+    "pages/preferences/index",
+    "pages/mine/index",
+    "pages/favorites/index",
+    "pages/feedback/index",
+    "pages/tools/index",
+    "pages/pace/index",
+    "pages/checklist/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "哪场值得跑",
+    "navigationBarBackgroundColor": "#1E293B",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F8FAFC"
+  },
+  "tabBar": {
+    "color": "#64748B",
+    "selectedColor": "#2A9D8F",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/events/index",
+        "text": "赛事"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

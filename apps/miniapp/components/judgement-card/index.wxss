@@ -1,0 +1,32 @@
+.judgement-card {
+  border: 1rpx solid #cce9e5;
+  border-radius: 12rpx;
+  background: #f3fbfa;
+  padding: 24rpx;
+}
+
+.label {
+  color: #2a9d8f;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.summary {
+  margin-top: 12rpx;
+  color: #111827;
+  font-size: 28rpx;
+  line-height: 1.5;
+}
+
+.reason,
+.notice {
+  margin-top: 10rpx;
+  color: #64748b;
+  font-size: 25rpx;
+  line-height: 1.5;
+}
+
+.notice {
+  border-top: 1rpx solid #cce9e5;
+  padding-top: 14rpx;
+}

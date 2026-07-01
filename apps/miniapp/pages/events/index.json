@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "赛事列表",
+  "usingComponents": {
+    "event-card": "../../components/event-card/index",
+    "empty-state": "../../components/empty-state/index",
+    "loading-state": "../../components/loading-state/index"
+  }
+}

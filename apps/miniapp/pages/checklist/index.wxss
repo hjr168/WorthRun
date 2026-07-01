@@ -1,0 +1,8 @@
+.picker-box {
+  border: 1rpx solid #e2e8f0;
+  border-radius: 8rpx;
+  background: #ffffff;
+  padding: 18rpx;
+  color: #1e293b;
+  font-size: 28rpx;
+}

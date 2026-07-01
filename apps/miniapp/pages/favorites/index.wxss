@@ -1,0 +1,4 @@
+.card-gap {
+  display: block;
+  margin-bottom: 16rpx;
+}

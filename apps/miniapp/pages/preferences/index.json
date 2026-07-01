@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "跑赛偏好",
+  "usingComponents": {
+    "loading-state": "../../components/loading-state/index"
+  }
+}

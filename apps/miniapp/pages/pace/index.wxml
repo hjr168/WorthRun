@@ -1,0 +1,30 @@
+<view class="page">
+  <view class="card">
+    <view class="field">
+      <view class="field-label">距离（公里）</view>
+      <input class="input" type="digit" value="{{distance}}" bindinput="onDistance" />
+    </view>
+    <view class="time-grid">
+      <view>
+        <view class="field-label">小时</view>
+        <input class="input" type="number" value="{{hours}}" bindinput="onHours" />
+      </view>
+      <view>
+        <view class="field-label">分钟</view>
+        <input class="input" type="number" value="{{minutes}}" bindinput="onMinutes" />
+      </view>
+      <view>
+        <view class="field-label">秒</view>
+        <input class="input" type="number" value="{{seconds}}" bindinput="onSeconds" />
+      </view>
+    </view>
+    <button class="primary-button calc" bindtap="calculate">计算</button>
+  </view>
+
+  <view class="card section">
+    <view class="section-title">平均配速</view>
+    <view class="pace">{{paceText || '待计算'}}</view>
+    <view class="section-title split-title">分段参考</view>
+    <view wx:for="{{splits}}" wx:key="*this" class="split">{{item}}</view>
+  </view>
+</view>

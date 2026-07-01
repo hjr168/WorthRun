@@ -1,0 +1,20 @@
+.form-card {
+  border: 1rpx solid #e2e8f0;
+  border-radius: 12rpx;
+  background: #ffffff;
+  padding: 24rpx;
+}
+
+.field {
+  margin-bottom: 26rpx;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.actions {
+  display: grid;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}

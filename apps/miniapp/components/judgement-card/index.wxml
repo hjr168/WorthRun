@@ -1,0 +1,8 @@
+<view class="judgement-card">
+  <view class="label">{{judgementText}}</view>
+  <view class="summary">{{event.judgementSummary || '信息仍需结合官方渠道确认。'}}</view>
+  <view wx:if="{{reasons.length}}" class="reasons">
+    <view wx:for="{{reasons}}" wx:key="*this" class="reason">· {{item}}</view>
+  </view>
+  <view class="notice">{{notice}}</view>
+</view>
