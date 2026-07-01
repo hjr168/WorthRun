@@ -50,6 +50,20 @@
   white-space: nowrap;
 }
 
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.reset-button {
+  width: 176rpx;
+  min-height: 64rpx;
+  line-height: 64rpx;
+  padding: 0;
+  color: #475569;
+  font-size: 25rpx;
+}
+
 .card-gap {
   display: block;
   margin-bottom: 16rpx;

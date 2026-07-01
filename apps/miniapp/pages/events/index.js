@@ -38,13 +38,19 @@ Page({
         total: 0,
         hasMore: true,
         loadingMore: false,
+        didInitialLoad: false,
+    },
+    onLoad() {
+        this.load(true);
     },
     onShow() {
+        if (!this.data.didInitialLoad)
+            return;
         this.load(true);
     },
     async load(reset = false) {
         const userKey = (0, user_1.getUserKey)();
-        if (this.data.loadingMore || (!reset && !this.data.hasMore))
+        if (!reset && (this.data.loadingMore || !this.data.hasMore))
             return;
         const page = reset ? 1 : this.data.page + 1;
         this.setData(Object.assign({ loading: reset, loadingMore: !reset, error: '', userKey,
@@ -69,6 +75,7 @@ Page({
             this.setData({
                 loading: false,
                 loadingMore: false,
+                didInitialLoad: true,
                 total: eventRes.total,
                 hasMore: events.length < eventRes.total,
                 events,
@@ -78,6 +85,7 @@ Page({
             this.setData({
                 loading: false,
                 loadingMore: false,
+                didInitialLoad: true,
                 error: reset ? error.message || '网络异常' : this.data.error,
             });
             wx.showToast({ title: reset ? '网络异常' : '加载失败', icon: 'none' });
@@ -97,6 +105,16 @@ Page({
         this.setData({ search: event.detail.value });
     },
     submitSearch() {
+        this.load(true);
+    },
+    resetFilters() {
+        this.setData({
+            search: '',
+            cityIndex: 0,
+            distanceIndex: 0,
+            signupIndex: 0,
+            judgementIndex: 0,
+        });
         this.load(true);
     },
     onCityChange(event) {

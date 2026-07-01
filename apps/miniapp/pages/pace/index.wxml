@@ -2,20 +2,20 @@
   <view class="card">
     <view class="field">
       <view class="field-label">距离（公里）</view>
-      <input class="input" type="digit" value="{{distance}}" bindinput="onDistance" />
+      <input class="input pace-input distance-input" type="digit" value="{{distance}}" bindinput="onDistance" />
     </view>
     <view class="time-grid">
-      <view>
+      <view class="time-field">
         <view class="field-label">小时</view>
-        <input class="input" type="number" value="{{hours}}" bindinput="onHours" />
+        <input class="input pace-input time-input" type="number" value="{{hours}}" bindinput="onHours" />
       </view>
-      <view>
+      <view class="time-field">
         <view class="field-label">分钟</view>
-        <input class="input" type="number" value="{{minutes}}" bindinput="onMinutes" />
+        <input class="input pace-input time-input" type="number" value="{{minutes}}" bindinput="onMinutes" />
       </view>
-      <view>
+      <view class="time-field">
         <view class="field-label">秒</view>
-        <input class="input" type="number" value="{{seconds}}" bindinput="onSeconds" />
+        <input class="input pace-input time-input" type="number" value="{{seconds}}" bindinput="onSeconds" />
       </view>
     </view>
     <button class="primary-button calc" bindtap="calculate">计算</button>

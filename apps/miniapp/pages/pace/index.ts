@@ -27,6 +27,23 @@ Page({
     const seconds = Math.round(totalSeconds % 60);
     return `${minutes}'${String(seconds).padStart(2, '0')}"/km`;
   },
+  buildSplitDistances(distance: number) {
+    if (distance <= 1) return [distance];
+
+    const splitDistances = [1];
+    for (let km = 5; km < distance; km += 5) {
+      splitDistances.push(km);
+    }
+
+    const lastDistance = splitDistances[splitDistances.length - 1];
+    if (lastDistance !== distance) {
+      splitDistances.push(distance);
+    }
+    return splitDistances;
+  },
+  formatDistanceLabel(distance: number) {
+    return `${Number(distance.toFixed(4))} km`;
+  },
   calculate() {
     const distance = Number(this.data.distance);
     const totalSeconds =
@@ -38,9 +55,9 @@ Page({
       return;
     }
     const perKm = totalSeconds / distance;
-    const splits = [1, 5, 10, 21.0975, 42.195]
-      .filter((km) => km <= distance)
-      .map((km) => `${km} km：${this.formatClock(perKm * km)}`);
+    const splits = this.buildSplitDistances(distance).map(
+      (km) => `${this.formatDistanceLabel(km)}：${this.formatClock(perKm * km)}`,
+    );
     this.setData({ paceText: this.formatSeconds(perKm), splits });
   },
   formatClock(seconds: number) {

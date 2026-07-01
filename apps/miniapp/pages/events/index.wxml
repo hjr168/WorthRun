@@ -18,6 +18,9 @@
         <view class="filter-item">判断：{{judgementLabels[judgementIndex]}}</view>
       </picker>
     </view>
+    <view class="filter-actions">
+      <button class="secondary-button reset-button" bindtap="resetFilters">重置筛选</button>
+    </view>
   </view>
 
   <loading-state wx:if="{{loading}}" text="正在加载赛事" />
