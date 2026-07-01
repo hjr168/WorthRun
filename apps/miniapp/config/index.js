@@ -1,5 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.config = void 0;
-const dev_1 = require("./dev");
-exports.config = dev_1.devConfig;
+const prod_1 = require("./prod");
+exports.config = prod_1.prodConfig;

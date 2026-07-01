@@ -1,5 +1,5 @@
 {
-  "appid": "wxd2f02b9b3ac2c8ed",
+  "appid": "wxb968bfb48f9a1d2b",
   "projectname": "WorthRun",
   "compileType": "miniprogram",
   "miniprogramRoot": "./",
@@ -18,7 +18,9 @@
     "minifyWXML": true,
     "localPlugins": false,
     "disableUseStrict": false,
-    "useCompilerPlugins": ["typescript"],
+    "useCompilerPlugins": [
+      "typescript"
+    ],
     "condition": false,
     "swc": false,
     "disableSWC": true,
