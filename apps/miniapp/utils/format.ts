@@ -28,6 +28,14 @@ export function formatDate(value?: string) {
   return value.slice(0, 10);
 }
 
+export function formatDateTime(value?: string) {
+  if (!value) return '待确认';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '待确认';
+  const pad = (number: number) => String(number).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function formatDistance(items?: string[]) {
   return items && items.length > 0 ? items.join(' / ') : '距离待确认';
 }

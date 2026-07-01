@@ -1,6 +1,14 @@
 # 真实赛事数据准备指南
 
-本指南用于把 `docs/seed-events-template.csv` 从演示数据替换为可内测的真实赛事数据。原则是：不编造赛事、不编造官方链接，不确定字段保留 `unknown` 或写明“待核实”。
+本指南用于把模板数据替换为可内测的真实赛事数据。原则是：不编造赛事、不编造官方链接，不确定字段保留 `unknown` 或写明“待核实”。
+
+`docs/real-events-template.csv` 是待填写模板，不可直接导入。请先复制为 `docs/real-events.local.csv`，再填入真实赛事日期、官方入口和来源信息。
+
+```bash
+cp docs/real-events-template.csv docs/real-events.local.csv
+pnpm db:import-events -- ./docs/real-events.local.csv --dry-run
+pnpm db:import-events -- ./docs/real-events.local.csv
+```
 
 ## 字段要求
 

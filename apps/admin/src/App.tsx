@@ -56,7 +56,10 @@ const publishStatusOptions = Object.entries(publishStatusLabels).map(([value, la
   value,
   label,
 }));
-const infoStatusOptions = Object.entries(infoStatusLabels).map(([value, label]) => ({ value, label }));
+const infoStatusOptions = Object.entries(infoStatusLabels).map(([value, label]) => ({
+  value,
+  label,
+}));
 const signupStatusOptions = Object.entries(signupStatusLabels).map(([value, label]) => ({
   value,
   label,
@@ -77,6 +80,7 @@ const feedbackStatusOptions = [
   { value: 'resolved', label: '已处理' },
   { value: 'rejected', label: '已驳回' },
 ];
+const riskKeywords = ['取消', '延期', '疑似', '网传', '非官方'];
 
 export function App() {
   return (
@@ -180,7 +184,9 @@ function LoginPage() {
       const result = await apiSend<{ token: string }>('POST', '/api/admin/auth/login', values);
       setToken(result.token);
       message.success('登录成功');
-      navigate((location.state as { from?: string } | null)?.from || '/workbench', { replace: true });
+      navigate((location.state as { from?: string } | null)?.from || '/workbench', {
+        replace: true,
+      });
     } catch (error) {
       showError(error);
     } finally {
@@ -375,7 +381,9 @@ function EventsPage() {
             title: '发布状态',
             dataIndex: 'publishStatus',
             width: 110,
-            render: (value) => <Tag>{publishStatusLabels[value as keyof typeof publishStatusLabels]}</Tag>,
+            render: (value) => (
+              <Tag>{publishStatusLabels[value as keyof typeof publishStatusLabels]}</Tag>
+            ),
           },
           {
             title: '信息状态',
@@ -402,16 +410,32 @@ function EventsPage() {
             width: 340,
             render: (_, record) => (
               <Space wrap>
-                <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/events/edit/${record.id}`)}>
+                <Button
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => navigate(`/events/edit/${record.id}`)}
+                >
                   编辑
                 </Button>
-                <Button size="small" icon={<FileDoneOutlined />} onClick={() => changeStatus(record, 'publish', '发布赛事')}>
+                <Button
+                  size="small"
+                  icon={<FileDoneOutlined />}
+                  onClick={() => changeStatus(record, 'publish', '发布赛事')}
+                >
                   发布
                 </Button>
-                <Button size="small" icon={<EyeInvisibleOutlined />} onClick={() => changeStatus(record, 'hide', '前端隐藏')}>
+                <Button
+                  size="small"
+                  icon={<EyeInvisibleOutlined />}
+                  onClick={() => changeStatus(record, 'hide', '前端隐藏')}
+                >
                   隐藏
                 </Button>
-                <Button size="small" icon={<StopOutlined />} onClick={() => changeStatus(record, 'offline', '临时下架')}>
+                <Button
+                  size="small"
+                  icon={<StopOutlined />}
+                  onClick={() => changeStatus(record, 'offline', '临时下架')}
+                >
                   下架
                 </Button>
                 <Button size="small" onClick={() => setLogEvent(record)}>
@@ -441,8 +465,12 @@ function EventEditPage() {
         form.setFieldsValue({
           ...event,
           eventDate: event.eventDate ? dayjs(event.eventDate).format('YYYY-MM-DD') : undefined,
-          signupStartAt: event.signupStartAt ? dayjs(event.signupStartAt).format('YYYY-MM-DDTHH:mm') : undefined,
-          signupDeadline: event.signupDeadline ? dayjs(event.signupDeadline).format('YYYY-MM-DDTHH:mm') : undefined,
+          signupStartAt: event.signupStartAt
+            ? dayjs(event.signupStartAt).format('YYYY-MM-DDTHH:mm')
+            : undefined,
+          signupDeadline: event.signupDeadline
+            ? dayjs(event.signupDeadline).format('YYYY-MM-DDTHH:mm')
+            : undefined,
           distanceItems: event.distanceItems.join(', '),
           judgementReasons: event.judgementReasons.join('\n'),
           suitableFor: event.suitableFor.join('\n'),
@@ -495,7 +523,9 @@ function EventEditPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">{id ? '编辑赛事' : '新增赛事'}</h1>
-          <div className="page-subtitle">所有赛事信息必须保留“AI 整理，仅供参考，报名以官方为准”提示</div>
+          <div className="page-subtitle">
+            所有赛事信息必须保留“AI 整理，仅供参考，报名以官方为准”提示
+          </div>
         </div>
         <Space>
           <Button onClick={() => navigate('/events')}>返回</Button>
@@ -535,7 +565,11 @@ function EventEditPage() {
                         <Form.Item label="比赛日期" name="eventDate" rules={[{ required: true }]}>
                           <Input type="date" />
                         </Form.Item>
-                        <Form.Item label="距离项目" name="distanceItems" rules={[{ required: true }]}>
+                        <Form.Item
+                          label="距离项目"
+                          name="distanceItems"
+                          rules={[{ required: true }]}
+                        >
                           <Input placeholder="半马, 10K" />
                         </Form.Item>
                         <Form.Item label="起点" name="startPoint">
@@ -548,7 +582,11 @@ function EventEditPage() {
                     </Section>
                     <Section title="报名信息">
                       <div className="form-grid">
-                        <Form.Item label="报名状态" name="signupStatus" rules={[{ required: true }]}>
+                        <Form.Item
+                          label="报名状态"
+                          name="signupStatus"
+                          rules={[{ required: true }]}
+                        >
                           <Select options={signupStatusOptions} />
                         </Form.Item>
                         <Form.Item label="报名开始时间" name="signupStartAt">
@@ -661,13 +699,28 @@ function ChecklistEditor() {
           <Space direction="vertical" style={{ width: '100%' }}>
             {fields.map((field) => (
               <div className="checklist-row" key={field.key}>
-                <Form.Item {...field} label="分组" name={[field.name, 'groupName']} rules={[{ required: true }]}>
+                <Form.Item
+                  {...field}
+                  label="分组"
+                  name={[field.name, 'groupName']}
+                  rules={[{ required: true }]}
+                >
                   <Input />
                 </Form.Item>
-                <Form.Item {...field} label="确认项" name={[field.name, 'itemName']} rules={[{ required: true }]}>
+                <Form.Item
+                  {...field}
+                  label="确认项"
+                  name={[field.name, 'itemName']}
+                  rules={[{ required: true }]}
+                >
                   <Input />
                 </Form.Item>
-                <Form.Item {...field} label="状态" name={[field.name, 'itemStatus']} rules={[{ required: true }]}>
+                <Form.Item
+                  {...field}
+                  label="状态"
+                  name={[field.name, 'itemStatus']}
+                  rules={[{ required: true }]}
+                >
                   <Select options={infoStatusOptions} />
                 </Form.Item>
                 <Form.Item {...field} label="说明" name={[field.name, 'description']}>
@@ -681,7 +734,10 @@ function ChecklistEditor() {
                 </Button>
               </div>
             ))}
-            <Button icon={<PlusOutlined />} onClick={() => add({ itemStatus: 'pending_verify', sortOrder: fields.length + 1 })}>
+            <Button
+              icon={<PlusOutlined />}
+              onClick={() => add({ itemStatus: 'pending_verify', sortOrder: fields.length + 1 })}
+            >
               新增确认项
             </Button>
           </Space>
@@ -692,26 +748,52 @@ function ChecklistEditor() {
 }
 
 function MiniappPublishChecks({ values }: { values: Record<string, unknown> }) {
-  const judgementReasons = splitLines(String(values.judgementReasons || ''));
+  const judgementReasons = toTextList(values.judgementReasons);
   const checklistItems = Array.isArray(values.checklistItems) ? values.checklistItems : [];
+  const textForRiskCheck = [
+    values.eventName,
+    values.officialUrl,
+    values.sourceName,
+    values.sourceUrl,
+    values.judgementSummary,
+    judgementReasons.join(' '),
+    toTextList(values.tags).join(' '),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const matchedRiskKeywords = riskKeywords.filter((keyword) => textForRiskCheck.includes(keyword));
   const checks = [
     { label: '官方入口', ok: Boolean(values.officialUrl) },
+    { label: '来源名称', ok: Boolean(values.sourceName) },
     { label: '跑前判断', ok: Boolean(values.runJudgement) },
     { label: '至少 1 条判断理由', ok: judgementReasons.length > 0 },
     { label: '确认清单', ok: checklistItems.length > 0 },
     { label: '合规提示', ok: true },
+    {
+      label: matchedRiskKeywords.length ? `风险词：${matchedRiskKeywords.join('、')}` : '风险词',
+      ok: matchedRiskKeywords.length === 0,
+    },
   ];
   const canPublish = checks.every((item) => item.ok);
 
   return (
     <Card size="small" className="miniapp-check-card" title="小程序发布前检查">
-      <Space wrap>
-        {checks.map((item) => (
-          <Tag key={item.label} color={item.ok ? 'green' : 'orange'}>
-            {item.label}：{item.ok ? '已具备' : '待补充'}
+      <Space direction="vertical" size={8}>
+        <Alert
+          type="info"
+          showIcon
+          message="仅作为人工运营发布前提示，不替代后端发布校验，不会自动发布。"
+        />
+        <Space wrap>
+          {checks.map((item) => (
+            <Tag key={item.label} color={item.ok ? 'green' : 'orange'}>
+              {item.label}：{item.ok ? '已具备' : '待补充/需复核'}
+            </Tag>
+          ))}
+          <Tag color={canPublish ? 'green' : 'red'}>
+            当前是否可发布：{canPublish ? '可以' : '不建议'}
           </Tag>
-        ))}
-        <Tag color={canPublish ? 'green' : 'red'}>当前是否可发布：{canPublish ? '可以' : '不建议'}</Tag>
+        </Space>
       </Space>
     </Card>
   );
@@ -778,7 +860,8 @@ function QualityPage() {
             title: '状态',
             dataIndex: 'status',
             width: 110,
-            render: (value) => feedbackStatusOptions.find((item) => item.value === value)?.label || value,
+            render: (value) =>
+              feedbackStatusOptions.find((item) => item.value === value)?.label || value,
           },
           {
             title: '关联赛事',
@@ -849,13 +932,21 @@ function EventLogsModal({ event, onClose }: { event: AdminEvent | null; onClose:
 
   useEffect(() => {
     if (!event) return;
-    apiGet<{ items: OperationLog[] }>(`/api/admin/operation-logs?targetType=events&targetId=${event.id}`)
+    apiGet<{ items: OperationLog[] }>(
+      `/api/admin/operation-logs?targetType=events&targetId=${event.id}`,
+    )
       .then((result) => setLogs(result.items))
       .catch(showError);
   }, [event]);
 
   return (
-    <Modal title={event ? `${event.eventName} 操作日志` : '操作日志'} open={!!event} onCancel={onClose} footer={null} width={860}>
+    <Modal
+      title={event ? `${event.eventName} 操作日志` : '操作日志'}
+      open={!!event}
+      onCancel={onClose}
+      footer={null}
+      width={860}
+    >
       <OperationLogTable logs={logs} />
     </Modal>
   );
@@ -897,6 +988,16 @@ function splitComma(value?: string) {
 function splitLines(value?: string) {
   return String(value || '')
     .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function toTextList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  return String(value || '')
+    .split(/\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
 }

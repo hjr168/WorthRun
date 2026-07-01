@@ -1,6 +1,9 @@
 <view class="page detail-page">
   <loading-state wx:if="{{loading}}" text="正在加载详情" />
-  <empty-state wx:elif="{{error}}" title="赛事不存在或未发布" description="{{error}}" />
+  <block wx:elif="{{error}}">
+    <empty-state title="赛事不存在或未发布" description="{{error}}" />
+    <button class="secondary-button" bindtap="reload">重新加载</button>
+  </block>
 
   <block wx:elif="{{event}}">
     <view class="title-card">
@@ -18,7 +21,7 @@
       <view class="info-row"><text>起点</text><text>{{event.startPoint || '待确认'}}</text></view>
       <view class="info-row"><text>终点</text><text>{{event.endPoint || '待确认'}}</text></view>
       <view class="info-row"><text>来源</text><text>{{event.sourceName}}</text></view>
-      <view class="info-row"><text>更新时间</text><text>{{event.updatedAt || '待确认'}}</text></view>
+      <view class="info-row"><text>最近更新</text><text>{{updatedAtText}}</text></view>
     </view>
 
     <view class="section card">

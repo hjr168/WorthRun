@@ -1,37 +1,46 @@
 <view class="page">
   <loading-state wx:if="{{loading}}" text="正在加载我的信息" />
-  <empty-state wx:elif="{{error}}" title="请求失败" description="{{error}}" />
+  <block wx:elif="{{error}}">
+    <empty-state title="请求失败" description="{{error}}" />
+    <button class="secondary-button" bindtap="reload">重新加载</button>
+  </block>
   <block wx:else>
-  <view class="card">
-    <view class="section-title">匿名标识</view>
-    <view class="muted">V0.1 不强制微信登录，收藏、偏好和反馈使用本地匿名标识保存。</view>
-    <view class="user-key">{{shortUserKey}}</view>
-  </view>
-
-  <view class="card section" bindtap="openPreferences">
-    <view class="section-title">偏好摘要</view>
-    <view class="muted">{{preferenceText}}</view>
-  </view>
-
-  <view class="card section" bindtap="openNextEvent">
-    <view class="section-title">我的下一场</view>
-    <view wx:if="{{nextEvent}}">
-      <view class="next-name">{{nextEvent.eventName}}</view>
-      <view class="muted">{{nextEvent.city}} · {{nextEventDate}}</view>
+    <view class="card">
+      <view class="section-title">匿名标识</view>
+      <view class="muted">V0.1 不强制微信登录，收藏、偏好和反馈使用本地匿名标识保存。</view>
+      <view class="user-key">{{shortUserKey}}</view>
     </view>
-    <view wx:else class="muted">先收藏一场赛事，这里会显示最近关注项。</view>
-  </view>
 
-  <view class="menu">
-    <button class="secondary-button" bindtap="openFavorites">我的收藏</button>
-    <button class="secondary-button" bindtap="openFeedback">我的反馈</button>
-    <button class="secondary-button" bindtap="openPreferences">偏好设置</button>
-    <button class="secondary-button" bindtap="openTools">工具</button>
-  </view>
+    <view class="card section" bindtap="openPreferences">
+      <view class="section-title">偏好摘要</view>
+      <view class="muted">{{preferenceText}}</view>
+    </view>
 
-  <view class="card section">
-    <view class="section-title">关于与合规说明</view>
-    <view class="muted">{{complianceNotice}}</view>
-  </view>
+    <view class="card section" bindtap="openNextEvent">
+      <view class="section-title">我的下一场</view>
+      <view wx:if="{{nextEvent}}">
+        <view class="next-name">{{nextEvent.eventName}}</view>
+        <view class="muted">{{nextEvent.city}} · {{nextEventDate}}</view>
+      </view>
+      <view wx:else class="muted">先收藏一场赛事，这里会显示最近关注项。</view>
+    </view>
+
+    <view class="menu">
+      <button class="secondary-button" bindtap="openFavorites">我的收藏</button>
+      <button class="secondary-button" bindtap="openFeedback">我的反馈</button>
+      <button class="secondary-button" bindtap="openPreferences">偏好设置</button>
+      <button class="secondary-button" bindtap="openTools">工具</button>
+    </view>
+
+    <view wx:if="{{isDev}}" class="card section dev-tools">
+      <view class="section-title">开发调试</view>
+      <view class="muted">用于测试匿名身份、偏好和收藏流程。</view>
+      <button class="secondary-button danger-button" bindtap="clearLocalUserData">清除本地用户数据</button>
+    </view>
+
+    <view class="card section">
+      <view class="section-title">关于与合规说明</view>
+      <view class="muted">{{complianceNotice}}</view>
+    </view>
   </block>
 </view>

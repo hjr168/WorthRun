@@ -17,7 +17,10 @@
   </view>
 
   <loading-state wx:if="{{loading}}" text="正在加载赛事" />
-  <empty-state wx:elif="{{error}}" title="请求失败" description="{{error}}" />
+  <block wx:elif="{{error}}">
+    <empty-state title="请求失败" description="{{error}}" />
+    <button class="secondary-button" bindtap="reload">重新加载</button>
+  </block>
   <block wx:else>
     <event-card
       wx:for="{{events}}"

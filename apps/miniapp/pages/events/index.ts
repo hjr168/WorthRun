@@ -75,7 +75,10 @@ Page({
         getFavorites(userKey).catch(() => ({ items: [] })),
       ]);
       const favoriteIds = new Set(favoriteRes.items.map((item) => item.eventId));
-      const nextEvents = eventRes.items.map((item) => ({ ...item, isFavorite: favoriteIds.has(item.id) }));
+      const nextEvents = eventRes.items.map((item) => ({
+        ...item,
+        isFavorite: favoriteIds.has(item.id),
+      }));
       const events = reset ? nextEvents : [...this.data.events, ...nextEvents];
       this.setData({
         loading: false,
@@ -92,6 +95,9 @@ Page({
       });
       wx.showToast({ title: reset ? '网络异常' : '加载失败', icon: 'none' });
     }
+  },
+  reload() {
+    this.load(true);
   },
   onReachBottom() {
     if (!this.data.hasMore) {

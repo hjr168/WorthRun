@@ -24,6 +24,9 @@ Page({
       this.setData({ loading: false, error: (error as Error).message || '网络异常' });
     }
   },
+  reload() {
+    this.load();
+  },
   openEvent(event: WechatMiniprogram.CustomEvent) {
     wx.navigateTo({ url: `/pages/event-detail/index?id=${event.detail.id}` });
   },

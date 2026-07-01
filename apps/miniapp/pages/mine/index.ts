@@ -1,6 +1,7 @@
 import { EventDetail, getFavorites, getPreference, Preference } from '../../utils/api';
+import { config } from '../../config/index';
 import { complianceNotice, formatDate } from '../../utils/format';
-import { getUserKey } from '../../utils/user';
+import { clearUserKey, getUserKey } from '../../utils/user';
 
 Page({
   data: {
@@ -13,6 +14,7 @@ Page({
     nextEvent: null as EventDetail | null,
     nextEventDate: '',
     complianceNotice,
+    isDev: config.env === 'dev',
   },
   onShow() {
     this.load();
@@ -47,6 +49,9 @@ Page({
       });
     }
   },
+  reload() {
+    this.load();
+  },
   openPreferences() {
     wx.navigateTo({ url: '/pages/preferences/index' });
   },
@@ -66,5 +71,18 @@ Page({
   openNextEvent() {
     if (!this.data.nextEvent) return;
     wx.navigateTo({ url: `/pages/event-detail/index?id=${this.data.nextEvent.id}` });
+  },
+  clearLocalUserData() {
+    wx.showModal({
+      title: '清除本地用户数据',
+      content: '将清除本地匿名标识。重新进入后会生成新的匿名身份，偏好和收藏会按新身份重新开始。',
+      confirmText: '清除',
+      success: (result) => {
+        if (!result.confirm) return;
+        clearUserKey();
+        wx.showToast({ title: '已清除', icon: 'success' });
+        this.load();
+      },
+    });
   },
 });

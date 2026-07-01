@@ -49,9 +49,7 @@ Page({
       this.setData({
         events: events.slice(0, 4),
         closingEvents: events.filter((item) => item.signupStatus === 'closing_soon').slice(0, 3),
-        fallbackNotice: eventRes.usedFallback
-          ? '暂未找到完全匹配偏好的赛事，先看看近期赛事。'
-          : '',
+        fallbackNotice: eventRes.usedFallback ? '暂未找到完全匹配偏好的赛事，先看看近期赛事。' : '',
         preference,
         preferenceText,
         loading: false,
@@ -60,6 +58,9 @@ Page({
       this.setData({ loading: false, error: (error as Error).message || '网络异常' });
       wx.showToast({ title: '网络异常', icon: 'none' });
     }
+  },
+  reload() {
+    this.load();
   },
   async getEventsWithFallback(params: {
     page: number;
@@ -71,12 +72,19 @@ Page({
     if (firstRes.items.length) return { ...firstRes, usedFallback: false };
 
     if (params.city) {
-      const cityRes = await getEvents({ page: params.page, pageSize: params.pageSize, city: params.city });
+      const cityRes = await getEvents({
+        page: params.page,
+        pageSize: params.pageSize,
+        city: params.city,
+      });
       if (cityRes.items.length) return { ...cityRes, usedFallback: Boolean(params.distance) };
     }
 
     const allRes = await getEvents({ page: params.page, pageSize: params.pageSize });
-    return { ...allRes, usedFallback: Boolean(params.city || params.distance) && allRes.items.length > 0 };
+    return {
+      ...allRes,
+      usedFallback: Boolean(params.city || params.distance) && allRes.items.length > 0,
+    };
   },
   openPreference() {
     wx.navigateTo({ url: '/pages/preferences/index' });

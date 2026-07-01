@@ -136,9 +136,9 @@ export const devConfig = {
 
 - `docs/REAL_EVENT_DATA_GUIDE.md`
 - `docs/seed-events-template.csv`
-- `docs/real-events-sample.csv`
+- `docs/real-events-template.csv`
 
-CSV 字段与 `docs/seed-events-template.csv` 保持一致。列表字段使用 `|` 分隔，例如 `10K|半马`。不要编造官方链接；来源不确定时保持待核实，不要把占位域名当作真实来源。
+`docs/real-events-template.csv` 是待填写模板，不可直接导入。请复制为 `docs/real-events.local.csv`，填入人工核验后的真实赛事日期、官方入口和来源信息，再运行导入脚本。CSV 字段与 `docs/seed-events-template.csv` 保持一致。列表字段使用 `|` 分隔，例如 `10K|半马`。不要编造官方链接；来源不确定时保持待核实，不要把占位域名当作真实来源。
 
 ## 真实赛事 CSV 导入
 
@@ -151,18 +151,25 @@ packages/database/scripts/import-events-from-csv.ts
 从根目录运行：
 
 ```bash
-pnpm db:import-events -- ./docs/real-events-sample.csv
+pnpm db:import-events -- ./docs/real-events.local.csv
 ```
 
 也可以直接运行 database 包脚本：
 
 ```bash
-pnpm --filter @worth-running/database db:import-events ./docs/real-events-sample.csv
+pnpm --filter @worth-running/database db:import-events ../../docs/real-events.local.csv
+```
+
+真实导入前先运行 dry-run：
+
+```bash
+pnpm db:import-events -- ./docs/real-events.local.csv --dry-run
 ```
 
 导入规则：
 
 - 按 `eventName + city + eventDate` 判断是否已存在。
+- `--dry-run` 只校验 CSV 和判断将新增/将更新/失败行，不写入数据库。
 - 不存在则创建赛事，默认 `publishStatus=draft`。
 - 已存在则更新赛事字段，删除并重建报名前确认清单和 eventTags，保留原 `publishStatus`。
 - `officialUrl` 必须是合法 URL，且不能包含 `example.com`。
@@ -178,7 +185,8 @@ pnpm dev:admin
 pnpm typecheck
 pnpm build
 pnpm format
-pnpm db:import-events -- ./docs/real-events-sample.csv
+pnpm db:import-events -- ./docs/real-events.local.csv --dry-run
+pnpm db:import-events -- ./docs/real-events.local.csv
 ```
 
 ## API 调试示例

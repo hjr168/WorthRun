@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": false,
+    "experimentalDecorators": true,
+    "module": "CommonJS",
+    "target": "ES2017",
+    "moduleResolution": "Node",
+    "lib": ["ES2017"],
+    "typeRoots": ["./types"]
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules"]
+}

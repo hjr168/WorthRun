@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   InfoStatus,
   Prisma,
@@ -33,6 +35,7 @@ const headers = [
 type Header = (typeof headers)[number];
 type Row = Record<Header, string>;
 type Failure = { line: number; reason: string };
+type ImportPlan = { line: number; row: Row; eventDate: Date; status: 'created' | 'updated' };
 
 const signupStatusValues = new Set(Object.values(SignupStatus));
 const sourceLevelValues = new Set(Object.values(SourceLevel));
@@ -49,13 +52,18 @@ const defaultChecklist = [
 ] as const;
 
 async function main() {
-  const csvPath = process.argv[2];
+  const { csvPath, dryRun } = parseArgs(process.argv.slice(2));
   if (!csvPath) {
-    console.error('请提供 CSV 文件路径，例如：pnpm db:import-events -- ./docs/real-events-sample.csv');
+    printUsage('请提供 CSV 文件路径。');
     process.exit(1);
   }
 
-  const filePath = resolve(process.cwd(), csvPath);
+  const filePath = resolveCsvPath(csvPath);
+  if (!filePath) {
+    printUsage(`找不到 CSV 文件：${csvPath}`);
+    process.exit(1);
+  }
+
   const content = await readFile(filePath, 'utf8');
   const records = parseCsv(content);
   const [headerRow, ...dataRows] = records;
@@ -65,27 +73,76 @@ async function main() {
     process.exit(1);
   }
 
-  const adminUser = await prisma.adminUser.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } });
   const failures: Failure[] = [];
-  const result = { created: 0, updated: 0, skipped: 0, failed: 0 };
+  const plans: ImportPlan[] = [];
+  const checkResult = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
   for (let index = 0; index < dataRows.length; index += 1) {
     const line = index + 2;
     const values = dataRows[index];
     if (values.every((value) => !value.trim())) {
-      result.skipped += 1;
+      checkResult.skipped += 1;
       continue;
     }
 
-    const row = Object.fromEntries(headers.map((header, column) => [header, values[column]?.trim() ?? ''])) as Row;
+    const row = Object.fromEntries(
+      headers.map((header, column) => [header, values[column]?.trim() ?? '']),
+    ) as Row;
     const validation = validateRow(row);
     if (validation.length) {
-      result.failed += 1;
+      checkResult.failed += 1;
       failures.push({ line, reason: validation.join('；') });
       continue;
     }
 
     const eventDate = parseDateOnly(row.eventDate);
+    const existing = await prisma.event.findFirst({
+      where: {
+        eventName: row.eventName,
+        city: row.city,
+        eventDate,
+      },
+      select: { id: true },
+    });
+
+    plans.push({ line, row, eventDate, status: existing ? 'updated' : 'created' });
+    if (existing) checkResult.updated += 1;
+    else checkResult.created += 1;
+  }
+
+  if (dryRun) {
+    console.log('dry-run 校验完成，不会写入数据库：');
+    console.log(`- 将新增：${checkResult.created} 条`);
+    console.log(`- 将更新：${checkResult.updated} 条`);
+    console.log(`- 跳过空行：${checkResult.skipped} 条`);
+    console.log(`- 失败：${checkResult.failed} 条`);
+    if (plans.length) {
+      console.log('待处理行：');
+      for (const plan of plans) {
+        const action = plan.status === 'created' ? '将新增' : '将更新';
+        console.log(
+          `- 第 ${plan.line} 行：${action} ${plan.row.eventName}（${plan.row.city} ${plan.row.eventDate}）`,
+        );
+      }
+    }
+    printFailures(failures);
+    process.exitCode = checkResult.failed ? 1 : 0;
+    return;
+  }
+
+  const adminUser = await prisma.adminUser.findFirst({
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const writeResult = {
+    created: 0,
+    updated: 0,
+    skipped: checkResult.skipped,
+    failed: checkResult.failed,
+  };
+
+  for (const plan of plans) {
+    const { row, eventDate } = plan;
     const signupDeadline = row.signupDeadline ? new Date(row.signupDeadline) : null;
     const distanceItems = splitList(row.distanceItems);
     const judgementReasons = splitList(row.judgementReasons);
@@ -111,7 +168,7 @@ async function main() {
         signupDeadline,
         officialUrl: row.officialUrl,
         sourceName: row.sourceName,
-        sourceUrl: row.sourceUrl || null,
+        sourceUrl: row.sourceUrl && row.sourceUrl !== 'unknown' ? row.sourceUrl : null,
         sourceLevel: row.sourceLevel as SourceLevel,
         infoStatus: InfoStatus.pending_verify,
         runJudgement: row.runJudgement as RunJudgement,
@@ -122,7 +179,8 @@ async function main() {
         tags,
         fieldConfidence: {
           importedFromCsv: 'pending_verify',
-          sourceUrl: row.sourceUrl ? 'pending_verify' : 'source_error',
+          sourceUrl:
+            row.sourceUrl && row.sourceUrl !== 'unknown' ? 'pending_verify' : 'source_error',
         } satisfies Prisma.InputJsonObject,
       };
 
@@ -136,12 +194,14 @@ async function main() {
             data: {
               ...baseData,
               checklistItems: {
-                create: defaultChecklist.map(([groupName, itemName, itemStatus], checklistIndex) => ({
-                  groupName,
-                  itemName,
-                  itemStatus,
-                  sortOrder: checklistIndex + 1,
-                })),
+                create: defaultChecklist.map(
+                  ([groupName, itemName, itemStatus], checklistIndex) => ({
+                    groupName,
+                    itemName,
+                    itemStatus,
+                    sortOrder: checklistIndex + 1,
+                  }),
+                ),
               },
               eventTags: {
                 create: tags.map((tagName) => ({ tagName, tagType: 'experience' })),
@@ -192,7 +252,11 @@ async function main() {
             action: 'event.import.create',
             targetType: 'events',
             targetId: created.id,
-            afterValue: { eventName: created.eventName, city: created.city, publishStatus: created.publishStatus },
+            afterValue: {
+              eventName: created.eventName,
+              city: created.city,
+              publishStatus: created.publishStatus,
+            },
             note: 'CSV 导入创建真实赛事数据',
           },
         });
@@ -200,23 +264,22 @@ async function main() {
         return { status: 'created' as const };
       });
 
-      if (saved.status === 'created') result.created += 1;
-      if (saved.status === 'updated') result.updated += 1;
+      if (saved.status === 'created') writeResult.created += 1;
+      if (saved.status === 'updated') writeResult.updated += 1;
     } catch (error) {
-      result.failed += 1;
-      failures.push({ line, reason: (error as Error).message || '数据库写入失败' });
+      writeResult.failed += 1;
+      failures.push({ line: plan.line, reason: (error as Error).message || '数据库写入失败' });
     }
   }
 
   console.log('导入完成：');
-  console.log(`- 新增：${result.created} 条`);
-  console.log(`- 更新：${result.updated} 条`);
-  console.log(`- 跳过：${result.skipped} 条`);
-  console.log(`- 失败：${result.failed} 条`);
+  console.log(`- 新增：${writeResult.created} 条`);
+  console.log(`- 更新：${writeResult.updated} 条`);
+  console.log(`- 跳过：${writeResult.skipped} 条`);
+  console.log(`- 失败：${writeResult.failed} 条`);
 
-  for (const failure of failures) {
-    console.log(`第 ${failure.line} 行失败：${failure.reason}`);
-  }
+  printFailures(failures);
+  process.exitCode = writeResult.failed ? 1 : 0;
 }
 
 function parseCsv(content: string) {
@@ -267,7 +330,44 @@ function parseCsv(content: string) {
 }
 
 function isExpectedHeader(row: string[]) {
-  return headers.length === row.length && headers.every((header, index) => row[index]?.trim() === header);
+  return (
+    headers.length === row.length && headers.every((header, index) => row[index]?.trim() === header)
+  );
+}
+
+function parseArgs(args: string[]) {
+  const dryRun = args.includes('--dry-run');
+  const csvPath = args.find((arg) => !arg.startsWith('--'));
+  return { csvPath, dryRun };
+}
+
+function resolveCsvPath(csvPath: string) {
+  const scriptDir = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolve(scriptDir, '../../..');
+  const candidates = [
+    isAbsolute(csvPath) ? csvPath : resolve(process.cwd(), csvPath),
+    isAbsolute(csvPath) ? csvPath : resolve(repoRoot, csvPath),
+  ];
+
+  return candidates.find(
+    (candidate, index) => candidates.indexOf(candidate) === index && existsSync(candidate),
+  );
+}
+
+function printUsage(message: string) {
+  console.error(message);
+  console.error('正确命令示例：');
+  console.error('  pnpm db:import-events -- ./docs/real-events.local.csv');
+  console.error('  pnpm db:import-events -- ./docs/real-events.local.csv --dry-run');
+  console.error(
+    '  pnpm --filter @worth-running/database db:import-events ../../docs/real-events.local.csv',
+  );
+}
+
+function printFailures(failures: Failure[]) {
+  for (const failure of failures) {
+    console.log(`第 ${failure.line} 行失败：${failure.reason}`);
+  }
 }
 
 function validateRow(row: Row) {
@@ -289,13 +389,20 @@ function validateRow(row: Row) {
     if (!row[field]) errors.push(`${field} 不能为空`);
   }
 
-  if (row.eventDate && !/^\d{4}-\d{2}-\d{2}$/.test(row.eventDate)) errors.push('eventDate 必须是 YYYY-MM-DD');
-  if (row.eventDate && Number.isNaN(parseDateOnly(row.eventDate).getTime())) errors.push('eventDate 无效');
+  if (row.eventDate && !/^\d{4}-\d{2}-\d{2}$/.test(row.eventDate))
+    errors.push('eventDate 必须是 YYYY-MM-DD');
+  if (row.eventDate && Number.isNaN(parseDateOnly(row.eventDate).getTime()))
+    errors.push('eventDate 无效');
+  if (!splitList(row.distanceItems).length) errors.push('distanceItems 至少填写 1 个距离项目');
+  if (!splitList(row.judgementReasons).length)
+    errors.push('judgementReasons 至少填写 1 条判断理由');
   if (row.officialUrl && !isValidUrl(row.officialUrl)) errors.push('officialUrl 必须是合法 URL');
   if (row.officialUrl && row.officialUrl.includes('example.com')) {
     errors.push('officialUrl 不能包含 example.com');
   }
-  if (row.sourceUrl && !isValidUrl(row.sourceUrl)) errors.push('sourceUrl 必须是合法 URL');
+  if (row.sourceUrl && row.sourceUrl !== 'unknown' && !isValidUrl(row.sourceUrl)) {
+    errors.push('sourceUrl 必须是合法 URL 或留空');
+  }
   if (row.signupDeadline && Number.isNaN(new Date(row.signupDeadline).getTime())) {
     errors.push('signupDeadline 必须是合法日期时间或留空');
   }

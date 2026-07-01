@@ -8,6 +8,7 @@ import {
 import {
   complianceNotice,
   formatDate,
+  formatDateTime,
   formatDistance,
   labelOf,
   officialActionText,
@@ -26,6 +27,7 @@ Page({
     dateText: '',
     distanceText: '',
     signupText: '',
+    updatedAtText: '待确认',
     complianceNotice,
     officialActionText,
   },
@@ -50,13 +52,21 @@ Page({
         dateText: formatDate(detail.event.eventDate),
         distanceText: formatDistance(detail.event.distanceItems),
         signupText: labelOf(signupStatusLabels, detail.event.signupStatus),
+        updatedAtText: formatDateTime(detail.event.updatedAt),
         complianceNotice: detail.complianceNotice || complianceNotice,
         officialActionText: detail.officialActionText || officialActionText,
         loading: false,
       });
     } catch (error) {
-      this.setData({ loading: false, error: (error as Error).message || '赛事不存在或未发布' });
+      this.setData({
+        loading: false,
+        event: null,
+        error: (error as Error).message || '赛事不存在或未发布',
+      });
     }
+  },
+  reload() {
+    this.load();
   },
   async toggleFavorite() {
     if (!this.data.event) return;
@@ -82,7 +92,8 @@ Page({
       success: () =>
         wx.showModal({
           title: '官方链接已复制',
-          content: '小程序暂不直接跳转外部链接，已为你复制官方链接。请在浏览器或微信中打开后，以官方信息为准。',
+          content:
+            '小程序暂不直接跳转外部链接，已为你复制官方链接。请在浏览器或微信中打开后，以官方信息为准。',
           showCancel: false,
           confirmText: '知道了',
         }),

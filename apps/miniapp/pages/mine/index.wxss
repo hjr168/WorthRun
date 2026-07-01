@@ -18,3 +18,13 @@
   gap: 16rpx;
   margin-top: 28rpx;
 }
+
+.dev-tools {
+  display: grid;
+  gap: 16rpx;
+}
+
+.danger-button {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
