@@ -73,10 +73,19 @@ Page({
   },
   openOfficial() {
     const url = this.data.event?.officialUrl;
-    if (!url) return;
+    if (!url) {
+      wx.showToast({ title: '请前往官方渠道确认', icon: 'none' });
+      return;
+    }
     wx.setClipboardData({
       data: url,
-      success: () => wx.showToast({ title: '官方链接已复制', icon: 'success' }),
+      success: () =>
+        wx.showModal({
+          title: '官方链接已复制',
+          content: '小程序暂不直接跳转外部链接，已为你复制官方链接。请在浏览器或微信中打开后，以官方信息为准。',
+          showCancel: false,
+          confirmText: '知道了',
+        }),
       fail: () => wx.showToast({ title: '请前往官方渠道确认', icon: 'none' }),
     });
   },

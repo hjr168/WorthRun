@@ -51,21 +51,21 @@ export interface Preference {
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'DELETE';
-  data?: Record<string, unknown>;
+  data?: object;
   loadingText?: string;
   silent?: boolean;
 }
 
 function getBaseUrl() {
-  const app = getApp<IAppOption>();
-  return app.globalData.apiBaseUrl || 'http://localhost:4000';
+  return config.apiBaseUrl;
 }
 
-function toQuery(data?: Record<string, unknown>) {
+function toQuery(data?: object) {
   if (!data) return '';
-  const pairs = Object.keys(data)
-    .filter((key) => data[key] !== undefined && data[key] !== '')
-    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(String(data[key]))}`);
+  const record = data as Record<string, unknown>;
+  const pairs = Object.keys(record)
+    .filter((key) => record[key] !== undefined && record[key] !== '')
+    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(String(record[key]))}`);
   return pairs.length ? `?${pairs.join('&')}` : '';
 }
 
@@ -167,3 +167,4 @@ export function submitFeedback(data: {
 export function getChecklistTemplates() {
   return request<{ items: ChecklistItem[] }>('/api/checklist/templates', { silent: true });
 }
+import { config } from '../config/index';

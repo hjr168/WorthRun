@@ -1,4 +1,7 @@
 <view class="page">
+  <loading-state wx:if="{{loading}}" text="正在加载我的信息" />
+  <empty-state wx:elif="{{error}}" title="请求失败" description="{{error}}" />
+  <block wx:else>
   <view class="card">
     <view class="section-title">匿名标识</view>
     <view class="muted">V0.1 不强制微信登录，收藏、偏好和反馈使用本地匿名标识保存。</view>
@@ -30,4 +33,5 @@
     <view class="section-title">关于与合规说明</view>
     <view class="muted">{{complianceNotice}}</view>
   </view>
+  </block>
 </view>

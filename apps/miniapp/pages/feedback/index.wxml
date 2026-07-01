@@ -11,5 +11,5 @@
       <textarea class="textarea" value="{{content}}" placeholder="请说明你发现的问题" bindinput="onContentInput" />
     </view>
   </view>
-  <button class="primary-button submit" bindtap="submit">提交反馈</button>
+  <button class="primary-button submit" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">提交反馈</button>
 </view>

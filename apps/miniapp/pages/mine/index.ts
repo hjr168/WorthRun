@@ -4,6 +4,8 @@ import { getUserKey } from '../../utils/user';
 
 Page({
   data: {
+    loading: true,
+    error: '',
     userKey: '',
     shortUserKey: '',
     preference: null as Preference | null,
@@ -17,23 +19,33 @@ Page({
   },
   async load() {
     const userKey = getUserKey();
-    const [preference, favorites] = await Promise.all([
-      getPreference(userKey).catch(() => null),
-      getFavorites(userKey).catch(() => ({ items: [] })),
-    ]);
-    const nextEvent = favorites.items[0]?.event || null;
-    const preferenceText = preference
-      ? `${preference.cities.join('、') || '城市不限'} · ${preference.distances.join('、') || '距离不限'}`
-      : '尚未设置偏好';
-    this.setData({
-      userKey,
-      shortUserKey: `${userKey.slice(0, 10)}...`,
-      preference,
-      preferenceText,
-      nextEvent,
-      nextEventDate: nextEvent ? formatDate(nextEvent.eventDate) : '',
-      complianceNotice,
-    });
+    this.setData({ loading: true, error: '', userKey });
+    try {
+      const [preference, favorites] = await Promise.all([
+        getPreference(userKey).catch(() => null),
+        getFavorites(userKey),
+      ]);
+      const nextEvent = favorites.items[0]?.event || null;
+      const preferenceText = preference
+        ? `${preference.cities.join('、') || '城市不限'} · ${preference.distances.join('、') || '距离不限'}`
+        : '尚未设置偏好';
+      this.setData({
+        loading: false,
+        userKey,
+        shortUserKey: `${userKey.slice(0, 10)}...`,
+        preference,
+        preferenceText,
+        nextEvent,
+        nextEventDate: nextEvent ? formatDate(nextEvent.eventDate) : '',
+        complianceNotice,
+      });
+    } catch (error) {
+      this.setData({
+        loading: false,
+        shortUserKey: `${userKey.slice(0, 10)}...`,
+        error: (error as Error).message || '网络异常',
+      });
+    }
   },
   openPreferences() {
     wx.navigateTo({ url: '/pages/preferences/index' });

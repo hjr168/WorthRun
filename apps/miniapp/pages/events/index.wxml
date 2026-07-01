@@ -28,5 +28,7 @@
       bind:favorite="toggleFavorite"
     />
     <empty-state wx:if="{{!events.length}}" title="暂无赛事" description="换个城市、距离或报名状态再试试" />
+    <view wx:elif="{{loadingMore}}" class="load-more">正在加载更多...</view>
+    <view wx:elif="{{events.length && !hasMore}}" class="load-more">没有更多了</view>
   </block>
 </view>

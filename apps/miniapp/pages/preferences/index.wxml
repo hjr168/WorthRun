@@ -1,18 +1,52 @@
 <view class="page">
   <loading-state wx:if="{{loading}}" text="正在读取偏好" />
   <block wx:else>
+    <view wx:if="{{error}}" class="error-tip">{{error}}</view>
     <view class="form-card">
-      <view class="field">
+      <view class="chip-section">
         <view class="field-label">常跑城市</view>
-        <input class="input" value="{{citiesText}}" placeholder="如：广州、深圳" bindinput="onCitiesInput" />
+        <view class="chip-row">
+          <button
+            wx:for="{{cityChips}}"
+            wx:key="label"
+            class="chip {{item.selected ? 'selected' : ''}}"
+            data-group="cities"
+            data-value="{{item.label}}"
+            bindtap="toggleChip"
+          >
+            {{item.label}}
+          </button>
+        </view>
       </view>
-      <view class="field">
+      <view class="chip-section">
         <view class="field-label">目标距离</view>
-        <input class="input" value="{{distancesText}}" placeholder="如：10K、半马、全马" bindinput="onDistancesInput" />
+        <view class="chip-row">
+          <button
+            wx:for="{{distanceChips}}"
+            wx:key="label"
+            class="chip {{item.selected ? 'selected' : ''}}"
+            data-group="distances"
+            data-value="{{item.label}}"
+            bindtap="toggleChip"
+          >
+            {{item.label}}
+          </button>
+        </view>
       </view>
-      <view class="field">
+      <view class="chip-section">
         <view class="field-label">关注点</view>
-        <input class="input" value="{{focusTagsText}}" placeholder="如：交通方便、新手友好、风景路线" bindinput="onFocusInput" />
+        <view class="chip-row">
+          <button
+            wx:for="{{focusChips}}"
+            wx:key="label"
+            class="chip {{item.selected ? 'selected' : ''}}"
+            data-group="focusTags"
+            data-value="{{item.label}}"
+            bindtap="toggleChip"
+          >
+            {{item.label}}
+          </button>
+        </view>
       </view>
     </view>
     <view class="actions">

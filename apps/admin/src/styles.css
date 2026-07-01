@@ -91,6 +91,10 @@ body {
   color: #8c5a00;
 }
 
+.miniapp-check-card {
+  margin-top: 16px;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));

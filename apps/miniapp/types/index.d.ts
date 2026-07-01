@@ -1,5 +1,3 @@
 interface IAppOption {
-  globalData: {
-    apiBaseUrl: string;
-  };
+  globalData: Record<string, never>;
 }

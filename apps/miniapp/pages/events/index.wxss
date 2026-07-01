@@ -33,3 +33,10 @@
   display: block;
   margin-bottom: 16rpx;
 }
+
+.load-more {
+  padding: 20rpx 0 8rpx;
+  color: #64748b;
+  font-size: 24rpx;
+  text-align: center;
+}

@@ -630,6 +630,9 @@ function EventEditPage() {
                       </Descriptions.Item>
                       <Descriptions.Item label="官方入口文案">前往官方确认</Descriptions.Item>
                     </Descriptions>
+                    <Form.Item shouldUpdate noStyle>
+                      {() => <MiniappPublishChecks values={form.getFieldsValue(true)} />}
+                    </Form.Item>
                   </>
                 ),
               },
@@ -685,6 +688,32 @@ function ChecklistEditor() {
         )}
       </Form.List>
     </Section>
+  );
+}
+
+function MiniappPublishChecks({ values }: { values: Record<string, unknown> }) {
+  const judgementReasons = splitLines(String(values.judgementReasons || ''));
+  const checklistItems = Array.isArray(values.checklistItems) ? values.checklistItems : [];
+  const checks = [
+    { label: '官方入口', ok: Boolean(values.officialUrl) },
+    { label: '跑前判断', ok: Boolean(values.runJudgement) },
+    { label: '至少 1 条判断理由', ok: judgementReasons.length > 0 },
+    { label: '确认清单', ok: checklistItems.length > 0 },
+    { label: '合规提示', ok: true },
+  ];
+  const canPublish = checks.every((item) => item.ok);
+
+  return (
+    <Card size="small" className="miniapp-check-card" title="小程序发布前检查">
+      <Space wrap>
+        {checks.map((item) => (
+          <Tag key={item.label} color={item.ok ? 'green' : 'orange'}>
+            {item.label}：{item.ok ? '已具备' : '待补充'}
+          </Tag>
+        ))}
+        <Tag color={canPublish ? 'green' : 'red'}>当前是否可发布：{canPublish ? '可以' : '不建议'}</Tag>
+      </Space>
+    </Card>
   );
 }
 

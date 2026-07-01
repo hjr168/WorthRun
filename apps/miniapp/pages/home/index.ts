@@ -26,10 +26,16 @@ Page({
     const userKey = getUserKey();
     this.setData({ loading: true, error: '', userKey });
     try {
-      const [eventRes, favoriteRes, preference] = await Promise.all([
-        getEvents({ page: 1, pageSize: 8 }),
+      const preference = await getPreference(userKey).catch(() => null);
+      const params = {
+        page: 1,
+        pageSize: 8,
+        city: preference?.cities[0] || '',
+        distance: preference?.distances[0] || '',
+      };
+      const [eventRes, favoriteRes] = await Promise.all([
+        getEvents(params),
         getFavorites(userKey).catch(() => ({ items: [] })),
-        getPreference(userKey).catch(() => null),
       ]);
       const favoriteIds = new Set(favoriteRes.items.map((item) => item.eventId));
       const events = eventRes.items.map((item) => ({
@@ -48,6 +54,7 @@ Page({
       });
     } catch (error) {
       this.setData({ loading: false, error: (error as Error).message || '网络异常' });
+      wx.showToast({ title: '网络异常', icon: 'none' });
     }
   },
   openPreference() {
@@ -73,6 +80,8 @@ Page({
         wx.showToast({ title: '收藏成功', icon: 'success' });
       }
       this.load();
-    } catch {}
+    } catch {
+      wx.showToast({ title: isFavorite ? '取消收藏失败' : '收藏失败', icon: 'none' });
+    }
   },
 });

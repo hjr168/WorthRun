@@ -28,9 +28,13 @@ Page({
     wx.navigateTo({ url: `/pages/event-detail/index?id=${event.detail.id}` });
   },
   async toggleFavorite(event: WechatMiniprogram.CustomEvent) {
-    await removeFavorite(this.data.userKey, event.detail.id);
-    wx.showToast({ title: '已取消收藏', icon: 'success' });
-    this.load();
+    try {
+      await removeFavorite(this.data.userKey, event.detail.id);
+      wx.showToast({ title: '已取消收藏', icon: 'success' });
+      this.load();
+    } catch {
+      wx.showToast({ title: '取消收藏失败', icon: 'none' });
+    }
   },
   openEvents() {
     wx.switchTab({ url: '/pages/events/index' });

@@ -5,12 +5,46 @@
   padding: 24rpx;
 }
 
-.field {
+.error-tip {
+  margin-bottom: 18rpx;
+  border: 1rpx solid #fecaca;
+  border-radius: 8rpx;
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 16rpx 18rpx;
+  font-size: 26rpx;
+}
+
+.chip-section {
   margin-bottom: 26rpx;
 }
 
-.field:last-child {
+.chip-section:last-child {
   margin-bottom: 0;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+}
+
+.chip {
+  min-height: 64rpx;
+  border: 1rpx solid #cbd5e1;
+  border-radius: 999rpx;
+  background: #ffffff;
+  color: #334155;
+  padding: 0 22rpx;
+  font-size: 26rpx;
+  line-height: 64rpx;
+}
+
+.chip.selected {
+  border-color: #2a9d8f;
+  background: #e7f6f3;
+  color: #17786d;
+  font-weight: 700;
 }
 
 .actions {

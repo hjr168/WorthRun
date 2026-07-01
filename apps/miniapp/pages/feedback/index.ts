@@ -17,6 +17,7 @@ Page({
     feedbackTypes,
     typeIndex: 0,
     content: '',
+    submitting: false,
   },
   onLoad(query: { eventId?: string }) {
     this.setData({ eventId: query.eventId || '', userKey: getUserKey() });
@@ -28,18 +29,26 @@ Page({
     this.setData({ content: event.detail.value });
   },
   async submit() {
+    if (this.data.submitting) return;
     if (!this.data.eventId) {
       wx.showToast({ title: '赛事不存在', icon: 'none' });
       return;
     }
     const content = this.data.content.trim() || feedbackTypes[this.data.typeIndex];
-    await submitFeedback({
-      eventId: this.data.eventId,
-      userKey: this.data.userKey,
-      feedbackType: feedbackTypes[this.data.typeIndex],
-      content,
-    });
-    wx.showToast({ title: '提交成功', icon: 'success' });
-    setTimeout(() => wx.navigateBack(), 600);
+    this.setData({ submitting: true });
+    try {
+      await submitFeedback({
+        eventId: this.data.eventId,
+        userKey: this.data.userKey,
+        feedbackType: feedbackTypes[this.data.typeIndex],
+        content,
+      });
+      wx.showToast({ title: '提交成功', icon: 'success' });
+      setTimeout(() => wx.navigateBack(), 600);
+    } catch {
+      wx.showToast({ title: '反馈失败', icon: 'none' });
+    } finally {
+      this.setData({ submitting: false });
+    }
   },
 });
