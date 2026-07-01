@@ -1,0 +1,22 @@
+{
+  "name": "worth-running",
+  "private": true,
+  "version": "0.1.0",
+  "description": "哪场值得跑 V0.1 monorepo",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @worth-running/api --filter @worth-running/admin dev",
+    "dev:api": "pnpm --filter @worth-running/api dev",
+    "dev:admin": "pnpm --filter @worth-running/admin dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write .",
+    "db:generate": "pnpm --filter @worth-running/database db:generate",
+    "db:migrate": "pnpm --filter @worth-running/database db:migrate",
+    "db:seed": "pnpm --filter @worth-running/database db:seed"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  },
+  "packageManager": "pnpm@11.7.0"
+}
