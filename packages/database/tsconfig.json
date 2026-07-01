@@ -4,5 +4,5 @@
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["src", "prisma/seed.ts"]
+  "include": ["src", "prisma/seed.ts", "scripts"]
 }

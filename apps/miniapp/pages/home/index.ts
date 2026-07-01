@@ -18,13 +18,14 @@ Page({
     preferenceText: '',
     events: [] as EventSummary[],
     closingEvents: [] as EventSummary[],
+    fallbackNotice: '',
   },
   onShow() {
     this.load();
   },
   async load() {
     const userKey = getUserKey();
-    this.setData({ loading: true, error: '', userKey });
+    this.setData({ loading: true, error: '', fallbackNotice: '', userKey });
     try {
       const preference = await getPreference(userKey).catch(() => null);
       const params = {
@@ -34,7 +35,7 @@ Page({
         distance: preference?.distances[0] || '',
       };
       const [eventRes, favoriteRes] = await Promise.all([
-        getEvents(params),
+        this.getEventsWithFallback(params),
         getFavorites(userKey).catch(() => ({ items: [] })),
       ]);
       const favoriteIds = new Set(favoriteRes.items.map((item) => item.eventId));
@@ -48,6 +49,9 @@ Page({
       this.setData({
         events: events.slice(0, 4),
         closingEvents: events.filter((item) => item.signupStatus === 'closing_soon').slice(0, 3),
+        fallbackNotice: eventRes.usedFallback
+          ? '暂未找到完全匹配偏好的赛事，先看看近期赛事。'
+          : '',
         preference,
         preferenceText,
         loading: false,
@@ -56,6 +60,23 @@ Page({
       this.setData({ loading: false, error: (error as Error).message || '网络异常' });
       wx.showToast({ title: '网络异常', icon: 'none' });
     }
+  },
+  async getEventsWithFallback(params: {
+    page: number;
+    pageSize: number;
+    city: string;
+    distance: string;
+  }) {
+    const firstRes = await getEvents(params);
+    if (firstRes.items.length) return { ...firstRes, usedFallback: false };
+
+    if (params.city) {
+      const cityRes = await getEvents({ page: params.page, pageSize: params.pageSize, city: params.city });
+      if (cityRes.items.length) return { ...cityRes, usedFallback: Boolean(params.distance) };
+    }
+
+    const allRes = await getEvents({ page: params.page, pageSize: params.pageSize });
+    return { ...allRes, usedFallback: Boolean(params.city || params.distance) && allRes.items.length > 0 };
   },
   openPreference() {
     wx.navigateTo({ url: '/pages/preferences/index' });

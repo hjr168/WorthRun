@@ -1,0 +1,11 @@
+eventName,city,eventDate,distanceItems,signupStatus,signupDeadline,officialUrl,sourceName,sourceUrl,sourceLevel,runJudgement,judgementSummary,judgementReasons,suitableFor,notSuitableFor,tags
+待填写赛事1,广州,YYYY-MM-DD,10K|半马,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实
+待填写赛事2,深圳,YYYY-MM-DD,5K|10K,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实
+待填写赛事3,佛山,YYYY-MM-DD,半马,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实
+待填写赛事4,东莞,YYYY-MM-DD,10K,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实
+待填写赛事5,珠海,YYYY-MM-DD,5K|10K,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实
+待填写赛事6,中山,YYYY-MM-DD,10K,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实
+待填写赛事7,惠州,YYYY-MM-DD,半马|10K,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实
+待填写赛事8,江门,YYYY-MM-DD,10K,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实
+待填写赛事9,肇庆,YYYY-MM-DD,5K|10K,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实
+待填写赛事10,香港,YYYY-MM-DD,10K,unknown,,,待核实来源,,unknown,unverified,待人工核验后补充,信息待核实,待补充,待补充,信息待核实

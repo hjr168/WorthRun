@@ -1,3 +1,3 @@
-export const config = {
-  apiBaseUrl: 'http://localhost:4000',
-};
+import { devConfig } from './dev';
+
+export const config = devConfig;

@@ -19,6 +19,7 @@
       <view class="preference-title">偏好摘要</view>
       <view class="muted">{{preferenceText}}</view>
     </view>
+    <view wx:if="{{fallbackNotice}}" class="fallback-notice">{{fallbackNotice}}</view>
 
     <view class="section">
       <view class="section-title">今日跑前判断</view>

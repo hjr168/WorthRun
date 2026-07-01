@@ -1,3 +1,5 @@
+import { config } from '../config/index';
+
 export type RunJudgement = 'priority' | 'watch' | 'unverified';
 export type SignupStatus = 'signup_open' | 'closing_soon' | 'closed' | 'not_started' | 'unknown';
 export type InfoStatus =
@@ -167,4 +169,3 @@ export function submitFeedback(data: {
 export function getChecklistTemplates() {
   return request<{ items: ChecklistItem[] }>('/api/checklist/templates', { silent: true });
 }
-import { config } from '../config/index';
