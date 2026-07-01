@@ -7,7 +7,7 @@
 
 .event-head {
   display: flex;
-  gap: 18rpx;
+  gap: 20rpx;
   align-items: flex-start;
 }
 
@@ -33,18 +33,36 @@
 }
 
 .favorite {
-  width: 104rpx;
-  min-height: 58rpx;
-  border: 1rpx solid #e2e8f0;
-  background: #ffffff;
-  color: #1e293b;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  min-width: 112rpx;
+  min-height: 56rpx;
+  border: 1rpx solid #d6e3e0;
+  border-radius: 999rpx;
+  background: #f8fafc;
+  color: #475569;
   padding: 0;
-  font-size: 24rpx;
+  line-height: 1;
+  font-size: 23rpx;
 }
 
 .favorite.active {
   border-color: #2a9d8f;
-  color: #2a9d8f;
+  background: #eef6f5;
+  color: #1f8a7f;
+}
+
+.favorite-icon {
+  font-size: 25rpx;
+  line-height: 1;
+}
+
+.favorite-label {
+  font-size: 22rpx;
+  line-height: 1;
 }
 
 .status-row {

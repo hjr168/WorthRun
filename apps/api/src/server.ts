@@ -849,8 +849,9 @@ app.get(
     const preference = await prisma.userPreference.findUnique({
       where: { userKey: req.params.userKey },
     });
-    if (!preference) throw new HttpError(404, '偏好不存在');
-    res.json(preference);
+    // 无偏好记录时返回 200 + null，作为"尚无偏好"的语义化信号，
+    // 避免新用户/清过数据的用户在控制台看到 404 噪音。
+    res.json(preference ?? null);
   }),
 );
 

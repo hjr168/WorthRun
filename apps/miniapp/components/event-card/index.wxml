@@ -4,8 +4,9 @@
       <view class="event-name">{{event.eventName}}</view>
       <view class="event-meta">{{event.city}} · {{dateText}} · {{distanceText}}</view>
     </view>
-    <button wx:if="{{showFavorite}}" class="favorite {{event.isFavorite ? 'active' : ''}}" catchtap="onFavorite">
-      {{event.isFavorite ? '已藏' : '收藏'}}
+    <button wx:if="{{showFavorite}}" class="favorite {{event.isFavorite ? 'active' : ''}}" catchtap="onFavorite" aria-label="{{event.isFavorite ? '取消收藏' : '收藏赛事'}}">
+      <text class="favorite-icon">{{event.isFavorite ? '★' : '☆'}}</text>
+      <text class="favorite-label">{{event.isFavorite ? '已收藏' : '收藏'}}</text>
     </button>
   </view>
   <view class="status-row">
