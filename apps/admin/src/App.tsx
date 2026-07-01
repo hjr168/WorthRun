@@ -5,6 +5,7 @@ import {
   Descriptions,
   Form,
   Input,
+  InputNumber,
   Layout,
   Menu,
   Modal,
@@ -22,20 +23,31 @@ import {
   EditOutlined,
   EyeInvisibleOutlined,
   FileDoneOutlined,
+  LogoutOutlined,
   PlusOutlined,
+  ProfileOutlined,
   StopOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
-import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import {
   infoStatusLabels,
   publishStatusLabels,
   runJudgementLabels,
   signupStatusLabels,
 } from '@worth-running/shared';
-import { apiGet, apiSend } from './api';
-import { AdminEvent, OperationLog } from './types';
+import { apiGet, apiSend, clearToken, getToken, setToken } from './api';
+import { AdminEvent, AdminUser, FeedbackItem, OperationLog } from './types';
 
 const { Content, Sider } = Layout;
 const { TextArea } = Input;
@@ -53,8 +65,61 @@ const runJudgementOptions = Object.entries(runJudgementLabels).map(([value, labe
   value,
   label,
 }));
+const sourceLevelOptions = [
+  { value: 'official', label: '官方来源' },
+  { value: 'trusted', label: '可信来源' },
+  { value: 'secondary', label: '二级来源' },
+  { value: 'unknown', label: '待核实' },
+];
+const feedbackStatusOptions = [
+  { value: 'pending', label: '待处理' },
+  { value: 'handling', label: '处理中' },
+  { value: 'resolved', label: '已处理' },
+  { value: 'rejected', label: '已驳回' },
+];
 
-function Shell() {
+export function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/*" element={<ProtectedShell />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+function ProtectedShell() {
+  const [admin, setAdmin] = useState<AdminUser | null>(null);
+  const [checking, setChecking] = useState(true);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!getToken()) {
+      setChecking(false);
+      return;
+    }
+    apiGet<{ admin: AdminUser }>('/api/admin/auth/me')
+      .then((result) => setAdmin(result.admin))
+      .catch(() => clearToken())
+      .finally(() => setChecking(false));
+  }, []);
+
+  if (checking) return null;
+  if (!getToken()) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+
+  return <Shell admin={admin} onLogout={() => logout(navigate)} />;
+}
+
+function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => void }) {
+  const location = useLocation();
+  const selectedKey = location.pathname.startsWith('/events')
+    ? '/events'
+    : location.pathname.startsWith('/quality')
+      ? '/quality'
+      : '/workbench';
+
   return (
     <Layout className="app-shell">
       <Sider width={220}>
@@ -62,7 +127,7 @@ function Shell() {
         <Menu
           theme="dark"
           mode="inline"
-          defaultSelectedKeys={[location.pathname.startsWith('/events') ? '/events' : '/workbench']}
+          selectedKeys={[selectedKey]}
           items={[
             {
               key: '/workbench',
@@ -74,10 +139,21 @@ function Shell() {
               icon: <DatabaseOutlined />,
               label: <Link to="/events">赛事库</Link>,
             },
+            {
+              key: '/quality',
+              icon: <ProfileOutlined />,
+              label: <Link to="/quality">质量反馈</Link>,
+            },
           ]}
         />
       </Sider>
       <Layout>
+        <div className="topbar">
+          <span>{admin?.displayName || '后台用户'}</span>
+          <Button icon={<LogoutOutlined />} onClick={onLogout}>
+            退出登录
+          </Button>
+        </div>
         <Content>
           <Routes>
             <Route path="/" element={<Navigate to="/workbench" replace />} />
@@ -85,6 +161,7 @@ function Shell() {
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/edit" element={<EventEditPage />} />
             <Route path="/events/edit/:id" element={<EventEditPage />} />
+            <Route path="/quality" element={<QualityPage />} />
           </Routes>
         </Content>
       </Layout>
@@ -92,11 +169,41 @@ function Shell() {
   );
 }
 
-export function App() {
+function LoginPage() {
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const submit = async (values: { username: string; password: string }) => {
+    setLoading(true);
+    try {
+      const result = await apiSend<{ token: string }>('POST', '/api/admin/auth/login', values);
+      setToken(result.token);
+      message.success('登录成功');
+      navigate((location.state as { from?: string } | null)?.from || '/workbench', { replace: true });
+    } catch (error) {
+      showError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <BrowserRouter>
-      <Shell />
-    </BrowserRouter>
+    <main className="login-page">
+      <Card className="login-card" title="哪场值得跑后台登录">
+        <Form layout="vertical" initialValues={{ username: 'admin' }} onFinish={submit}>
+          <Form.Item label="用户名" name="username" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="密码" name="password" rules={[{ required: true }]}>
+            <Input.Password />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={loading} block>
+            登录
+          </Button>
+        </Form>
+      </Card>
+    </main>
   );
 }
 
@@ -132,7 +239,7 @@ function WorkbenchPage() {
           showIcon
           message="AI 整理，仅供参考，报名以官方为准。官方入口统一使用“前往官方确认”。"
         />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(160px, 1fr))', gap: 16 }}>
+        <div className="stat-grid">
           <Card>
             <Statistic title="当前赛事总数" value={data?.totalEvents ?? 0} />
           </Card>
@@ -146,24 +253,7 @@ function WorkbenchPage() {
             <Statistic title="待处理反馈数" value={data?.pendingFeedback ?? 0} />
           </Card>
         </div>
-        <Card title="最近操作记录">
-          <Table
-            rowKey="id"
-            dataSource={data?.recentLogs || []}
-            pagination={false}
-            columns={[
-              { title: '操作', dataIndex: 'action' },
-              { title: '对象', dataIndex: 'targetType' },
-              { title: '对象 ID', dataIndex: 'targetId' },
-              { title: '备注', dataIndex: 'note' },
-              {
-                title: '时间',
-                dataIndex: 'createdAt',
-                render: (value) => dayjs(value).format('YYYY-MM-DD HH:mm'),
-              },
-            ]}
-          />
-        </Card>
+        <OperationLogTable logs={data?.recentLogs || []} />
       </Space>
     </main>
   );
@@ -174,6 +264,7 @@ function EventsPage() {
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [logEvent, setLogEvent] = useState<AdminEvent | null>(null);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -258,7 +349,7 @@ function EventsPage() {
         rowKey="id"
         loading={loading}
         dataSource={events}
-        scroll={{ x: 1300 }}
+        scroll={{ x: 1450 }}
         columns={[
           { title: '赛事名称', dataIndex: 'eventName', fixed: 'left', width: 210 },
           { title: '城市', dataIndex: 'city', width: 90 },
@@ -308,7 +399,7 @@ function EventsPage() {
           {
             title: '操作',
             fixed: 'right',
-            width: 280,
+            width: 340,
             render: (_, record) => (
               <Space wrap>
                 <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/events/edit/${record.id}`)}>
@@ -323,11 +414,15 @@ function EventsPage() {
                 <Button size="small" icon={<StopOutlined />} onClick={() => changeStatus(record, 'offline', '临时下架')}>
                   下架
                 </Button>
+                <Button size="small" onClick={() => setLogEvent(record)}>
+                  日志
+                </Button>
               </Space>
             ),
           },
         ]}
       />
+      <EventLogsModal event={logEvent} onClose={() => setLogEvent(null)} />
     </main>
   );
 }
@@ -337,6 +432,7 @@ function EventEditPage() {
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [logs, setLogs] = useState<OperationLog[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -352,8 +448,12 @@ function EventEditPage() {
           suitableFor: event.suitableFor.join('\n'),
           notSuitableFor: event.notSuitableFor.join('\n'),
           tags: event.tags.join(', '),
+          checklistItems: event.checklistItems,
         });
       })
+      .catch(showError);
+    apiGet<{ items: OperationLog[] }>(`/api/admin/operation-logs?targetType=events&targetId=${id}`)
+      .then((result) => setLogs(result.items))
       .catch(showError);
   }, [form, id]);
 
@@ -366,7 +466,7 @@ function EventEditPage() {
       suitableFor: splitLines(values.suitableFor),
       notSuitableFor: splitLines(values.notSuitableFor),
       tags: splitComma(values.tags),
-      checklistItems: defaultChecklist(values),
+      checklistItems: values.checklistItems || [],
       eventTags: splitComma(values.tags).map((tagName) => ({ tagName, tagType: 'experience' })),
       fieldConfidence: {
         signupDeadline: values.signupDeadline ? 'verified' : 'pending_verify',
@@ -414,6 +514,7 @@ function EventEditPage() {
             infoStatus: 'pending_verify',
             runJudgement: 'unverified',
             sourceLevel: 'official',
+            checklistItems: defaultChecklist(),
           }}
         >
           <Tabs
@@ -457,7 +558,7 @@ function EventEditPage() {
                           <Input type="datetime-local" />
                         </Form.Item>
                         <Form.Item label="官方入口" name="officialUrl" rules={[{ required: true }]}>
-                          <Input placeholder="前往官方确认" />
+                          <Input placeholder="https://example.com" />
                         </Form.Item>
                       </div>
                     </Section>
@@ -468,26 +569,29 @@ function EventEditPage() {
                 key: 'judgement',
                 label: '跑前判断',
                 children: (
-                  <>
-                    <Section title="跑前判断">
-                      <Form.Item label="跑前判断" name="runJudgement" rules={[{ required: true }]}>
-                        <Select options={runJudgementOptions} />
-                      </Form.Item>
-                      <Form.Item label="一句话判断" name="judgementSummary">
-                        <Input />
-                      </Form.Item>
-                      <Form.Item label="判断理由" name="judgementReasons">
-                        <TextArea rows={4} placeholder="每行一条" />
-                      </Form.Item>
-                      <Form.Item label="适合谁" name="suitableFor">
-                        <TextArea rows={3} placeholder="每行一条" />
-                      </Form.Item>
-                      <Form.Item label="不太适合谁" name="notSuitableFor">
-                        <TextArea rows={3} placeholder="每行一条" />
-                      </Form.Item>
-                    </Section>
-                  </>
+                  <Section title="跑前判断">
+                    <Form.Item label="跑前判断" name="runJudgement" rules={[{ required: true }]}>
+                      <Select options={runJudgementOptions} />
+                    </Form.Item>
+                    <Form.Item label="一句话判断" name="judgementSummary">
+                      <Input />
+                    </Form.Item>
+                    <Form.Item label="判断理由" name="judgementReasons">
+                      <TextArea rows={4} placeholder="每行一条" />
+                    </Form.Item>
+                    <Form.Item label="适合谁" name="suitableFor">
+                      <TextArea rows={3} placeholder="每行一条" />
+                    </Form.Item>
+                    <Form.Item label="不太适合谁" name="notSuitableFor">
+                      <TextArea rows={3} placeholder="每行一条" />
+                    </Form.Item>
+                  </Section>
                 ),
+              },
+              {
+                key: 'checklist',
+                label: '报名前确认清单',
+                children: <ChecklistEditor />,
               },
               {
                 key: 'source',
@@ -508,14 +612,7 @@ function EventEditPage() {
                           <Input />
                         </Form.Item>
                         <Form.Item label="来源等级" name="sourceLevel" rules={[{ required: true }]}>
-                          <Select
-                            options={[
-                              { value: 'official', label: '官方来源' },
-                              { value: 'trusted', label: '可信来源' },
-                              { value: 'secondary', label: '二级来源' },
-                              { value: 'unknown', label: '待核实' },
-                            ]}
-                          />
+                          <Select options={sourceLevelOptions} />
                         </Form.Item>
                         <Form.Item label="信息状态" name="infoStatus" rules={[{ required: true }]}>
                           <Select options={infoStatusOptions} />
@@ -536,11 +633,202 @@ function EventEditPage() {
                   </>
                 ),
               },
+              ...(id
+                ? [
+                    {
+                      key: 'logs',
+                      label: '操作日志',
+                      children: <OperationLogTable logs={logs} />,
+                    },
+                  ]
+                : []),
             ]}
           />
         </Form>
       </Card>
     </main>
+  );
+}
+
+function ChecklistEditor() {
+  return (
+    <Section title="报名前确认清单">
+      <Form.List name="checklistItems">
+        {(fields, { add, remove }) => (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            {fields.map((field) => (
+              <div className="checklist-row" key={field.key}>
+                <Form.Item {...field} label="分组" name={[field.name, 'groupName']} rules={[{ required: true }]}>
+                  <Input />
+                </Form.Item>
+                <Form.Item {...field} label="确认项" name={[field.name, 'itemName']} rules={[{ required: true }]}>
+                  <Input />
+                </Form.Item>
+                <Form.Item {...field} label="状态" name={[field.name, 'itemStatus']} rules={[{ required: true }]}>
+                  <Select options={infoStatusOptions} />
+                </Form.Item>
+                <Form.Item {...field} label="说明" name={[field.name, 'description']}>
+                  <Input />
+                </Form.Item>
+                <Form.Item {...field} label="排序" name={[field.name, 'sortOrder']}>
+                  <InputNumber min={0} />
+                </Form.Item>
+                <Button danger onClick={() => remove(field.name)}>
+                  删除
+                </Button>
+              </div>
+            ))}
+            <Button icon={<PlusOutlined />} onClick={() => add({ itemStatus: 'pending_verify', sortOrder: fields.length + 1 })}>
+              新增确认项
+            </Button>
+          </Space>
+        )}
+      </Form.List>
+    </Section>
+  );
+}
+
+function QualityPage() {
+  const navigate = useNavigate();
+  const [items, setItems] = useState<FeedbackItem[]>([]);
+  const [status, setStatus] = useState<string>();
+
+  const load = () => {
+    apiGet<{ items: FeedbackItem[] }>(`/api/admin/feedback${status ? `?status=${status}` : ''}`)
+      .then((result) => setItems(result.items))
+      .catch(showError);
+  };
+
+  useEffect(load, [status]);
+
+  const handleFeedback = (feedback: FeedbackItem, nextStatus: 'resolved' | 'rejected') => {
+    let note = '';
+    Modal.confirm({
+      title: nextStatus === 'resolved' ? '标记已处理' : '标记驳回',
+      content: (
+        <Input.TextArea
+          rows={4}
+          placeholder="处理备注"
+          onChange={(event) => {
+            note = event.target.value;
+          }}
+        />
+      ),
+      onOk: async () => {
+        await apiSend('PATCH', `/api/admin/feedback/${feedback.id}/handle`, {
+          status: nextStatus,
+          adminNote: note,
+        });
+        message.success('反馈已更新');
+        load();
+      },
+    });
+  };
+
+  return (
+    <main className="page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">质量与反馈</h1>
+          <div className="page-subtitle">处理用户纠错反馈，关键处理动作会写入操作日志</div>
+        </div>
+        <Select
+          allowClear
+          placeholder="反馈状态"
+          style={{ width: 180 }}
+          options={feedbackStatusOptions}
+          onChange={setStatus}
+        />
+      </div>
+      <Table
+        rowKey="id"
+        dataSource={items}
+        columns={[
+          { title: '反馈类型', dataIndex: 'feedbackType', width: 130 },
+          {
+            title: '状态',
+            dataIndex: 'status',
+            width: 110,
+            render: (value) => feedbackStatusOptions.find((item) => item.value === value)?.label || value,
+          },
+          {
+            title: '关联赛事',
+            dataIndex: 'event',
+            width: 220,
+            render: (event) =>
+              event ? (
+                <Button type="link" onClick={() => navigate(`/events/edit/${event.id}`)}>
+                  {event.eventName}
+                </Button>
+              ) : (
+                '-'
+              ),
+          },
+          { title: '反馈内容', dataIndex: 'content' },
+          { title: '处理备注', dataIndex: 'adminNote' },
+          {
+            title: '提交时间',
+            dataIndex: 'createdAt',
+            width: 150,
+            render: (value) => dayjs(value).format('MM-DD HH:mm'),
+          },
+          {
+            title: '操作',
+            width: 180,
+            render: (_, record) => (
+              <Space>
+                <Button size="small" onClick={() => handleFeedback(record, 'resolved')}>
+                  已处理
+                </Button>
+                <Button size="small" danger onClick={() => handleFeedback(record, 'rejected')}>
+                  驳回
+                </Button>
+              </Space>
+            ),
+          },
+        ]}
+      />
+    </main>
+  );
+}
+
+function OperationLogTable({ logs }: { logs: OperationLog[] }) {
+  return (
+    <Card title="操作记录">
+      <Table
+        rowKey="id"
+        dataSource={logs}
+        pagination={false}
+        columns={[
+          { title: '操作', dataIndex: 'action' },
+          { title: '对象', dataIndex: 'targetType' },
+          { title: '对象 ID', dataIndex: 'targetId' },
+          { title: '备注', dataIndex: 'note' },
+          {
+            title: '时间',
+            dataIndex: 'createdAt',
+            render: (value) => dayjs(value).format('YYYY-MM-DD HH:mm'),
+          },
+        ]}
+      />
+    </Card>
+  );
+}
+
+function EventLogsModal({ event, onClose }: { event: AdminEvent | null; onClose: () => void }) {
+  const [logs, setLogs] = useState<OperationLog[]>([]);
+
+  useEffect(() => {
+    if (!event) return;
+    apiGet<{ items: OperationLog[] }>(`/api/admin/operation-logs?targetType=events&targetId=${event.id}`)
+      .then((result) => setLogs(result.items))
+      .catch(showError);
+  }, [event]);
+
+  return (
+    <Modal title={event ? `${event.eventName} 操作日志` : '操作日志'} open={!!event} onCancel={onClose} footer={null} width={860}>
+      <OperationLogTable logs={logs} />
+    </Modal>
   );
 }
 
@@ -553,17 +841,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function defaultChecklist(values: Record<string, string>) {
-  const items = [
-    ['报名信息', '报名截止', values.signupDeadline ? 'verified' : 'pending_verify'],
+function defaultChecklist() {
+  return [
+    ['报名信息', '报名截止', 'pending_verify'],
     ['报名信息', '是否抽签', 'pending_verify'],
     ['赛事规则', '关门时间', 'pending_verify'],
     ['赛事服务', '领物时间', 'pending_verify'],
     ['路线信息', '官方路线', 'pending_verify'],
     ['风险提示', '天气变化', 'pending_verify'],
     ['风险提示', '赛事变更公告', 'pending_verify'],
-  ];
-  return items.map(([groupName, itemName, itemStatus], index) => ({
+  ].map(([groupName, itemName, itemStatus], index) => ({
     groupName,
     itemName,
     itemStatus,
@@ -583,6 +870,11 @@ function splitLines(value?: string) {
     .split('\n')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function logout(navigate: ReturnType<typeof useNavigate>) {
+  clearToken();
+  navigate('/login', { replace: true });
 }
 
 function showError(error: unknown) {

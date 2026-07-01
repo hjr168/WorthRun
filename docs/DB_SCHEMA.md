@@ -14,4 +14,10 @@ V0.1 使用 PostgreSQL + Prisma。
 - `admin_operation_logs`：后台关键操作日志。
 - `system_configs`：基础配置。
 
-发布状态、信息状态、跑前判断、报名状态等枚举同时定义在 Prisma schema 和 `packages/shared`。
+发布状态、信息状态、跑前判断、报名状态、来源等级等枚举同时定义在 Prisma schema 和 `packages/shared`。
+
+第二阶段变更：
+
+- 新增 Prisma enum `SourceLevel`：`official`、`trusted`、`secondary`、`unknown`。
+- `events.source_level` 从字符串改为 `SourceLevel` enum。
+- `admin_users.password_hash` 继续用于后台登录密码 hash，不存储明文密码。

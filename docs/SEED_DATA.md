@@ -15,3 +15,14 @@
 ```bash
 pnpm db:seed
 ```
+
+默认后台开发账号：
+
+- 用户名：`admin`
+- 密码：`admin`
+
+密码会以 PBKDF2 hash 写入 `admin_users.password_hash`。
+
+30 条赛事导入前模板见：
+
+- `docs/seed-events-template.csv`

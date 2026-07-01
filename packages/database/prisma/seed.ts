@@ -1,4 +1,5 @@
-import { PrismaClient, RunJudgement, SignupStatus } from '@prisma/client';
+import { pbkdf2Sync, randomBytes } from 'node:crypto';
+import { PrismaClient, RunJudgement, SignupStatus, SourceLevel } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -21,7 +22,7 @@ type SeedEvent = {
   officialUrl: string;
   sourceName: string;
   sourceUrl: string;
-  sourceLevel: string;
+  sourceLevel: SourceLevel;
   runJudgement: RunJudgement;
   judgementSummary: string;
   judgementReasons: string[];
@@ -40,7 +41,7 @@ const events: SeedEvent[] = [
     officialUrl: 'https://example.com/guangzhou-half',
     sourceName: '赛事官方公告',
     sourceUrl: 'https://example.com/guangzhou-half/source',
-    sourceLevel: 'official',
+    sourceLevel: SourceLevel.official,
     runJudgement: RunJudgement.priority,
     judgementSummary: '城市交通便利，半马跑者可优先关注。',
     judgementReasons: ['市区到达较方便', '半马距离适合进阶训练'],
@@ -57,7 +58,7 @@ const events: SeedEvent[] = [
     officialUrl: 'https://example.com/shenzhen-bay-run',
     sourceName: '赛事官方公众号',
     sourceUrl: 'https://example.com/shenzhen-bay-run/source',
-    sourceLevel: 'official',
+    sourceLevel: SourceLevel.official,
     runJudgement: RunJudgement.watch,
     judgementSummary: '路线友好但信息仍需等官方细则。',
     judgementReasons: ['距离门槛低', '报名细则尚未完整'],
@@ -74,7 +75,7 @@ const events: SeedEvent[] = [
     officialUrl: 'https://example.com/foshan-xiqiao',
     sourceName: '赛事组委会信息',
     sourceUrl: 'https://example.com/foshan-xiqiao/source',
-    sourceLevel: 'trusted',
+    sourceLevel: SourceLevel.trusted,
     runJudgement: RunJudgement.priority,
     judgementSummary: '风景体验突出，适合周末轻旅行式参赛。',
     judgementReasons: ['路线体验较强', '距离设置适合大众跑者'],
@@ -91,7 +92,7 @@ const events: SeedEvent[] = [
     officialUrl: 'https://example.com/dongguan-songshanhu',
     sourceName: '官方报名页',
     sourceUrl: 'https://example.com/dongguan-songshanhu/source',
-    sourceLevel: 'official',
+    sourceLevel: SourceLevel.official,
     runJudgement: RunJudgement.unverified,
     judgementSummary: '赛事信息待核实，建议先收藏观望。',
     judgementReasons: ['部分时间信息不完整', '需等待官方补充公告'],
@@ -108,7 +109,7 @@ const events: SeedEvent[] = [
     officialUrl: 'https://example.com/zhuhai-lovers-road',
     sourceName: '赛事官方网站',
     sourceUrl: 'https://example.com/zhuhai-lovers-road/source',
-    sourceLevel: 'official',
+    sourceLevel: SourceLevel.official,
     runJudgement: RunJudgement.priority,
     judgementSummary: '海滨路线辨识度高，适合重视体验的半马跑者。',
     judgementReasons: ['路线体验鲜明', '半马目标清晰'],
@@ -119,13 +120,15 @@ const events: SeedEvent[] = [
 ];
 
 async function main() {
+  const adminPasswordHash = hashPassword('admin');
+
   await prisma.adminUser.upsert({
     where: { username: 'admin' },
-    update: {},
+    update: { passwordHash: adminPasswordHash, role: 'super_admin', status: 'active' },
     create: {
       id: 'seed-admin',
       username: 'admin',
-      passwordHash: 'dev-only-password-hash',
+      passwordHash: adminPasswordHash,
       displayName: '默认管理员',
       role: 'super_admin',
     },
@@ -203,3 +206,9 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
+
+function hashPassword(password: string) {
+  const salt = randomBytes(16).toString('hex');
+  const hash = pbkdf2Sync(password, salt, 100_000, 32, 'sha256').toString('hex');
+  return `pbkdf2_sha256$100000$${salt}$${hash}`;
+}

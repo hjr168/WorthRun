@@ -1,0 +1,31 @@
+eventName,city,eventDate,distanceItems,signupStatus,signupDeadline,officialUrl,sourceName,sourceUrl,sourceLevel,runJudgement,judgementSummary,judgementReasons,suitableFor,notSuitableFor,tags
+广州半程马拉松,广州,2026-10-18,"半马|欢乐跑",signup_open,2026-09-20T23:59:00+08:00,https://example.com/guangzhou-half,赛事官方公告,https://example.com/guangzhou-half/source,official,priority,城市交通便利，半马跑者可优先关注。,"市区到达较方便|半马距离适合进阶训练","想跑半马的广州及周边跑者|重视交通便利的跑者",只想跑全马的跑者,"交通方便|新手友好|周末可去"
+深圳湾迎新跑,深圳,2026-01-03,"10K|5K",not_started,,https://example.com/shenzhen-bay-run,赛事官方公众号,https://example.com/shenzhen-bay-run/source,official,watch,路线友好但信息仍需等官方细则。,"距离门槛低|报名细则尚未完整","新手跑者|想轻松参赛的深圳跑者",需要完整竞赛规程后再决策的跑者,"新手友好|风景路线"
+佛山西樵山环湖跑,佛山,2026-04-12,"15K|5K",closing_soon,2026-03-20T23:59:00+08:00,https://example.com/foshan-xiqiao,赛事组委会信息,https://example.com/foshan-xiqiao/source,trusted,priority,风景体验突出，适合周末轻旅行式参赛。,"路线体验较强|距离设置适合大众跑者","喜欢风景路线的跑者|周末可安排短途出行的跑者",追求平路 PB 的跑者,"风景路线|周末可去"
+东莞松山湖路跑,东莞,2026-05-24,"半马|10K",unknown,,https://example.com/dongguan-songshanhu,官方报名页,https://example.com/dongguan-songshanhu/source,official,unverified,赛事信息待核实，建议先收藏观望。,"部分时间信息不完整|需等待官方补充公告","东莞本地跑者|愿意等待信息补齐的跑者",需要立即确认行程的跑者,"信息较完整|交通方便"
+珠海情侣路半程马拉松,珠海,2026-11-08,半马,signup_open,2026-10-15T23:59:00+08:00,https://example.com/zhuhai-lovers-road,赛事官方网站,https://example.com/zhuhai-lovers-road/source,official,priority,海滨路线辨识度高，适合重视体验的半马跑者。,"路线体验鲜明|半马目标清晰","喜欢海滨路线的跑者|计划半马完赛的跑者",只关注全马项目的跑者,"风景路线|适合 PB|周末可去"
+广州黄埔科学城路跑,广州,2026-03-15,10K,unknown,,https://example.com/template-06,官方公告,https://example.com/template-06/source,unknown,watch,待补充官方细则。,"路线待确认|报名时间待确认",广州本地跑者,需要立刻决策的跑者,"交通方便|信息待核实"
+深圳大鹏海岸跑,深圳,2026-04-26,"半马|10K",unknown,,https://example.com/template-07,官方公告,https://example.com/template-07/source,unknown,watch,海岸路线可观望。,"风景体验可能较好|交通安排待核实",喜欢风景路线的跑者,不方便早起跨城的跑者,"风景路线|周末可去"
+佛山岭南欢乐跑,佛山,2026-06-06,"5K|亲子跑",unknown,,https://example.com/template-08,官方公告,https://example.com/template-08/source,unknown,unverified,信息待核实。,"项目设置待确认|服务信息待确认",亲子和新手跑者,严肃竞速跑者,"新手友好|信息待核实"
+东莞滨江夜跑,东莞,2026-07-18,10K,unknown,,https://example.com/template-09,官方公告,https://example.com/template-09/source,unknown,watch,夜跑体验可观望。,"时间安排特别|补给信息待核实",喜欢夜跑的本地跑者,不适应晚间比赛的跑者,"周末可去|信息待核实"
+珠海横琴欢乐跑,珠海,2026-09-12,"10K|5K",unknown,,https://example.com/template-10,官方公告,https://example.com/template-10/source,unknown,watch,适合大众跑者先收藏。,"距离门槛较低|交通信息待核实",珠海及澳门周边跑者,追求全马训练的跑者,"新手友好|交通待核实"
+中山岐江路跑,中山,2026-03-29,10K,unknown,,https://example.com/template-11,官方公告,https://example.com/template-11/source,unknown,unverified,等待官方信息补齐。,"报名时间待确认|路线待确认",中山本地跑者,需要完整规程的跑者,信息待核实
+惠州西湖健康跑,惠州,2026-05-10,"10K|5K",unknown,,https://example.com/template-12,官方公告,https://example.com/template-12/source,unknown,watch,风景路线可观望。,"路线体验可能较好|人流组织待核实",周末短途跑者,追求 PB 的跑者,"风景路线|周末可去"
+江门滨江半程马拉松,江门,2026-10-25,半马,unknown,,https://example.com/template-13,官方公告,https://example.com/template-13/source,unknown,unverified,半马信息待核实。,"报名截止待确认|关门时间待确认",江门周边半马跑者,需要明确关门时间的跑者,信息待核实
+肇庆星湖欢乐跑,肇庆,2026-04-19,"10K|5K",unknown,,https://example.com/template-14,官方公告,https://example.com/template-14/source,unknown,watch,景区路线可观望。,"路线体验较强|交通接驳待核实",喜欢风景路线的跑者,追求高速赛道的跑者,"风景路线|周末可去"
+澳门城市路跑,澳门,2026-12-06,"半马|10K",unknown,,https://example.com/template-15,官方公告,https://example.com/template-15/source,unknown,watch,跨境参赛需关注细则。,"证件交通需提前确认|报名规则待核实",跨境参赛经验跑者,临时报名跑者,"周末可去|信息待核实"
+香港海滨十公里,香港,2026-02-22,10K,unknown,,https://example.com/template-16,官方公告,https://example.com/template-16/source,unknown,watch,适合关注海滨路线。,"路线体验较好|报名要求待核实",10K 目标跑者,不便跨境的跑者,风景路线
+广州大学城青春跑,广州,2026-05-17,"10K|5K",unknown,,https://example.com/template-17,官方公告,https://example.com/template-17/source,unknown,watch,新手友好度可能较高。,"距离设置亲民|交通信息待核实",学生和新手跑者,严肃竞速跑者,新手友好
+深圳人才公园路跑,深圳,2026-08-30,10K,unknown,,https://example.com/template-18,官方公告,https://example.com/template-18/source,unknown,watch,城市景观路线可观望。,"路线识别度较高|报名细则待补充",深圳本地跑者,只跑半马以上跑者,"交通方便|风景路线"
+佛山千灯湖路跑,佛山,2026-09-20,10K,unknown,,https://example.com/template-19,官方公告,https://example.com/template-19/source,unknown,watch,本地短距离赛事可收藏。,"距离适中|服务信息待核实",佛山本地跑者,跨城长距离跑者,"交通方便|周末可去"
+东莞生态园健康跑,东莞,2026-11-15,"10K|5K",unknown,,https://example.com/template-20,官方公告,https://example.com/template-20/source,unknown,unverified,等待官方公告。,"路线待确认|报名待确认",本地大众跑者,需要立即订行程的跑者,信息待核实
+珠海金湾航空城跑,珠海,2026-03-08,10K,unknown,,https://example.com/template-21,官方公告,https://example.com/template-21/source,unknown,watch,适合本地跑者关注。,"交通安排待确认|报名时间待确认",珠海本地跑者,跨城临时参赛跑者,周末可去
+中山翠亨新区路跑,中山,2026-06-21,10K,unknown,,https://example.com/template-22,官方公告,https://example.com/template-22/source,unknown,unverified,信息待补齐。,"赛事服务待确认|路线待确认",中山本地跑者,追求成熟大赛的跑者,信息待核实
+惠州巽寮湾海岸跑,惠州,2026-10-11,"半马|10K",unknown,,https://example.com/template-23,官方公告,https://example.com/template-23/source,unknown,watch,海岸体验值得观望。,"风景路线可能突出|交通住宿需确认",周末旅行跑者,不想安排住宿的跑者,"风景路线|周末可去"
+江门古劳水乡跑,江门,2026-04-05,10K,unknown,,https://example.com/template-24,官方公告,https://example.com/template-24/source,unknown,watch,特色路线可关注。,"路线体验有特点|官方信息待完善",喜欢特色路线的跑者,只追求 PB 的跑者,风景路线
+肇庆新区半程马拉松,肇庆,2026-12-13,半马,unknown,,https://example.com/template-25,官方公告,https://example.com/template-25/source,unknown,unverified,半马信息待核实。,"关门时间待确认|报名规则待确认",半马训练跑者,信息敏感型跑者,信息待核实
+澳门氹仔欢乐跑,澳门,2026-05-31,"10K|5K",unknown,,https://example.com/template-26,官方公告,https://example.com/template-26/source,unknown,watch,跨境短距离赛事可观望。,"距离门槛低|跨境安排需确认",珠澳周边跑者,不便跨境跑者,新手友好
+香港维港晨跑,香港,2026-07-05,10K,unknown,,https://example.com/template-27,官方公告,https://example.com/template-27/source,unknown,watch,城市晨跑路线路值得关注。,"路线识别度高|报名信息待核实",香港及深圳跑者,不便早起跨境的跑者,风景路线
+广州海珠湿地跑,广州,2026-11-29,"10K|5K",unknown,,https://example.com/template-28,官方公告,https://example.com/template-28/source,unknown,watch,适合轻松周末跑。,"环境体验可能较好|参赛规模待确认",新手和亲友跑者,严肃竞速跑者,"新手友好|风景路线"
+深圳光明科学城跑,深圳,2026-10-04,10K,unknown,,https://example.com/template-29,官方公告,https://example.com/template-29/source,unknown,unverified,等待官方确认。,"报名规则待确认|路线待确认",深圳本地跑者,需要完整规程的跑者,信息待核实
+佛山顺德美食路跑,佛山,2026-12-27,"10K|5K",unknown,,https://example.com/template-30,官方公告,https://example.com/template-30/source,unknown,watch,适合周末体验型跑者。,"体验属性较强|竞赛信息待核实",体验型跑者,只追求成绩的跑者,"周末可去|新手友好"

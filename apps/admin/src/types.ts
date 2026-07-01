@@ -49,3 +49,24 @@ export interface OperationLog {
   note?: string;
   createdAt: string;
 }
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  displayName: string;
+  role: string;
+}
+
+export interface FeedbackItem {
+  id: string;
+  eventId?: string | null;
+  userKey?: string | null;
+  feedbackType: string;
+  content: string;
+  status: 'pending' | 'handling' | 'resolved' | 'rejected';
+  adminNote?: string | null;
+  handledBy?: string | null;
+  handledAt?: string | null;
+  createdAt: string;
+  event?: { id: string; eventName: string; city: string } | null;
+}

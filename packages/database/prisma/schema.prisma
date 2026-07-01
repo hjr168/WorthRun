@@ -37,6 +37,13 @@ enum SignupStatus {
   unknown
 }
 
+enum SourceLevel {
+  official
+  trusted
+  secondary
+  unknown
+}
+
 enum FeedbackStatus {
   pending
   handling
@@ -70,7 +77,7 @@ model Event {
   officialUrl      String               @map("official_url")
   sourceName       String               @map("source_name")
   sourceUrl        String?              @map("source_url")
-  sourceLevel      String               @map("source_level")
+  sourceLevel      SourceLevel          @default(unknown) @map("source_level")
   publishStatus    PublishStatus        @default(draft) @map("publish_status")
   infoStatus       InfoStatus           @default(pending_verify) @map("info_status")
   runJudgement     RunJudgement         @default(unverified) @map("run_judgement")
