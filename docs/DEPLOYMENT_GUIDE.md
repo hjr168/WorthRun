@@ -26,14 +26,22 @@ pnpm --filter @worth-running/api start
 
 - 创建独立数据库和账号。
 - 将生产或测试数据库连接串写入部署环境的 `DATABASE_URL`。
-- 部署后先访问 `/health` 确认 API 可用，再验证后台登录和赛事接口。
+- 部署后先访问 `/health` 确认 API 与数据库都正常，再验证后台登录和赛事接口。
 
 ## 3. 后台部署
 
 - 后台是 React + Vite 静态站点，可构建后部署到任意静态托管或 Web 服务。
 - 构建时需要通过 `VITE_API_BASE_URL` 指向对应环境 API。
 - 后台登录依赖 API 的 `ADMIN_TOKEN_SECRET` 和数据库中的管理员账号。
-- 不要把默认 `admin/admin` 用于正式环境。正式环境上线前必须修改或替换管理员密码。
+- 不要把默认 `admin/admin` 用于测试或正式环境。上线前必须修改或替换管理员密码。
+
+重置管理员密码：
+
+```bash
+pnpm admin:reset-password -- admin "new-strong-password"
+```
+
+该命令不会在控制台输出明文密码。
 
 常用命令：
 
@@ -51,10 +59,10 @@ VITE_API_BASE_URL=https://your-api.example.com pnpm --filter @worth-running/admi
 
 ## 5. 发布前检查
 
-1. API `/health` 可访问。
+1. API `/health` 返回 `ok: true` 且 `database: "ok"`。
 2. 数据库迁移已执行。
 3. 后台可以登录、查看赛事、发布赛事。
 4. 至少 5 条真实赛事已人工核验并发布。
 5. 小程序 `test` 或 `prod` API 域名已经替换为真实 HTTPS 域名。
 6. 微信公众平台 request 合法域名配置完成。
-7. 默认 `admin/admin` 不再用于正式环境。
+7. 默认 `admin/admin` 不再用于测试或正式环境。

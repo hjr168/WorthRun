@@ -68,6 +68,20 @@ pnpm dev
 
 该密码由 seed 脚本写入 PBKDF2 hash，不以明文存储。
 
+测试和正式环境必须重置默认管理员密码：
+
+```bash
+pnpm admin:reset-password -- admin "new-strong-password"
+```
+
+也可以直接运行数据库包脚本：
+
+```bash
+pnpm --filter @worth-running/database reset-admin-password admin "new-strong-password"
+```
+
+重置命令不会在控制台输出明文密码。
+
 ## 微信开发者工具打开方式
 
 1. 先启动 API，确保 `http://localhost:4000/health` 可访问。
@@ -136,6 +150,8 @@ export const devConfig = {
 - `test.ts` 和 `prod.ts` 当前只是占位域名，需要替换为真实已备案、已配置的 HTTPS API 域名。
 - 体验版前必须替换 `apps/miniapp/config/test.ts` 中的测试 API 域名，不要把 `https://test-api.example.com` 带到体验版。
 - `urlCheck=false` 只允许开发调试，提审前必须开启合法域名校验。
+- 测试环境部署可参考 `docs/TEST_ENV_SETUP.md`。
+- 隐私政策草稿可参考 `docs/PRIVACY_POLICY_DRAFT.md`，正式发布前需要人工确认主体信息和联系方式。
 
 ## 真实赛事数据准备
 
@@ -196,6 +212,7 @@ pnpm dev:admin
 pnpm typecheck
 pnpm build
 pnpm format
+pnpm admin:reset-password -- admin "new-strong-password"
 pnpm db:import-events -- ./docs/real-events.local.csv --dry-run
 pnpm db:import-events -- ./docs/real-events.local.csv
 ```

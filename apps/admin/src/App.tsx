@@ -303,12 +303,36 @@ function EventsPage() {
               showIcon
               message={`小程序发布前检查：${publishChecks.canPublish ? '当前可以发布' : '当前不建议发布'}`}
               description={
-                <Space wrap>
-                  {publishChecks.checks.map((item) => (
-                    <Tag key={item.label} color={item.ok ? 'green' : 'orange'}>
-                      {item.label}：{item.ok ? '已具备' : '待补充/需复核'}
-                    </Tag>
-                  ))}
+                <Space direction="vertical" size={8}>
+                  <Descriptions size="small" column={1} bordered>
+                    <Descriptions.Item label="官方入口">
+                      {publishChecks.summary.officialUrl || '待补充'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="来源名称">
+                      {publishChecks.summary.sourceName || '待补充'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="跑前判断">
+                      {publishChecks.summary.runJudgement}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="判断理由">
+                      {publishChecks.summary.judgementReasons || '待补充'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="确认清单">
+                      {publishChecks.summary.checklistCount
+                        ? `${publishChecks.summary.checklistCount} 项`
+                        : '待补充'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="风险词">
+                      {publishChecks.summary.riskKeywords || '未命中'}
+                    </Descriptions.Item>
+                  </Descriptions>
+                  <Space wrap>
+                    {publishChecks.checks.map((item) => (
+                      <Tag key={item.label} color={item.ok ? 'green' : 'orange'}>
+                        {item.label}：{item.ok ? '已具备' : '待补充/需复核'}
+                      </Tag>
+                    ))}
+                  </Space>
                 </Space>
               }
             />
@@ -822,8 +846,20 @@ function buildMiniappPublishChecks(values: Record<string, unknown>) {
     },
   ];
   const canPublish = checks.every((item) => item.ok);
+  const runJudgement =
+    typeof values.runJudgement === 'string' && values.runJudgement in runJudgementLabels
+      ? runJudgementLabels[values.runJudgement as keyof typeof runJudgementLabels]
+      : '待补充';
+  const summary = {
+    officialUrl: typeof values.officialUrl === 'string' ? values.officialUrl : '',
+    sourceName: typeof values.sourceName === 'string' ? values.sourceName : '',
+    runJudgement,
+    judgementReasons: judgementReasons.join('；'),
+    checklistCount: checklistItems.length,
+    riskKeywords: matchedRiskKeywords.join('、'),
+  };
 
-  return { checks, canPublish };
+  return { checks, canPublish, summary };
 }
 
 function QualityPage() {

@@ -15,6 +15,7 @@ import { z, ZodError } from 'zod';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
+const host = process.env.HOST ?? '127.0.0.1';
 const isProduction = process.env.NODE_ENV === 'production';
 const tokenSecret =
   process.env.ADMIN_TOKEN_SECRET || process.env.DATABASE_URL || 'worth-running-dev-secret';
@@ -403,9 +404,19 @@ async function writeOperationLog(params: {
   });
 }
 
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'worth-running-api' });
-});
+app.get(
+  '/health',
+  asyncHandler(async (_req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ ok: true, database: 'ok', timestamp: new Date().toISOString() });
+    } catch {
+      res
+        .status(503)
+        .json({ ok: false, database: 'error', timestamp: new Date().toISOString() });
+    }
+  }),
+);
 
 app.post(
   '/api/admin/auth/login',
@@ -953,6 +964,6 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ message: '服务器内部错误' });
 });
 
-app.listen(port, () => {
-  console.log(`worth-running api listening on http://localhost:${port}`);
+app.listen(port, host, () => {
+  console.log(`worth-running api listening on http://${host}:${port}`);
 });

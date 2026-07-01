@@ -13,7 +13,8 @@
     "db:generate": "pnpm --filter @worth-running/database db:generate",
     "db:migrate": "pnpm --filter @worth-running/database db:migrate",
     "db:seed": "pnpm --filter @worth-running/database db:seed",
-    "db:import-events": "pnpm --filter @worth-running/database db:import-events"
+    "db:import-events": "pnpm --filter @worth-running/database db:import-events",
+    "admin:reset-password": "pnpm --filter @worth-running/database reset-admin-password"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

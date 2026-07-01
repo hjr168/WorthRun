@@ -45,6 +45,13 @@ Page({
     onLoad() {
         this.setData({ items: checklistByGroup[groups[this.data.groupIndex]] });
     },
+    reload() {
+        this.setData({
+            loading: false,
+            error: '',
+            items: checklistByGroup[groups[this.data.groupIndex]] || [],
+        });
+    },
     onGroupChange(event) {
         const groupIndex = Number(event.detail.value);
         this.setData({ groupIndex, items: checklistByGroup[groups[groupIndex]] || [] });
