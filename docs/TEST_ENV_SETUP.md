@@ -51,14 +51,14 @@
 后台是 Vite 静态站点，构建时需要写入测试 API 地址：
 
 ```bash
-VITE_API_BASE_URL=https://your-test-api.example.com pnpm --filter @worth-running/admin build
+VITE_API_BASE_URL=https://run-api.huangjiarong.top pnpm --filter @worth-running/admin build
 ```
 
 部署 `apps/admin/dist` 到静态站点后，确认后台可以登录、查看赛事、执行发布前检查和处理反馈。
 
 ## 5. 小程序 testConfig 配置
 
-1. 将 `apps/miniapp/config/test.ts` 中的 `apiBaseUrl` 替换为真实测试 API HTTPS 域名。
+1. 确认 `apps/miniapp/config/test.ts` 中的 `apiBaseUrl` 为 `https://run-api.huangjiarong.top`。
 2. 将 `apps/miniapp/config/index.ts` 切换到：
 
    ```ts
@@ -68,7 +68,7 @@ VITE_API_BASE_URL=https://your-test-api.example.com pnpm --filter @worth-running
    ```
 
 3. 小程序体验版不能继续使用 `localhost`、局域网 IP 或 HTTP。
-4. 小程序不能继续使用 `https://test-api.example.com`。
+4. 小程序不能继续使用旧的测试占位域名。
 
 ## 6. 微信 request 合法域名配置
 
@@ -90,18 +90,22 @@ VITE_API_BASE_URL=https://your-test-api.example.com pnpm --filter @worth-running
 | --- | --- | --- |
 | `DATABASE_URL` | PostgreSQL 连接串 | 使用独立测试库，不提交到仓库 |
 | `API_PORT` | API 监听端口 | 例如 `4000`，由平台网关或反向代理转 HTTPS |
+| `NODE_ENV` | Node 运行环境 | 必须为 `production` |
 | `ADMIN_TOKEN_SECRET` | 后台登录 token 签名密钥 | 使用高强度随机值，不使用 `change-me-in-production` |
-| `VITE_API_BASE_URL` | 后台构建时注入的 API 地址 | 使用真实 HTTPS 测试 API |
+| `ALLOW_DEV_ADMIN` | 本地开发无 token fallback 开关 | 测试环境禁止设置为 `true` |
+| `CORS_ORIGINS` | 后台管理站点浏览器跨域白名单 | 按后台域名配置，多个域名用逗号分隔 |
+| `VITE_API_BASE_URL` | 后台构建时注入的 API 地址 | 使用 `https://run-api.huangjiarong.top` 或对应真实 HTTPS 测试 API |
 
 安全提醒：
 
 - 测试环境不要使用 `admin/admin`。
 - `ADMIN_TOKEN_SECRET` 不要使用 `change-me-in-production`。
+- 测试环境不要设置 `ALLOW_DEV_ADMIN=true`。
 - 数据库连接串、token 密钥和管理员密码不要写入 Git。
 
 ## 9. 测试环境启动后验收步骤
 
-1. 访问 `https://your-test-api.example.com/health`，确认返回 `ok: true` 和 `database: "ok"`。
+1. 访问 `https://run-api.huangjiarong.top/health`，确认返回 `ok: true` 和 `database: "ok"`。
 2. 使用后台 HTTPS 地址登录。
 3. 立即重置默认管理员密码。
 4. 后台导入或确认至少 5 条人工核验赛事。

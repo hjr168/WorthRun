@@ -1,5 +1,6 @@
 import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import cors from 'cors';
+import type { CorsOptions } from 'cors';
 import express, { NextFunction, Request, Response } from 'express';
 import { Prisma, prisma } from '@worth-running/database';
 import {
@@ -17,10 +18,33 @@ const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
 const host = process.env.HOST ?? '127.0.0.1';
 const isProduction = process.env.NODE_ENV === 'production';
-const tokenSecret =
-  process.env.ADMIN_TOKEN_SECRET || process.env.DATABASE_URL || 'worth-running-dev-secret';
+const allowDevAdmin = process.env.ALLOW_DEV_ADMIN === 'true';
 
-app.use(cors());
+if (isProduction && !process.env.ADMIN_TOKEN_SECRET) {
+  throw new Error('生产环境必须配置 ADMIN_TOKEN_SECRET');
+}
+
+const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'worth-running-dev-secret';
+const corsOrigins = (process.env.CORS_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const devCorsOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const corsOptions: CorsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    if (corsOrigins.includes(origin) || (!isProduction && devCorsOriginPattern.test(origin))) {
+      callback(null, true);
+      return;
+    }
+    callback(new HttpError(403, 'CORS origin not allowed'));
+  },
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 
 const complianceNotice = 'AI 整理，仅供参考，报名以官方为准。';
@@ -325,7 +349,7 @@ function parseToken(token: string): AdminContext {
 function getAdmin(req: Request): AdminContext {
   const token = getBearerToken(req);
   if (token) return parseToken(token);
-  if (!isProduction) return defaultAdmin;
+  if (!isProduction && allowDevAdmin) return defaultAdmin;
   throw new HttpError(401, '请先登录后台');
 }
 

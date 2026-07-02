@@ -1,3 +1,3 @@
-import { prodConfig } from './prod';
+import { testConfig } from './test';
 
-export const config = prodConfig;
+export const config = testConfig;

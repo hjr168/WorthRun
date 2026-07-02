@@ -9,7 +9,10 @@
 - `.env` 至少需要配置：
   - `DATABASE_URL`：PostgreSQL 连接串。
   - `API_PORT`：API 监听端口，例如 `4000`。
+  - `NODE_ENV=production`：线上 API 必须使用生产环境。
   - `ADMIN_TOKEN_SECRET`：后台登录 token 签名密钥，正式环境必须使用高强度随机值。
+  - `CORS_ORIGINS`：后台管理站点浏览器跨域白名单，多个域名用英文逗号分隔。
+- 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。
 - API 对外访问需要 HTTPS 域名，体验版和提审不能使用 `localhost`、局域网 IP 或 HTTP。
 
 常用命令：
@@ -46,14 +49,16 @@ pnpm admin:reset-password -- admin "new-strong-password"
 常用命令：
 
 ```bash
-VITE_API_BASE_URL=https://your-api.example.com pnpm --filter @worth-running/admin build
+VITE_API_BASE_URL=https://run-api.huangjiarong.top pnpm --filter @worth-running/admin build
 ```
 
 ## 4. 小程序配置
 
 - 体验版使用 `apps/miniapp/config/test.ts`，正式版使用 `apps/miniapp/config/prod.ts`。
 - `apps/miniapp/config/index.ts` 需要切换到对应配置。
-- `test.ts` 和 `prod.ts` 必须替换为真实 HTTPS API，不能保留 `https://test-api.example.com` 或 `https://api.example.com`。
+- 当前体验版 API 为 `https://run-api.huangjiarong.top`。
+- `test.ts` 当前已使用真实 HTTPS API。
+- `prod.ts` 当前可暂时与体验版同域；如果后续独立部署正式环境，再替换为独立生产域名。
 - 微信公众平台 request 合法域名必须与小程序配置中的 API 域名一致。
 - `urlCheck=false` 只适合本地调试。体验版、提审和正式发布前必须开启合法域名校验。
 
@@ -63,6 +68,8 @@ VITE_API_BASE_URL=https://your-api.example.com pnpm --filter @worth-running/admi
 2. 数据库迁移已执行。
 3. 后台可以登录、查看赛事、发布赛事。
 4. 至少 5 条真实赛事已人工核验并发布。
-5. 小程序 `test` 或 `prod` API 域名已经替换为真实 HTTPS 域名。
+5. 小程序 `test` 或 `prod` API 域名指向真实 HTTPS 域名。
 6. 微信公众平台 request 合法域名配置完成。
-7. 默认 `admin/admin` 不再用于测试或正式环境。
+7. 线上 API 已设置 `NODE_ENV=production` 和强随机 `ADMIN_TOKEN_SECRET`。
+8. 线上 API 未设置 `ALLOW_DEV_ADMIN=true`。
+9. 默认 `admin/admin` 不再用于测试或正式环境。
