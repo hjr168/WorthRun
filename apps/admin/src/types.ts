@@ -70,3 +70,20 @@ export interface FeedbackItem {
   createdAt: string;
   event?: { id: string; eventName: string; city: string } | null;
 }
+
+export interface AdminUserListItem {
+  id: string;
+  username: string;
+  displayName: string;
+  role: string;
+  status: 'active' | 'disabled';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SystemConfigItem {
+  id: string;
+  configKey: string;
+  configValue: unknown;
+  description?: string | null;
+}

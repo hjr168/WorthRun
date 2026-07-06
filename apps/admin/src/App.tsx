@@ -4,6 +4,7 @@ import {
   DatabaseOutlined,
   LogoutOutlined,
   ProfileOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import {
@@ -23,6 +24,7 @@ import { WorkbenchPage } from './pages/WorkbenchPage';
 import { EventsPage } from './pages/EventsPage';
 import { EventEditPage } from './pages/EventEditPage';
 import { QualityPage } from './pages/QualityPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 const { Content, Sider } = Layout;
 
@@ -64,9 +66,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
   const location = useLocation();
   const selectedKey = location.pathname.startsWith('/events')
     ? '/events'
-    : location.pathname.startsWith('/quality')
-      ? '/quality'
-      : '/workbench';
+    : location.pathname.startsWith('/settings')
+      ? '/settings'
+      : location.pathname.startsWith('/quality')
+        ? '/quality'
+        : '/workbench';
 
   return (
     <Layout className="app-shell">
@@ -92,6 +96,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               icon: <ProfileOutlined />,
               label: <Link to="/quality">质量反馈</Link>,
             },
+            {
+              key: '/settings',
+              icon: <SettingOutlined />,
+              label: <Link to="/settings">系统设置</Link>,
+            },
           ]}
         />
       </Sider>
@@ -110,6 +119,7 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/events/edit" element={<EventEditPage />} />
             <Route path="/events/edit/:id" element={<EventEditPage />} />
             <Route path="/quality" element={<QualityPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </Content>
       </Layout>

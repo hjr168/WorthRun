@@ -163,6 +163,20 @@ const systemConfigSchema = z.object({
   description: z.string().trim().max(500).optional().nullable(),
 });
 
+const adminUserCreateSchema = z.object({
+  username: z.string().trim().min(1, '用户名不能为空').max(50),
+  password: z.string().min(6, '密码至少 6 位'),
+  displayName: z.string().trim().min(1, '显示名不能为空'),
+  role: z.enum(['super_admin', 'event_operator', 'content_reviewer', 'readonly']),
+});
+
+const adminUserUpdateSchema = z.object({
+  role: z.enum(['super_admin', 'event_operator', 'content_reviewer', 'readonly']).optional(),
+  status: z.enum(['active', 'disabled']).optional(),
+  password: z.string().min(6).optional(),
+  displayName: z.string().trim().min(1).optional(),
+});
+
 const preferenceSchema = z.object({
   userKey: z.string().trim().min(1, 'userKey 不能为空'),
   cities: stringArraySchema,
@@ -772,6 +786,108 @@ app.get(
       prisma.adminOperationLog.count({ where }),
     ]);
     res.json({ items, total, page, pageSize });
+  }),
+);
+
+app.get(
+  '/api/admin/admin-users',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin']);
+    const items = await prisma.adminUser.findMany({
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ items });
+  }),
+);
+
+app.post(
+  '/api/admin/admin-users',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin']);
+    const input = validateBody(adminUserCreateSchema, req.body);
+    const existing = await prisma.adminUser.findUnique({ where: { username: input.username } });
+    if (existing) throw new HttpError(400, '用户名已存在');
+
+    const created = await prisma.adminUser.create({
+      data: {
+        username: input.username,
+        displayName: input.displayName,
+        role: input.role as AdminRole,
+        passwordHash: hashPassword(input.password),
+        status: 'active',
+      },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'admin_user.create',
+      targetType: 'admin_users',
+      targetId: created.id,
+      afterValue: created,
+      note: `新增管理员 ${created.username}`,
+    });
+
+    res.status(201).json(created);
+  }),
+);
+
+app.patch(
+  '/api/admin/admin-users/:id',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin']);
+    const input = validateBody(adminUserUpdateSchema, req.body);
+    const before = await prisma.adminUser.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new HttpError(404, '管理员不存在');
+
+    const data: Prisma.AdminUserUncheckedUpdateInput = {};
+    if (input.role) data.role = input.role as AdminRole;
+    if (input.status) data.status = input.status;
+    if (input.displayName) data.displayName = input.displayName;
+    if (input.password) data.passwordHash = hashPassword(input.password);
+
+    const updated = await prisma.adminUser.update({
+      where: { id: req.params.id },
+      data,
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'admin_user.update',
+      targetType: 'admin_users',
+      targetId: updated.id,
+      beforeValue: { ...before, passwordHash: '[redacted]' },
+      afterValue: updated,
+      note: `更新管理员 ${updated.username}`,
+    });
+
+    res.json(updated);
   }),
 );
 
