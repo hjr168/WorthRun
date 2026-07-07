@@ -185,6 +185,13 @@ const publicFeedbackSchema = z.object({
   content: z.string().trim().min(1, '反馈内容不能为空').max(2000, '反馈内容过长'),
 });
 
+const shareRecordSchema = z.object({
+  userKey: z.string().trim().min(1, 'userKey 不能为空').max(100),
+  eventId: z.string().trim().min(1).optional(),
+  shareType: z.enum(['page_share', 'image_generate']),
+  scene: z.enum(['event_detail', 'after_favorite', 'home', 'events', 'share_card']),
+});
+
 const queryStringSchema = z.preprocess((value) => {
   if (Array.isArray(value)) return value[0];
   if (value === undefined || value === '') return undefined;
@@ -920,6 +927,57 @@ app.put(
 );
 
 app.get(
+  '/api/admin/share-records/stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const [total, pageShares, imageGenerates, topEventsRaw, dailyRaw] = await Promise.all([
+      prisma.shareRecord.count(),
+      prisma.shareRecord.count({ where: { shareType: 'page_share' } }),
+      prisma.shareRecord.count({ where: { shareType: 'image_generate' } }),
+      prisma.shareRecord.groupBy({
+        by: ['eventId'],
+        _count: { _all: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 10,
+      }),
+      prisma.shareRecord.findMany({
+        where: { createdAt: { gte: since } },
+        select: { shareType: true, createdAt: true },
+      }),
+    ]);
+
+    const eventIds = topEventsRaw.map((item) => item.eventId).filter(Boolean) as string[];
+    const events = await prisma.event.findMany({
+      where: { id: { in: eventIds } },
+      select: { id: true, eventName: true, city: true, eventDate: true },
+    });
+    const eventMap = new Map(events.map((event) => [event.id, event]));
+    const topEvents = topEventsRaw.map((item) => ({
+      event: item.eventId ? eventMap.get(item.eventId) : null,
+      count: item._count._all,
+    }));
+
+    // 按天聚合趋势
+    const dailyMap = new Map<string, { pageShare: number; imageGenerate: number }>();
+    for (const record of dailyRaw) {
+      const day = record.createdAt.toISOString().slice(0, 10);
+      const entry = dailyMap.get(day) || { pageShare: 0, imageGenerate: 0 };
+      if (record.shareType === 'page_share') entry.pageShare += 1;
+      else entry.imageGenerate += 1;
+      dailyMap.set(day, entry);
+    }
+    const daily = Array.from(dailyMap.entries())
+      .map(([day, counts]) => ({ day, ...counts, total: counts.pageShare + counts.imageGenerate }))
+      .sort((a, b) => a.day.localeCompare(b.day));
+
+    res.json({ total, pageShares, imageGenerates, topEvents, daily });
+  }),
+);
+
+app.get(
   '/api/events',
   asyncHandler(async (req, res) => {
     const query = validateQuery(publicEventsQuerySchema, req.query) as PublicEventsQuery;
@@ -1053,6 +1111,22 @@ app.post(
       },
     });
     res.status(201).json(feedback);
+  }),
+);
+
+app.post(
+  '/api/share-records',
+  asyncHandler(async (req, res) => {
+    const input = validateBody(shareRecordSchema, req.body);
+    const record = await prisma.shareRecord.create({
+      data: {
+        userKey: input.userKey,
+        eventId: input.eventId || null,
+        shareType: input.shareType,
+        scene: input.scene,
+      },
+    });
+    res.status(201).json({ id: record.id });
   }),
 );
 
