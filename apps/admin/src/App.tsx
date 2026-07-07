@@ -5,6 +5,7 @@ import {
   LogoutOutlined,
   ProfileOutlined,
   SettingOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import {
@@ -25,6 +26,7 @@ import { EventsPage } from './pages/EventsPage';
 import { EventEditPage } from './pages/EventEditPage';
 import { QualityPage } from './pages/QualityPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ContentPage } from './pages/ContentPage';
 
 const { Content, Sider } = Layout;
 
@@ -66,11 +68,13 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
   const location = useLocation();
   const selectedKey = location.pathname.startsWith('/events')
     ? '/events'
-    : location.pathname.startsWith('/settings')
-      ? '/settings'
-      : location.pathname.startsWith('/quality')
-        ? '/quality'
-        : '/workbench';
+    : location.pathname.startsWith('/content')
+      ? '/content'
+      : location.pathname.startsWith('/settings')
+        ? '/settings'
+        : location.pathname.startsWith('/quality')
+          ? '/quality'
+          : '/workbench';
 
   return (
     <Layout className="app-shell">
@@ -97,6 +101,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               label: <Link to="/quality">质量反馈</Link>,
             },
             {
+              key: '/content',
+              icon: <ToolOutlined />,
+              label: <Link to="/content">内容配置</Link>,
+            },
+            {
               key: '/settings',
               icon: <SettingOutlined />,
               label: <Link to="/settings">系统设置</Link>,
@@ -119,6 +128,7 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/events/edit" element={<EventEditPage />} />
             <Route path="/events/edit/:id" element={<EventEditPage />} />
             <Route path="/quality" element={<QualityPage />} />
+            <Route path="/content" element={<ContentPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </Content>

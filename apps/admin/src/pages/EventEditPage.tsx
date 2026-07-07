@@ -28,6 +28,8 @@ import { defaultChecklist, splitComma, splitLines } from '../utils/form';
 import { Section } from '../components/Section';
 import { OperationLogTable } from '../components/OperationLogTable';
 import { MiniappPublishChecks } from '../components/MiniappPublishChecks';
+import { useConfig } from '../hooks/useConfig';
+import { DEFAULT_CITIES, DEFAULT_DISTANCES } from './ContentPage';
 
 const { TextArea } = Input;
 
@@ -37,6 +39,8 @@ export function EventEditPage() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<OperationLog[]>([]);
+  const { value: cityOptions } = useConfig<string[]>('available_cities', DEFAULT_CITIES);
+  const { value: distanceOptions } = useConfig<string[]>('distance_options', DEFAULT_DISTANCES);
 
   useEffect(() => {
     if (!id) return;
@@ -44,6 +48,7 @@ export function EventEditPage() {
       .then((event) => {
         form.setFieldsValue({
           ...event,
+          city: event.city ? [event.city] : [],
           eventDate: event.eventDate ? dayjs(event.eventDate).format('YYYY-MM-DD') : undefined,
           signupStartAt: event.signupStartAt
             ? dayjs(event.signupStartAt).format('YYYY-MM-DDTHH:mm')
@@ -51,7 +56,7 @@ export function EventEditPage() {
           signupDeadline: event.signupDeadline
             ? dayjs(event.signupDeadline).format('YYYY-MM-DDTHH:mm')
             : undefined,
-          distanceItems: event.distanceItems.join(', '),
+          distanceItems: event.distanceItems,
           judgementReasons: event.judgementReasons.join('\n'),
           suitableFor: event.suitableFor.join('\n'),
           notSuitableFor: event.notSuitableFor.join('\n'),
@@ -69,7 +74,8 @@ export function EventEditPage() {
     const values = await form.validateFields();
     const body = {
       ...values,
-      distanceItems: splitComma(values.distanceItems),
+      city: Array.isArray(values.city) ? values.city[0] : values.city,
+      distanceItems: values.distanceItems || [],
       judgementReasons: splitLines(values.judgementReasons),
       suitableFor: splitLines(values.suitableFor),
       notSuitableFor: splitLines(values.notSuitableFor),
@@ -140,7 +146,13 @@ export function EventEditPage() {
                           <Input />
                         </Form.Item>
                         <Form.Item label="城市" name="city" rules={[{ required: true }]}>
-                          <Input />
+                          <Select
+                            mode="tags"
+                            maxCount={1}
+                            placeholder="选择或输入城市"
+                            options={cityOptions.map((item) => ({ value: item, label: item }))}
+                            tokenSeparators={[',']}
+                          />
                         </Form.Item>
                         <Form.Item label="比赛日期" name="eventDate" rules={[{ required: true }]}>
                           <Input type="date" />
@@ -150,7 +162,14 @@ export function EventEditPage() {
                           name="distanceItems"
                           rules={[{ required: true }]}
                         >
-                          <Input placeholder="半马, 10K" />
+                          <Select
+                            mode="multiple"
+                            placeholder="选择距离项目"
+                            options={distanceOptions.map((item) => ({
+                              value: item,
+                              label: item,
+                            }))}
+                          />
                         </Form.Item>
                         <Form.Item label="起点" name="startPoint">
                           <Input />
