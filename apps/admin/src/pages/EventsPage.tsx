@@ -26,9 +26,11 @@ import {
 import { showError } from '../utils/helpers';
 import { buildMiniappPublishChecks } from '../utils/form';
 import { EventLogsModal } from '../components/MiniappPublishChecks';
+import { useAdmin } from '../context/AdminContext';
 
 export function EventsPage() {
   const navigate = useNavigate();
+  const { can } = useAdmin();
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -118,9 +120,11 @@ export function EventsPage() {
           <h1 className="page-title">赛事库</h1>
           <div className="page-subtitle">维护赛事基础信息、发布状态与可信度</div>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/events/edit')}>
-          新增赛事
-        </Button>
+        {can('create_event') && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/events/edit')}>
+            新增赛事
+          </Button>
+        )}
       </div>
       <div className="toolbar">
         <Input
@@ -215,41 +219,65 @@ export function EventsPage() {
             title: '操作',
             fixed: 'right',
             width: 340,
-            render: (_, record) => (
-              <Space wrap>
-                <Button
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => navigate(`/events/edit/${record.id}`)}
-                >
-                  编辑
-                </Button>
-                <Button
-                  size="small"
-                  icon={<FileDoneOutlined />}
-                  onClick={() => changeStatus(record, 'publish', '发布赛事')}
-                >
-                  发布
-                </Button>
-                <Button
-                  size="small"
-                  icon={<EyeInvisibleOutlined />}
-                  onClick={() => changeStatus(record, 'hide', '前端隐藏')}
-                >
-                  隐藏
-                </Button>
-                <Button
-                  size="small"
-                  icon={<StopOutlined />}
-                  onClick={() => changeStatus(record, 'offline', '临时下架')}
-                >
-                  下架
-                </Button>
-                <Button size="small" onClick={() => setLogEvent(record)}>
-                  日志
-                </Button>
-              </Space>
-            ),
+            render: (_, record) => {
+              const archived = record.publishStatus === 'archived';
+              return (
+                <Space wrap>
+                  {can('edit_event') && (
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => navigate(`/events/edit/${record.id}`)}
+                    >
+                      编辑
+                    </Button>
+                  )}
+                  {can('publish_event') &&
+                    (archived ? (
+                      <Button
+                        size="small"
+                        icon={<FileDoneOutlined />}
+                        onClick={() => changeStatus(record, 'publish', '恢复发布')}
+                      >
+                        恢复发布
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          size="small"
+                          icon={<FileDoneOutlined />}
+                          onClick={() => changeStatus(record, 'publish', '发布赛事')}
+                        >
+                          发布
+                        </Button>
+                        <Button
+                          size="small"
+                          icon={<EyeInvisibleOutlined />}
+                          onClick={() => changeStatus(record, 'hide', '前端隐藏')}
+                        >
+                          隐藏
+                        </Button>
+                        <Button
+                          size="small"
+                          icon={<StopOutlined />}
+                          onClick={() => changeStatus(record, 'offline', '临时下架')}
+                        >
+                          下架
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() => changeStatus(record, 'archive', '归档赛事')}
+                        >
+                          归档
+                        </Button>
+                      </>
+                    ))}
+                  <Button size="small" onClick={() => setLogEvent(record)}>
+                    日志
+                  </Button>
+                </Space>
+              );
+            },
           },
         ]}
       />

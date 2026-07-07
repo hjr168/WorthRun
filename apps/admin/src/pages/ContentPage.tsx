@@ -3,6 +3,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { apiGet, apiSend } from '../api';
 import { showError } from '../utils/helpers';
+import { useAdmin } from '../context/AdminContext';
 
 /* ----------------------------- 内置默认值 ----------------------------- */
 
@@ -123,6 +124,8 @@ function parseChecklist(value: unknown): ChecklistTemplates {
 }
 
 export function ContentPage() {
+  const { can } = useAdmin();
+  const canSave = can('manage_settings');
   const [loading, setLoading] = useState(true);
   const [cities, setCities] = useState<string[]>(DEFAULT_CITIES);
   const [distances, setDistances] = useState<string[]>(DEFAULT_DISTANCES);
@@ -191,6 +194,7 @@ export function ContentPage() {
                 onChange={setCities}
                 defaultValue={DEFAULT_CITIES}
                 onSave={() => saveListConfig('available_cities', cities)}
+                canSave={canSave}
               />
             ),
           },
@@ -206,6 +210,7 @@ export function ContentPage() {
                 onChange={setDistances}
                 defaultValue={DEFAULT_DISTANCES}
                 onSave={() => saveListConfig('distance_options', distances)}
+                canSave={canSave}
               />
             ),
           },
@@ -221,6 +226,7 @@ export function ContentPage() {
                 onChange={setTags}
                 defaultValue={DEFAULT_TAGS}
                 onSave={() => saveListConfig('decision_tag_options', tags)}
+                canSave={canSave}
               />
             ),
           },
@@ -233,6 +239,7 @@ export function ContentPage() {
                 value={checklistTemplates}
                 onChange={setChecklistTemplates}
                 onSave={() => saveChecklist(checklistTemplates)}
+                canSave={canSave}
               />
             ),
           },
@@ -265,6 +272,7 @@ function ListConfigTab({
   onChange,
   defaultValue,
   onSave,
+  canSave,
 }: {
   loading: boolean;
   title: string;
@@ -273,6 +281,7 @@ function ListConfigTab({
   onChange: (next: string[]) => void;
   defaultValue: string[];
   onSave: () => Promise<unknown>;
+  canSave: boolean;
 }) {
   const { saving, run } = useSavingState();
   const confirmReset = () => {
@@ -304,13 +313,19 @@ function ListConfigTab({
             tokenSeparators={[',']}
             placeholder="可输入回车添加，或从已有选项选择"
             options={value.map((item) => ({ value: item, label: item }))}
+            disabled={!canSave}
           />
-          <Space style={{ marginTop: 16 }}>
-            <Button type="primary" loading={saving} onClick={() => run(onSave)}>
-              保存
-            </Button>
-            <Button onClick={confirmReset}>重置为默认</Button>
-          </Space>
+          {canSave && (
+            <Space style={{ marginTop: 16 }}>
+              <Button type="primary" loading={saving} onClick={() => run(onSave)}>
+                保存
+              </Button>
+              <Button onClick={confirmReset}>重置为默认</Button>
+            </Space>
+          )}
+          {!canSave && (
+            <div style={{ marginTop: 12, color: '#999' }}>当前角色只读，保存功能已禁用。</div>
+          )}
         </>
       )}
     </div>
@@ -377,11 +392,13 @@ function ChecklistTab({
   value,
   onChange,
   onSave,
+  canSave,
 }: {
   loading: boolean;
   value: ChecklistTemplates;
   onChange: (next: ChecklistTemplates) => void;
   onSave: () => Promise<unknown>;
+  canSave: boolean;
 }) {
   const { saving, run } = useSavingState();
   const safeValue: ChecklistTemplates = CHECKLIST_DISTANCE_TABS.reduce(
@@ -429,12 +446,17 @@ function ChecklistTab({
               ),
             }))}
           />
-          <Space style={{ marginTop: 16 }}>
-            <Button type="primary" loading={saving} onClick={() => run(onSave)}>
-              保存
-            </Button>
-            <Button onClick={confirmReset}>重置为默认</Button>
-          </Space>
+          {canSave && (
+            <Space style={{ marginTop: 16 }}>
+              <Button type="primary" loading={saving} onClick={() => run(onSave)}>
+                保存
+              </Button>
+              <Button onClick={confirmReset}>重置为默认</Button>
+            </Space>
+          )}
+          {!canSave && (
+            <div style={{ marginTop: 12, color: '#999' }}>当前角色只读，保存功能已禁用。</div>
+          )}
         </>
       )}
     </div>

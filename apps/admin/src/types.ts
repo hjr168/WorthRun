@@ -48,6 +48,7 @@ export interface OperationLog {
   targetId?: string;
   note?: string;
   createdAt: string;
+  adminUserId?: string;
 }
 
 export interface AdminUser {

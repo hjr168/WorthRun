@@ -2,6 +2,7 @@ import { Button, Layout, Menu } from 'antd';
 import {
   DashboardOutlined,
   DatabaseOutlined,
+  FileTextOutlined,
   LogoutOutlined,
   ProfileOutlined,
   SettingOutlined,
@@ -27,6 +28,8 @@ import { EventEditPage } from './pages/EventEditPage';
 import { QualityPage } from './pages/QualityPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ContentPage } from './pages/ContentPage';
+import { LogsPage } from './pages/LogsPage';
+import { AdminProvider } from './context/AdminContext';
 
 const { Content, Sider } = Layout;
 
@@ -61,7 +64,11 @@ function ProtectedShell() {
   if (checking) return null;
   if (!getToken()) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
 
-  return <Shell admin={admin} onLogout={() => logout(navigate)} />;
+  return (
+    <AdminProvider admin={admin}>
+      <Shell admin={admin} onLogout={() => logout(navigate)} />
+    </AdminProvider>
+  );
 }
 
 function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => void }) {
@@ -74,7 +81,9 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
         ? '/settings'
         : location.pathname.startsWith('/quality')
           ? '/quality'
-          : '/workbench';
+          : location.pathname.startsWith('/logs')
+            ? '/logs'
+            : '/workbench';
 
   return (
     <Layout className="app-shell">
@@ -110,6 +119,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               icon: <SettingOutlined />,
               label: <Link to="/settings">系统设置</Link>,
             },
+            {
+              key: '/logs',
+              icon: <FileTextOutlined />,
+              label: <Link to="/logs">操作日志</Link>,
+            },
           ]}
         />
       </Sider>
@@ -130,6 +144,7 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/quality" element={<QualityPage />} />
             <Route path="/content" element={<ContentPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/logs" element={<LogsPage />} />
           </Routes>
         </Content>
       </Layout>

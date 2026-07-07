@@ -6,9 +6,11 @@ import { apiGet, apiSend } from '../api';
 import { FeedbackItem } from '../types';
 import { feedbackStatusOptions } from '../constants';
 import { showError } from '../utils/helpers';
+import { useAdmin } from '../context/AdminContext';
 
 export function QualityPage() {
   const navigate = useNavigate();
+  const { can } = useAdmin();
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [status, setStatus] = useState<string>();
 
@@ -95,16 +97,19 @@ export function QualityPage() {
           {
             title: '操作',
             width: 180,
-            render: (_, record) => (
-              <Space>
-                <Button size="small" onClick={() => handleFeedback(record, 'resolved')}>
-                  已处理
-                </Button>
-                <Button size="small" danger onClick={() => handleFeedback(record, 'rejected')}>
-                  驳回
-                </Button>
-              </Space>
-            ),
+            render: (_, record) =>
+              can('handle_feedback') ? (
+                <Space>
+                  <Button size="small" onClick={() => handleFeedback(record, 'resolved')}>
+                    已处理
+                  </Button>
+                  <Button size="small" danger onClick={() => handleFeedback(record, 'rejected')}>
+                    驳回
+                  </Button>
+                </Space>
+              ) : (
+                '-'
+              ),
           },
         ]}
       />

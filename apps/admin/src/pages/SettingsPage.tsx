@@ -18,6 +18,7 @@ import { Link } from 'react-router-dom';
 import { apiGet, apiSend } from '../api';
 import { AdminUserListItem, SystemConfigItem } from '../types';
 import { showError } from '../utils/helpers';
+import { useAdmin } from '../context/AdminContext';
 
 const roleLabels: Record<string, string> = {
   super_admin: '超级管理员',
@@ -29,6 +30,7 @@ const roleLabels: Record<string, string> = {
 const roleOptions = Object.entries(roleLabels).map(([value, label]) => ({ value, label }));
 
 function ComplianceTab() {
+  const { can } = useAdmin();
   const [configs, setConfigs] = useState<SystemConfigItem[]>([]);
   const [notice, setNotice] = useState('');
   const [actionText, setActionText] = useState('');
@@ -71,15 +73,18 @@ function ComplianceTab() {
           value={notice}
           onChange={(event) => setNotice(event.target.value)}
           placeholder="例如：AI 整理，仅供参考，报名以官方为准。"
+          disabled={!can('manage_settings')}
         />
-        <Button
-          type="primary"
-          style={{ marginTop: 8 }}
-          loading={savingKey === 'compliance_notice'}
-          onClick={() => save('compliance_notice', notice)}
-        >
-          保存
-        </Button>
+        {can('manage_settings') && (
+          <Button
+            type="primary"
+            style={{ marginTop: 8 }}
+            loading={savingKey === 'compliance_notice'}
+            onClick={() => save('compliance_notice', notice)}
+          >
+            保存
+          </Button>
+        )}
       </div>
       <div>
         <div style={{ marginBottom: 8, fontWeight: 500 }}>官方入口文案（official_action_text）</div>
@@ -87,15 +92,18 @@ function ComplianceTab() {
           value={actionText}
           onChange={(event) => setActionText(event.target.value)}
           placeholder="例如：前往官方确认"
+          disabled={!can('manage_settings')}
         />
-        <Button
-          type="primary"
-          style={{ marginTop: 8 }}
-          loading={savingKey === 'official_action_text'}
-          onClick={() => save('official_action_text', actionText)}
-        >
-          保存
-        </Button>
+        {can('manage_settings') && (
+          <Button
+            type="primary"
+            style={{ marginTop: 8 }}
+            loading={savingKey === 'official_action_text'}
+            onClick={() => save('official_action_text', actionText)}
+          >
+            保存
+          </Button>
+        )}
       </div>
       {loading && <div style={{ marginTop: 16, color: '#999' }}>加载中…</div>}
       {!loading && configs.length === 0 && (
@@ -352,6 +360,14 @@ function AboutTab() {
 }
 
 export function SettingsPage() {
+  const { can } = useAdmin();
+  const tabItems = [
+    { key: 'compliance', label: '合规文案', children: <ComplianceTab /> },
+    { key: 'about', label: '关于', children: <AboutTab /> },
+  ];
+  if (can('manage_settings')) {
+    tabItems.splice(1, 0, { key: 'admin', label: '管理员管理', children: <AdminTab /> });
+  }
   return (
     <main className="page">
       <div className="page-header">
@@ -360,14 +376,7 @@ export function SettingsPage() {
           <div className="page-subtitle">合规文案、管理员账号与系统信息</div>
         </div>
       </div>
-      <Tabs
-        defaultActiveKey="compliance"
-        items={[
-          { key: 'compliance', label: '合规文案', children: <ComplianceTab /> },
-          { key: 'admin', label: '管理员管理', children: <AdminTab /> },
-          { key: 'about', label: '关于', children: <AboutTab /> },
-        ]}
-      />
+      <Tabs defaultActiveKey="compliance" items={tabItems} />
     </main>
   );
 }
