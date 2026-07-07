@@ -1,0 +1,17 @@
+<view class="page share-card-page">
+  <loading-state wx:if="{{loading}}" text="正在生成分享图" />
+  <block wx:elif="{{error}}">
+    <empty-state title="生成失败" description="{{error}}" />
+    <button class="secondary-button" bindtap="reload">重新加载</button>
+  </block>
+  <block wx:else>
+    <view class="canvas-wrapper">
+      <canvas type="2d" id="shareCanvas" class="share-canvas" style="width:{{canvasW}}px;height:{{canvasH}}px;"></canvas>
+    </view>
+    <view class="actions">
+      <button class="primary-button" bindtap="saveImage" loading="{{saving}}">保存到相册</button>
+      <button class="secondary-button" open-type="share">分享给好友</button>
+    </view>
+    <view class="notice">AI 整理，仅供参考｜报名以官方为准</view>
+  </block>
+</view>

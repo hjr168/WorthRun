@@ -1,0 +1,33 @@
+.share-card-page {
+  padding: 32rpx;
+  background: #f8fafc;
+  min-height: 100vh;
+}
+
+.canvas-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24rpx;
+  background: #ffffff;
+  border-radius: 24rpx;
+  box-shadow: 0 8rpx 32rpx rgba(30, 41, 59, 0.12);
+}
+
+.share-canvas {
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  margin-top: 32rpx;
+}
+
+.notice {
+  margin-top: 28rpx;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 24rpx;
+}
