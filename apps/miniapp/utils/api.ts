@@ -166,6 +166,9 @@ export function submitFeedback(data: {
   return request('/api/feedback', { method: 'POST', data, loadingText: '提交中' });
 }
 
-export function getChecklistTemplates() {
-  return request<{ items: ChecklistItem[] }>('/api/checklist/templates', { silent: true });
+export function getChecklistTemplates(type?: string) {
+  const query = type ? `?type=${encodeURIComponent(type)}` : '';
+  return request<{ items: ChecklistItem[] }>(`/api/checklist/templates${query}`, {
+    silent: true,
+  });
 }

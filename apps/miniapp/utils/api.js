@@ -97,6 +97,7 @@ function removeFavorite(userKey, eventId) {
 function submitFeedback(data) {
     return request('/api/feedback', { method: 'POST', data, loadingText: '提交中' });
 }
-function getChecklistTemplates() {
-    return request('/api/checklist/templates', { silent: true });
+function getChecklistTemplates(type) {
+    var query = type ? "?type=" + encodeURIComponent(type) : '';
+    return request('/api/checklist/templates' + query, { silent: true });
 }

@@ -1,7 +1,18 @@
-import { ChecklistItem } from '../../utils/api';
+import { ChecklistItem, getChecklistTemplates } from '../../utils/api';
 
 const groups = ['通用清单', '5K', '10K', '半马', '全马'];
-const checklistByGroup: Record<string, ChecklistItem[]> = {
+
+// 页面显示文案 → 后端 checklist_templates 的 key
+const typeKeyMap: Record<string, string> = {
+  通用清单: 'general',
+  '5K': '5K',
+  '10K': '10K',
+  半马: 'half',
+  全马: 'full',
+};
+
+// 本地兜底数据：接口失败或离线时使用，保证清单页可用
+const fallbackChecklist: Record<string, ChecklistItem[]> = {
   通用清单: [
     { groupName: '报名信息', itemName: '报名截止与是否抽签', itemStatus: 'pending_verify' },
     { groupName: '领物安排', itemName: '领物时间、地点、证件要求', itemStatus: 'pending_verify' },
@@ -41,20 +52,33 @@ Page({
     error: '',
     groupIndex: 0,
     groups,
-    items: checklistByGroup[groups[0]],
+    items: fallbackChecklist[groups[0]],
   },
   onLoad() {
-    this.setData({ items: checklistByGroup[groups[this.data.groupIndex]] });
+    this.loadItems();
+  },
+  loadItems() {
+    const groupName = groups[this.data.groupIndex];
+    const type = typeKeyMap[groupName] || 'general';
+    this.setData({ loading: true });
+    getChecklistTemplates(type)
+      .then((result) => {
+        this.setData({ items: result.items, loading: false, error: '' });
+      })
+      .catch(() => {
+        // 接口失败用本地兜底，保证离线可用
+        this.setData({
+          items: fallbackChecklist[groupName] || [],
+          loading: false,
+        });
+      });
   },
   reload() {
-    this.setData({
-      loading: false,
-      error: '',
-      items: checklistByGroup[groups[this.data.groupIndex]] || [],
-    });
+    this.loadItems();
   },
   onGroupChange(event: WechatMiniprogram.PickerChange) {
     const groupIndex = Number(event.detail.value);
-    this.setData({ groupIndex, items: checklistByGroup[groups[groupIndex]] || [] });
+    this.setData({ groupIndex });
+    this.loadItems();
   },
 });
