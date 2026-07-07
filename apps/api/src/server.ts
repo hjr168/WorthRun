@@ -5,6 +5,14 @@ import express, { NextFunction, Request, Response } from 'express';
 import { Prisma, prisma } from '@worth-running/database';
 import {
   AdminRole,
+  feedbackStatusValues,
+  infoStatusValues,
+  publishStatusValues,
+  runJudgementValues,
+  signupStatusValues,
+  sourceLevelValues,
+} from '@worth-running/shared';
+import type {
   FeedbackStatus,
   InfoStatus,
   PublishStatus,
@@ -62,25 +70,6 @@ class HttpError extends Error {
 }
 
 type AdminContext = { id: string; role: AdminRole };
-
-const publishStatusValues = ['draft', 'published', 'hidden', 'offline', 'archived'] as const;
-const infoStatusValues = [
-  'ai_generated',
-  'pending_verify',
-  'verified',
-  'user_flagged',
-  'source_error',
-] as const;
-const runJudgementValues = ['priority', 'watch', 'unverified'] as const;
-const signupStatusValues = [
-  'signup_open',
-  'closing_soon',
-  'closed',
-  'not_started',
-  'unknown',
-] as const;
-const sourceLevelValues = ['official', 'trusted', 'secondary', 'unknown'] as const;
-const feedbackStatusValues = ['pending', 'handling', 'resolved', 'rejected'] as const;
 
 const dateOnlySchema = z
   .string({ required_error: '比赛日期不能为空' })

@@ -109,3 +109,51 @@ export interface EventListQuery {
   page?: number;
   pageSize?: number;
 }
+
+/* 枚举值数组（as const），供后端 Zod 校验与前端下拉选项统一引用，避免三处重复定义。 */
+export const publishStatusValues = [
+  'draft',
+  'published',
+  'hidden',
+  'offline',
+  'archived',
+] as const;
+
+export const infoStatusValues = [
+  'ai_generated',
+  'pending_verify',
+  'verified',
+  'user_flagged',
+  'source_error',
+] as const;
+
+export const runJudgementValues = ['priority', 'watch', 'unverified'] as const;
+
+export const signupStatusValues = [
+  'signup_open',
+  'closing_soon',
+  'closed',
+  'not_started',
+  'unknown',
+] as const;
+
+export const sourceLevelValues = [
+  'official',
+  'trusted',
+  'secondary',
+  'unknown',
+] as const;
+
+export const feedbackStatusValues = [
+  'pending',
+  'handling',
+  'resolved',
+  'rejected',
+] as const;
+
+export const adminRoleValues = [
+  'super_admin',
+  'event_operator',
+  'content_reviewer',
+  'readonly',
+] as const;
