@@ -6,6 +6,7 @@ import {
   LogoutOutlined,
   ProfileOutlined,
   SettingOutlined,
+  ShareAltOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
@@ -28,6 +29,7 @@ import { EventEditPage } from './pages/EventEditPage';
 import { QualityPage } from './pages/QualityPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ContentPage } from './pages/ContentPage';
+import { ShareStatsPage } from './pages/ShareStatsPage';
 import { LogsPage } from './pages/LogsPage';
 import { AdminProvider } from './context/AdminContext';
 
@@ -81,9 +83,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
         ? '/settings'
         : location.pathname.startsWith('/quality')
           ? '/quality'
-          : location.pathname.startsWith('/logs')
-            ? '/logs'
-            : '/workbench';
+          : location.pathname.startsWith('/share-stats')
+            ? '/share-stats'
+            : location.pathname.startsWith('/logs')
+              ? '/logs'
+              : '/workbench';
 
   return (
     <Layout className="app-shell">
@@ -108,6 +112,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               key: '/quality',
               icon: <ProfileOutlined />,
               label: <Link to="/quality">质量反馈</Link>,
+            },
+            {
+              key: '/share-stats',
+              icon: <ShareAltOutlined />,
+              label: <Link to="/share-stats">分享数据</Link>,
             },
             {
               key: '/content',
@@ -142,6 +151,7 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/events/edit" element={<EventEditPage />} />
             <Route path="/events/edit/:id" element={<EventEditPage />} />
             <Route path="/quality" element={<QualityPage />} />
+            <Route path="/share-stats" element={<ShareStatsPage />} />
             <Route path="/content" element={<ContentPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/logs" element={<LogsPage />} />
