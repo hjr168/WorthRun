@@ -54,6 +54,7 @@
   <view wx:if="{{event}}" class="bottom-bar">
     <button class="primary-button" bindtap="openOfficial">{{officialActionText}}</button>
     <button class="secondary-button" bindtap="toggleFavorite">{{isFavorite ? '取消收藏' : '收藏'}}</button>
+    <button class="secondary-button" bindtap="openShareCard">分享图</button>
     <button class="secondary-button" bindtap="openFeedback">反馈纠错</button>
   </view>
 </view>

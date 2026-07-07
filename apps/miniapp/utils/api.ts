@@ -172,3 +172,12 @@ export function getChecklistTemplates(type?: string) {
     silent: true,
   });
 }
+
+export function recordShare(data: {
+  userKey: string;
+  eventId?: string;
+  shareType: 'page_share' | 'image_generate';
+  scene: 'event_detail' | 'after_favorite' | 'home' | 'events' | 'share_card';
+}) {
+  return request<{ id: string }>('/api/share-records', { method: 'POST', data, silent: true });
+}

@@ -21,6 +21,7 @@ import type {
   SourceLevel,
 } from '@worth-running/shared';
 import { z, ZodError } from 'zod';
+import { getMiniProgramCode } from './wxacode.js';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -1127,6 +1128,20 @@ app.post(
       },
     });
     res.status(201).json({ id: record.id });
+  }),
+);
+
+app.get(
+  '/api/wxacode',
+  asyncHandler(async (req, res) => {
+    const eventId = String(req.query.eventId || '');
+    if (!eventId) throw new HttpError(400, 'eventId 不能为空');
+    // scene 值需 <=32 字符且为安全字符集。cuid 约 24 字符，id= 前缀共 27 字符，符合限制。
+    const buffer = await getMiniProgramCode(`id=${eventId}`, 'pages/event-detail/index');
+    if (!buffer) throw new HttpError(503, '小程序码服务暂不可用');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
   }),
 );
 

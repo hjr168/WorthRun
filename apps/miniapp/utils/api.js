@@ -101,3 +101,7 @@ function getChecklistTemplates(type) {
     var query = type ? "?type=" + encodeURIComponent(type) : '';
     return request('/api/checklist/templates' + query, { silent: true });
 }
+function recordShare(data) {
+    return request('/api/share-records', { method: 'POST', data: data, silent: true });
+}
+exports.recordShare = recordShare;

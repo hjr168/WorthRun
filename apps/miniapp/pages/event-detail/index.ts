@@ -3,6 +3,7 @@ import {
   EventDetail,
   getEventDetail,
   getFavorites,
+  recordShare,
   removeFavorite,
 } from '../../utils/api';
 import {
@@ -102,5 +103,33 @@ Page({
   },
   openFeedback() {
     wx.navigateTo({ url: `/pages/feedback/index?eventId=${this.data.id}` });
+  },
+  openShareCard() {
+    if (!this.data.event) return;
+    wx.navigateTo({ url: `/pages/share-card/index?id=${this.data.id}` });
+  },
+  onShareAppMessage() {
+    const event = this.data.event;
+    if (event) {
+      recordShare({
+        userKey: this.data.userKey,
+        eventId: event.id,
+        shareType: 'page_share',
+        scene: 'event_detail',
+      }).catch(() => {});
+    }
+    return {
+      title: event
+        ? `这场值得跑吗？${event.eventName}`
+        : '哪场值得跑｜大湾区跑步赛事决策工具',
+      path: event ? `/pages/event-detail/index?id=${event.id}` : '/pages/home/index',
+    };
+  },
+  onShareTimeline() {
+    const event = this.data.event;
+    return {
+      title: event ? `这场值得跑吗？${event.eventName}` : '哪场值得跑',
+      query: event ? `id=${event.id}` : '',
+    };
   },
 });
