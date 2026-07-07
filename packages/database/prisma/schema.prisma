@@ -96,6 +96,7 @@ model Event {
   eventTags      EventTag[]
   favorites      UserFavorite[]
   feedback       Feedback[]
+  shareRecords   ShareRecord[]
 
   @@index([city])
   @@index([eventDate])
@@ -221,4 +222,19 @@ model SystemConfig {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("system_configs")
+}
+
+model ShareRecord {
+  id        String   @id @default(cuid())
+  userKey   String?  @map("user_key")
+  eventId   String?  @map("event_id")
+  shareType String   @map("share_type")
+  scene     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([createdAt])
+  @@map("share_records")
 }
