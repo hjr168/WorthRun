@@ -9,6 +9,7 @@
     "dev:admin": "pnpm --filter @worth-running/admin dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
     "format": "prettier --write .",
     "db:generate": "pnpm --filter @worth-running/database db:generate",
     "db:migrate": "pnpm --filter @worth-running/database db:migrate",
@@ -18,7 +19,8 @@
   },
   "devDependencies": {
     "prettier": "^3.3.3",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
   },
   "packageManager": "pnpm@11.7.0"
 }
