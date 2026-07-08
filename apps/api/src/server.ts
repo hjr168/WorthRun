@@ -2,7 +2,7 @@ import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypt
 import cors from 'cors';
 import type { CorsOptions } from 'cors';
 import express, { NextFunction, Request, Response } from 'express';
-import { Prisma, prisma } from '@worth-running/database';
+import { EventCandidateStatus, Prisma, prisma } from '@worth-running/database';
 import {
   AdminRole,
   feedbackStatusValues,
@@ -21,6 +21,7 @@ import type {
   SourceLevel,
 } from '@worth-running/shared';
 import { z, ZodError } from 'zod';
+import { aiEventCandidateSchema } from './ai/eventCandidateSchema.js';
 import { getMiniProgramCode } from './wxacode.js';
 
 const app = express();
@@ -151,6 +152,43 @@ const feedbackHandleSchema = z.object({
 const systemConfigSchema = z.object({
   configValue: z.unknown().refine((value) => value !== undefined, 'configValue 不能为空'),
   description: z.string().trim().max(500).optional().nullable(),
+});
+
+const optionalUrlSchema = z
+  .union([
+    z.string().trim().url('入口 URL 必须是有效 URL'),
+    z.string().trim().length(0).transform(() => null),
+    z.null(),
+    z.undefined().transform(() => null),
+  ])
+  .transform((value): string | null => value ?? null);
+
+const eventSourceSchema = z.object({
+  name: z.string().trim().min(1, '赛事源名称不能为空'),
+  sourceType: z.enum(['page_url', 'search_query', 'rss']).default('page_url'),
+  entryUrl: optionalUrlSchema,
+  searchQuery: z.string().trim().optional().nullable(),
+  allowedDomains: z.array(z.string().trim().min(1)).default([]),
+  cityHints: z.array(z.string().trim().min(1)).default([]),
+  status: z.enum(['active', 'paused']).default('active'),
+  notes: z.string().trim().optional().nullable(),
+});
+
+const eventCandidateStatusSchema = z.enum([
+  'new',
+  'needs_review',
+  'accepted',
+  'rejected',
+  'merged',
+]);
+
+const candidateReviewSchema = z.object({
+  action: z.enum(['accept', 'reject']),
+  rejectReason: z.string().trim().max(500).optional(),
+});
+
+const candidatePatchSchema = z.object({
+  extractedData: aiEventCandidateSchema,
 });
 
 const adminUserCreateSchema = z.object({
@@ -885,6 +923,246 @@ app.patch(
     });
 
     res.json(updated);
+  }),
+);
+
+app.get(
+  '/api/admin/event-sources',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const items = await prisma.eventSource.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ items });
+  }),
+);
+
+app.post(
+  '/api/admin/event-sources',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator']);
+    const input = validateBody(eventSourceSchema, req.body);
+    const created = await prisma.eventSource.create({ data: input });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_source.create',
+      targetType: 'event_sources',
+      targetId: created.id,
+      afterValue: created,
+      note: '新增 AI 赛事源',
+    });
+    res.status(201).json(created);
+  }),
+);
+
+app.put(
+  '/api/admin/event-sources/:id',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator']);
+    const input = validateBody(eventSourceSchema, req.body);
+    const before = await prisma.eventSource.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new HttpError(404, '赛事源不存在');
+    const updated = await prisma.eventSource.update({
+      where: { id: before.id },
+      data: input,
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_source.update',
+      targetType: 'event_sources',
+      targetId: updated.id,
+      beforeValue: before,
+      afterValue: updated,
+      note: '更新 AI 赛事源',
+    });
+    res.json(updated);
+  }),
+);
+
+app.post(
+  '/api/admin/event-sources/:id/run',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator']);
+    const source = await prisma.eventSource.findUnique({ where: { id: req.params.id } });
+    if (!source) throw new HttpError(404, '赛事源不存在');
+    if (source.status !== 'active') throw new HttpError(400, '赛事源未启用');
+
+    const updated = await prisma.eventSource.update({
+      where: { id: source.id },
+      data: { lastRunAt: new Date(), lastRunStatus: 'extractor_not_configured' },
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_source.run',
+      targetType: 'event_sources',
+      targetId: source.id,
+      beforeValue: source,
+      afterValue: updated,
+      note: '手动触发 AI 赛事源抽取，抽取引擎尚未接入',
+    });
+    throw new HttpError(503, 'AI 抽取服务尚未接入，赛事源已保存，下一步将接入抓取与抽取引擎');
+  }),
+);
+
+app.get(
+  '/api/admin/event-candidates',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const where: Prisma.EventCandidateWhereInput = {};
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    if (status) {
+      const parsedStatus = eventCandidateStatusSchema.safeParse(status);
+      if (!parsedStatus.success) throw new HttpError(400, '候选状态无效');
+      where.status = parsedStatus.data as EventCandidateStatus;
+    }
+    const items = await prisma.eventCandidate.findMany({
+      where,
+      include: { source: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    res.json({ items });
+  }),
+);
+
+app.put(
+  '/api/admin/event-candidates/:id',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(candidatePatchSchema, req.body);
+    const before = await prisma.eventCandidate.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new HttpError(404, '候选赛事不存在');
+    if (!['new', 'needs_review'].includes(before.status)) {
+      throw new HttpError(400, '仅待复核候选可以编辑');
+    }
+
+    const updated = await prisma.eventCandidate.update({
+      where: { id: before.id },
+      data: {
+        eventName: input.extractedData.eventName,
+        city: input.extractedData.city,
+        eventDate: input.extractedData.eventDate
+          ? new Date(`${input.extractedData.eventDate}T00:00:00.000Z`)
+          : null,
+        sourceUrl: input.extractedData.sourceUrl,
+        officialUrl: input.extractedData.officialUrl,
+        extractedData: input.extractedData as Prisma.InputJsonObject,
+        evidence: input.extractedData.evidence as Prisma.InputJsonArray,
+        confidence: input.extractedData.confidence as Prisma.InputJsonObject,
+        status: 'needs_review',
+      },
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_candidate.update',
+      targetType: 'event_candidates',
+      targetId: updated.id,
+      beforeValue: before,
+      afterValue: updated,
+      note: '人工补充 AI 候选赛事字段',
+    });
+    res.json(updated);
+  }),
+);
+
+app.post(
+  '/api/admin/event-candidates/:id/review',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(candidateReviewSchema, req.body);
+    const candidate = await prisma.eventCandidate.findUnique({ where: { id: req.params.id } });
+    if (!candidate) throw new HttpError(404, '候选赛事不存在');
+
+    if (input.action === 'reject') {
+      const rejected = await prisma.eventCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          status: 'rejected',
+          reviewedBy: admin.id,
+          reviewedAt: new Date(),
+          rejectReason: input.rejectReason || null,
+        },
+      });
+      await writeOperationLog({
+        adminUserId: admin.id,
+        action: 'event_candidate.reject',
+        targetType: 'event_candidates',
+        targetId: rejected.id,
+        beforeValue: candidate,
+        afterValue: rejected,
+        note: input.rejectReason || '驳回 AI 候选赛事',
+      });
+      res.json(rejected);
+      return;
+    }
+
+    const data = aiEventCandidateSchema.parse(candidate.extractedData);
+    if (!data.officialUrl) {
+      throw new HttpError(400, '候选赛事缺少官方入口，请先人工补充 officialUrl 后再采纳');
+    }
+    if (!data.sourceUrl) {
+      throw new HttpError(400, '候选赛事缺少来源链接，请先人工补充 sourceUrl 后再采纳');
+    }
+    if (!data.eventDate) {
+      throw new HttpError(400, '候选赛事缺少比赛日期，请先人工补充 eventDate 后再采纳');
+    }
+    const officialUrl = data.officialUrl;
+    const sourceUrl = data.sourceUrl;
+    const eventDate = data.eventDate;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const event = await tx.event.create({
+        data: {
+          eventName: data.eventName,
+          city: data.city,
+          eventDate: parseEventDate(eventDate),
+          distanceItems: data.distanceItems,
+          signupStatus: data.signupStatus as SignupStatus,
+          signupDeadline: data.signupDeadline ? new Date(data.signupDeadline) : null,
+          officialUrl,
+          sourceName: data.sourceName || 'AI 辅助抽取',
+          sourceUrl,
+          sourceLevel: data.sourceLevel as SourceLevel,
+          publishStatus: 'draft',
+          infoStatus: 'ai_generated',
+          runJudgement: data.runJudgement as RunJudgement,
+          judgementSummary: data.judgementSummary || null,
+          judgementReasons: data.judgementReasons,
+          suitableFor: data.suitableFor,
+          notSuitableFor: data.notSuitableFor,
+          tags: data.tags,
+          fieldConfidence: {
+            ...data.confidence,
+            aiCandidateId: candidate.id,
+          } as Prisma.InputJsonObject,
+          eventTags: {
+            create: data.tags.map((tagName) => ({ tagName, tagType: 'experience' })),
+          },
+        },
+      });
+
+      const accepted = await tx.eventCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          status: 'accepted',
+          acceptedEventId: event.id,
+          reviewedBy: admin.id,
+          reviewedAt: new Date(),
+        },
+      });
+
+      return { event, candidate: accepted };
+    });
+
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_candidate.accept',
+      targetType: 'event_candidates',
+      targetId: candidate.id,
+      beforeValue: candidate,
+      afterValue: { eventId: result.event.id, candidateId: result.candidate.id },
+      note: 'AI 候选赛事采纳为人工待补充草稿',
+    });
+
+    res.status(201).json(result);
   }),
 );
 

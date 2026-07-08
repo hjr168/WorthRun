@@ -88,3 +88,42 @@ export interface SystemConfigItem {
   configValue: unknown;
   description?: string | null;
 }
+
+export interface EventSourceItem {
+  id: string;
+  name: string;
+  sourceType: 'page_url' | 'search_query' | 'rss';
+  entryUrl?: string | null;
+  searchQuery?: string | null;
+  allowedDomains: string[];
+  cityHints: string[];
+  status: 'active' | 'paused';
+  lastRunAt?: string | null;
+  lastRunStatus?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventCandidateItem {
+  id: string;
+  status: 'new' | 'needs_review' | 'accepted' | 'rejected' | 'merged';
+  eventName: string;
+  city: string;
+  eventDate?: string | null;
+  sourceUrl?: string | null;
+  officialUrl?: string | null;
+  extractedData: Record<string, unknown>;
+  evidence: Array<{ field: string; sourceUrl: string; quote: string }>;
+  confidence?: Record<string, unknown> | null;
+  duplicateEventId?: string | null;
+  acceptedEventId?: string | null;
+  aiModel?: string | null;
+  aiPromptVersion?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  rejectReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  source?: EventSourceItem | null;
+}

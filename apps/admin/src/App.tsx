@@ -5,6 +5,7 @@ import {
   FileTextOutlined,
   LogoutOutlined,
   ProfileOutlined,
+  RobotOutlined,
   SettingOutlined,
   ShareAltOutlined,
   ToolOutlined,
@@ -26,6 +27,7 @@ import { LoginPage } from './pages/LoginPage';
 import { WorkbenchPage } from './pages/WorkbenchPage';
 import { EventsPage } from './pages/EventsPage';
 import { EventEditPage } from './pages/EventEditPage';
+import { AiSourcesPage } from './pages/AiSourcesPage';
 import { QualityPage } from './pages/QualityPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ContentPage } from './pages/ContentPage';
@@ -77,17 +79,19 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
   const location = useLocation();
   const selectedKey = location.pathname.startsWith('/events')
     ? '/events'
-    : location.pathname.startsWith('/content')
-      ? '/content'
-      : location.pathname.startsWith('/settings')
-        ? '/settings'
-        : location.pathname.startsWith('/quality')
-          ? '/quality'
-          : location.pathname.startsWith('/share-stats')
-            ? '/share-stats'
-            : location.pathname.startsWith('/logs')
-              ? '/logs'
-              : '/workbench';
+    : location.pathname.startsWith('/ai-sources')
+      ? '/ai-sources'
+      : location.pathname.startsWith('/content')
+        ? '/content'
+        : location.pathname.startsWith('/settings')
+          ? '/settings'
+          : location.pathname.startsWith('/quality')
+            ? '/quality'
+            : location.pathname.startsWith('/share-stats')
+              ? '/share-stats'
+              : location.pathname.startsWith('/logs')
+                ? '/logs'
+                : '/workbench';
 
   return (
     <Layout className="app-shell">
@@ -107,6 +111,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               key: '/events',
               icon: <DatabaseOutlined />,
               label: <Link to="/events">赛事库</Link>,
+            },
+            {
+              key: '/ai-sources',
+              icon: <RobotOutlined />,
+              label: <Link to="/ai-sources">AI 赛事源</Link>,
             },
             {
               key: '/quality',
@@ -150,6 +159,7 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/edit" element={<EventEditPage />} />
             <Route path="/events/edit/:id" element={<EventEditPage />} />
+            <Route path="/ai-sources" element={<AiSourcesPage />} />
             <Route path="/quality" element={<QualityPage />} />
             <Route path="/share-stats" element={<ShareStatsPage />} />
             <Route path="/content" element={<ContentPage />} />

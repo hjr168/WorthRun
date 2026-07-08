@@ -6,17 +6,14 @@ import {
 } from '@worth-running/shared';
 import { z } from 'zod';
 
-const nullableUrlSchema = z.preprocess((value) => {
-  if (value === undefined) {
-    return null;
-  }
-
-  if (typeof value === 'string' && value.trim() === '') {
-    return null;
-  }
-
-  return value;
-}, z.string().trim().url().nullable());
+const nullableUrlSchema = z
+  .union([
+    z.string().trim().url(),
+    z.string().trim().length(0).transform(() => null),
+    z.null(),
+    z.undefined().transform(() => null),
+  ])
+  .transform((value): string | null => value ?? null);
 
 export const aiCandidateEvidenceSchema = z.object({
   field: z.string().trim().min(1),

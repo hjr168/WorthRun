@@ -41,6 +41,20 @@ Authorization: Bearer <token>
 - `GET /api/admin/system-configs`
 - `PUT /api/admin/system-configs/:key`
 
+## AI 辅助赛事源
+
+- `GET /api/admin/event-sources`
+- `POST /api/admin/event-sources`
+- `PUT /api/admin/event-sources/:id`
+- `POST /api/admin/event-sources/:id/run`
+- `GET /api/admin/event-candidates`
+- `PUT /api/admin/event-candidates/:id`
+- `POST /api/admin/event-candidates/:id/review`
+
+AI 赛事源只生成候选草稿。管理员可以先编辑候选字段和证据，再采纳为 `publishStatus=draft` 的赛事；仍需进入赛事编辑页继续核验、补充和发布。
+
+当前 `POST /api/admin/event-sources/:id/run` 已预留手动触发入口；真实网页抓取与 AI 抽取引擎接入前会返回 503，并记录最近运行状态。
+
 ## 工作台
 
 - `GET /api/admin/dashboard`
