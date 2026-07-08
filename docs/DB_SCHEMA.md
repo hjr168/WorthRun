@@ -13,6 +13,8 @@ V0.1 使用 PostgreSQL + Prisma。
 - `admin_users`：后台管理员，V0.1 保留角色字段。
 - `admin_operation_logs`：后台关键操作日志。
 - `system_configs`：基础配置。
+- `event_sources`：AI 辅助入库的数据源配置，只由后台管理员维护。
+- `event_candidates`：AI 抽取出的候选赛事草稿，必须人工审核后才能写入 `events`。
 
 发布状态、信息状态、跑前判断、报名状态、来源等级等枚举同时定义在 Prisma schema 和 `packages/shared`。
 

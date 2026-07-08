@@ -63,6 +63,25 @@ enum AdminStatus {
   disabled
 }
 
+enum EventSourceType {
+  page_url
+  search_query
+  rss
+}
+
+enum EventSourceStatus {
+  active
+  paused
+}
+
+enum EventCandidateStatus {
+  new
+  needs_review
+  accepted
+  rejected
+  merged
+}
+
 model Event {
   id               String               @id @default(cuid())
   eventName        String               @map("event_name")
@@ -222,6 +241,57 @@ model SystemConfig {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("system_configs")
+}
+
+model EventSource {
+  id             String            @id @default(cuid())
+  name           String
+  sourceType     EventSourceType   @default(page_url) @map("source_type")
+  entryUrl       String?           @map("entry_url")
+  searchQuery    String?           @map("search_query")
+  allowedDomains String[]          @default([]) @map("allowed_domains")
+  cityHints      String[]          @default([]) @map("city_hints")
+  status         EventSourceStatus @default(active)
+  lastRunAt      DateTime?         @map("last_run_at")
+  lastRunStatus  String?           @map("last_run_status")
+  notes          String?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  candidates EventCandidate[]
+
+  @@index([status])
+  @@map("event_sources")
+}
+
+model EventCandidate {
+  id               String               @id @default(cuid())
+  sourceId         String?              @map("source_id")
+  status           EventCandidateStatus @default(new)
+  eventName        String               @map("event_name")
+  city             String
+  eventDate        DateTime?            @map("event_date") @db.Date
+  sourceUrl        String?              @map("source_url")
+  officialUrl      String?              @map("official_url")
+  extractedData    Json                 @map("extracted_data")
+  evidence         Json
+  confidence       Json?
+  duplicateEventId String?              @map("duplicate_event_id")
+  acceptedEventId  String?              @map("accepted_event_id")
+  aiModel          String?              @map("ai_model")
+  aiPromptVersion  String?              @map("ai_prompt_version")
+  reviewedBy       String?              @map("reviewed_by")
+  reviewedAt       DateTime?            @map("reviewed_at")
+  rejectReason     String?              @map("reject_reason")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  source EventSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([sourceId])
+  @@index([eventName, city, eventDate])
+  @@map("event_candidates")
 }
 
 model ShareRecord {
