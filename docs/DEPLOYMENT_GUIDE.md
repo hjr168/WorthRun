@@ -12,6 +12,9 @@
   - `NODE_ENV=production`：线上 API 必须使用生产环境。
   - `ADMIN_TOKEN_SECRET`：后台登录 token 签名密钥，正式环境必须使用高强度随机值。
   - `CORS_ORIGINS`：后台管理站点浏览器跨域白名单，多个域名用英文逗号分隔。
+  - `OPENAI_API_KEY`：后台 AI 赛事源抽取候选赛事所需；不配置时不影响普通赛事 API，但手动抓取会失败。
+  - `AI_INGEST_MODEL`：AI 赛事源结构化抽取模型，默认 `gpt-5.5`。
+  - `AI_INGEST_USER_AGENT`：抓取来源页使用的 User-Agent，建议使用可联系到运营方的标识。
 - 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。
 - API 对外访问需要 HTTPS 域名，体验版和提审不能使用 `localhost`、局域网 IP 或 HTTP。
 

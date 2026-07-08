@@ -53,7 +53,7 @@ Authorization: Bearer <token>
 
 AI 赛事源只生成候选草稿。管理员可以先编辑候选字段和证据，再采纳为 `publishStatus=draft` 的赛事；仍需进入赛事编辑页继续核验、补充和发布。
 
-当前 `POST /api/admin/event-sources/:id/run` 已预留手动触发入口；真实网页抓取与 AI 抽取引擎接入前会返回 503，并记录最近运行状态。
+当前 `POST /api/admin/event-sources/:id/run` 支持 `page_url` 类型：后端会校验允许域名、遵守 `robots.txt`、读取页面正文并调用 AI 结构化抽取候选赛事。未配置 `OPENAI_API_KEY`、页面不允许抓取或来源内容无法解析时，会返回错误并记录 `lastRunStatus`。`search_query` 与 `rss` 类型已保留配置字段，抽取能力后续接入。
 
 ## 工作台
 

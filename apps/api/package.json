@@ -13,9 +13,13 @@
     "@prisma/client": "^5.22.0",
     "@worth-running/database": "workspace:*",
     "@worth-running/shared": "workspace:*",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "express": "^4.21.1",
-    "zod": "^3.23.8"
+    "openai": "^6.45.0",
+    "p-limit": "^7.3.0",
+    "robots-parser": "^3.0.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

@@ -22,6 +22,7 @@ import type {
 } from '@worth-running/shared';
 import { z, ZodError } from 'zod';
 import { aiEventCandidateSchema } from './ai/eventCandidateSchema.js';
+import { AiIngestError, runEventSource } from './ai/runEventSource.js';
 import { getMiniProgramCode } from './wxacode.js';
 
 const app = express();
@@ -981,24 +982,30 @@ app.post(
   '/api/admin/event-sources/:id/run',
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
-    const source = await prisma.eventSource.findUnique({ where: { id: req.params.id } });
-    if (!source) throw new HttpError(404, '赛事源不存在');
-    if (source.status !== 'active') throw new HttpError(400, '赛事源未启用');
-
-    const updated = await prisma.eventSource.update({
-      where: { id: source.id },
-      data: { lastRunAt: new Date(), lastRunStatus: 'extractor_not_configured' },
-    });
-    await writeOperationLog({
-      adminUserId: admin.id,
-      action: 'event_source.run',
-      targetType: 'event_sources',
-      targetId: source.id,
-      beforeValue: source,
-      afterValue: updated,
-      note: '手动触发 AI 赛事源抽取，抽取引擎尚未接入',
-    });
-    throw new HttpError(503, 'AI 抽取服务尚未接入，赛事源已保存，下一步将接入抓取与抽取引擎');
+    try {
+      const candidate = await runEventSource(req.params.id);
+      await writeOperationLog({
+        adminUserId: admin.id,
+        action: 'event_source.run',
+        targetType: 'event_sources',
+        targetId: req.params.id,
+        afterValue: { candidateId: candidate.id, status: candidate.status },
+        note: '手动触发 AI 赛事源抽取',
+      });
+      res.status(201).json(candidate);
+    } catch (error) {
+      await writeOperationLog({
+        adminUserId: admin.id,
+        action: 'event_source.run_failed',
+        targetType: 'event_sources',
+        targetId: req.params.id,
+        note: error instanceof Error ? error.message.slice(0, 200) : 'AI 赛事源抽取失败',
+      }).catch(() => undefined);
+      if (error instanceof AiIngestError) {
+        throw new HttpError(error.status, error.message);
+      }
+      throw error;
+    }
   }),
 );
 
