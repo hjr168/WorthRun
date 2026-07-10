@@ -494,7 +494,7 @@ export function AiSourcesPage() {
           setSourceModalOpen(false);
           sourceForm.resetFields();
         }}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={sourceForm} layout="vertical" initialValues={{ sourceType: 'page_url' }}>
           <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
@@ -546,6 +546,7 @@ export function AiSourcesPage() {
         title="编辑候选赛事"
         open={Boolean(editingCandidate)}
         width={760}
+        styles={{ body: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' } }}
         onOk={saveCandidate}
         confirmLoading={savingCandidate}
         okText="保存候选"
@@ -553,7 +554,7 @@ export function AiSourcesPage() {
           setEditingCandidate(null);
           candidateForm.resetFields();
         }}
-        destroyOnClose
+        destroyOnHidden
       >
         <Alert
           showIcon
