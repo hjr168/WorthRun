@@ -1,8 +1,41 @@
+.events-page {
+  padding-bottom: 64rpx;
+  padding-bottom: calc(64rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(64rpx + env(safe-area-inset-bottom));
+}
+
+.list-head {
+  border: 1rpx solid #17353b;
+  border-radius: 18rpx;
+  background: #122b32;
+  padding: 30rpx 28rpx;
+  box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.12);
+}
+
+.list-title {
+  color: #ffffff;
+  font-size: 38rpx;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.list-subtitle {
+  margin-top: 10rpx;
+  color: #c6d7d5;
+  font-size: 25rpx;
+  line-height: 1.5;
+}
+
 .filters {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
-  margin-bottom: 24rpx;
+  margin: 24rpx 0;
+  border: 1rpx solid #e5edf0;
+  border-radius: 16rpx;
+  background: #ffffff;
+  padding: 18rpx;
+  box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
 }
 
 .search-row {
@@ -16,18 +49,21 @@
   min-width: 0;
   min-height: 76rpx;
   border: 1rpx solid #e2e8f0;
-  border-radius: 8rpx;
-  background: #ffffff;
+  border-radius: 12rpx;
+  background: #f8fafc;
   padding: 0 22rpx;
   font-size: 28rpx;
 }
 
 .search-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 132rpx;
   min-height: 76rpx;
-  line-height: 76rpx;
   padding: 0;
   font-size: 27rpx;
+  line-height: 1.2;
 }
 
 .filter-grid {
@@ -39,8 +75,8 @@
 .filter-item {
   min-height: 72rpx;
   border: 1rpx solid #e2e8f0;
-  border-radius: 8rpx;
-  background: #ffffff;
+  border-radius: 12rpx;
+  background: #f8fafc;
   padding: 18rpx;
   color: #1e293b;
   font-size: 26rpx;
@@ -56,12 +92,15 @@
 }
 
 .reset-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 176rpx;
   min-height: 64rpx;
-  line-height: 64rpx;
   padding: 0;
   color: #475569;
   font-size: 25rpx;
+  line-height: 1.2;
 }
 
 .card-gap {

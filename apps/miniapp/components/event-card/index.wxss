@@ -1,26 +1,24 @@
 .event-card {
-  border: 1rpx solid #e2e8f0;
-  border-radius: 12rpx;
+  border: 1rpx solid #e5edf0;
+  border-radius: 18rpx;
   background: #ffffff;
-  padding: 24rpx;
+  padding: 26rpx;
+  box-shadow: 0 8rpx 22rpx rgba(15, 23, 42, 0.05);
 }
 
 .event-head {
-  display: flex;
-  gap: 20rpx;
-  align-items: flex-start;
+  display: block;
 }
 
 .event-main {
-  flex: 1;
   min-width: 0;
 }
 
 .event-name {
   color: #111827;
-  font-size: 32rpx;
-  font-weight: 700;
-  line-height: 1.35;
+  font-size: 34rpx;
+  font-weight: 800;
+  line-height: 1.32;
 }
 
 .event-meta,
@@ -37,16 +35,16 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 6rpx;
-  min-width: 112rpx;
-  min-height: 56rpx;
+  gap: 5rpx;
+  width: 104rpx;
+  height: 54rpx;
   border: 1rpx solid #d6e3e0;
   border-radius: 999rpx;
   background: #f8fafc;
   color: #475569;
   padding: 0;
   line-height: 1;
-  font-size: 23rpx;
+  font-size: 22rpx;
 }
 
 .favorite.active {
@@ -56,12 +54,12 @@
 }
 
 .favorite-icon {
-  font-size: 25rpx;
+  font-size: 24rpx;
   line-height: 1;
 }
 
 .favorite-label {
-  font-size: 22rpx;
+  font-size: 21rpx;
   line-height: 1;
 }
 
@@ -90,9 +88,10 @@
 
 .tag-row {
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
   gap: 10rpx;
-  margin-top: 16rpx;
+  min-width: 0;
 }
 
 .tag {
@@ -101,4 +100,12 @@
   color: #64748b;
   padding: 5rpx 12rpx;
   font-size: 23rpx;
+}
+
+.card-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 18rpx;
 }

@@ -1,5 +1,6 @@
-<view class="page">
+<view class="page home-page">
   <view class="hero">
+    <view class="hero-kicker">WorthRun</view>
     <view class="hero-title">近期值得关注的赛事</view>
     <view class="hero-sub">先看公开赛事，再进详情核对报名信息。</view>
   </view>
@@ -21,6 +22,7 @@
     <view wx:else class="card preference-card" bindtap="openPreference">
       <view class="preference-title">偏好摘要</view>
       <view class="muted">{{preferenceText}}</view>
+      <view class="preference-action">调整偏好</view>
     </view>
     <view wx:if="{{fallbackNotice}}" class="fallback-notice">{{fallbackNotice}}</view>
 
@@ -52,7 +54,7 @@
 
     <view class="section tool-grid">
       <button class="secondary-button" bindtap="openEvents">赛事列表</button>
-      <button class="secondary-button" bindtap="openTools">工具</button>
+      <button class="secondary-button" bindtap="openTools">跑步工具</button>
     </view>
   </block>
 </view>

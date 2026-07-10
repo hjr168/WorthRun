@@ -6,7 +6,7 @@
   </block>
   <block wx:else>
     <view class="canvas-wrapper">
-      <canvas type="2d" id="shareCanvas" class="share-canvas" style="width:{{canvasW}}px;height:{{canvasH}}px;"></canvas>
+      <canvas type="2d" id="shareCanvas" class="share-canvas" style="width:{{canvasDisplayW}}px;height:{{canvasDisplayH}}px;"></canvas>
     </view>
     <view class="actions">
       <button class="primary-button" bindtap="saveImage" loading="{{saving}}">保存到相册</button>

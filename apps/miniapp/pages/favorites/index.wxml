@@ -1,4 +1,9 @@
-<view class="page">
+<view class="page favorites-page">
+  <view class="favorites-head">
+    <view class="favorites-title">我的收藏</view>
+    <view class="favorites-subtitle">把想跑、待确认的赛事先收在这里。</view>
+  </view>
+
   <loading-state wx:if="{{loading}}" text="正在加载收藏" />
   <block wx:elif="{{error}}">
     <empty-state title="请求失败" description="{{error}}" />

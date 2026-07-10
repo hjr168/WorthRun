@@ -6,6 +6,17 @@ const format_1 = require("../../utils/format");
 const user_1 = require("../../utils/user");
 const CANVAS_W = 375;
 const CANVAS_H = 667;
+function getCanvasDisplaySize() {
+    const windowInfo = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const windowWidth = Number(windowInfo === null || windowInfo === void 0 ? void 0 : windowInfo.windowWidth) || CANVAS_W;
+    const rpx = windowWidth / 750;
+    const horizontalChrome = 68 * rpx;
+    const displayW = Math.max(260, Math.min(CANVAS_W, Math.floor(windowWidth - horizontalChrome)));
+    return {
+        width: displayW,
+        height: Math.round((displayW * CANVAS_H) / CANVAS_W),
+    };
+}
 function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
     if (!text)
         return y;
@@ -49,6 +60,7 @@ function drawRoundRect(ctx, x, y, w, h, r) {
     ctx.arcTo(x, y, x + w, y, radius);
     ctx.closePath();
 }
+const initialCanvasSize = getCanvasDisplaySize();
 Page({
     data: {
         id: '',
@@ -57,16 +69,25 @@ Page({
         error: '',
         saving: false,
         event: null,
-        canvasW: CANVAS_W,
-        canvasH: CANVAS_H,
+        canvasDisplayW: initialCanvasSize.width,
+        canvasDisplayH: initialCanvasSize.height,
         tempFilePath: '',
     },
     canvasNode: null,
     onLoad(query) {
         this.setData({ id: query.id || '', userKey: (0, user_1.getUserKey)() });
+        this.updateCanvasDisplaySize();
         this.load();
     },
+    onResize() {
+        this.updateCanvasDisplaySize();
+    },
+    updateCanvasDisplaySize() {
+        const size = getCanvasDisplaySize();
+        this.setData({ canvasDisplayW: size.width, canvasDisplayH: size.height });
+    },
     reload() {
+        this.updateCanvasDisplaySize();
         this.load();
     },
     async load() {
@@ -77,7 +98,9 @@ Page({
         this.setData({ loading: true, error: '' });
         try {
             const detail = await (0, api_1.getEventDetail)(this.data.id);
-            this.setData({ event: detail.event, loading: false });
+            await new Promise((resolve) => {
+                this.setData({ event: detail.event, loading: false }, () => resolve());
+            });
             await this.initCanvasAndDraw();
         }
         catch (error) {
@@ -102,9 +125,10 @@ Page({
                 const canvas = res.node;
                 this.canvasNode = canvas;
                 const ctx = canvas.getContext('2d');
-                const dpr = wx.getWindowInfo().pixelRatio;
-                canvas.width = res.width * dpr;
-                canvas.height = res.height * dpr;
+                const windowInfo = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+                const dpr = Number(windowInfo === null || windowInfo === void 0 ? void 0 : windowInfo.pixelRatio) || 1;
+                canvas.width = CANVAS_W * dpr;
+                canvas.height = CANVAS_H * dpr;
                 ctx.scale(dpr, dpr);
                 wx.nextTick(() => {
                     this.drawShareCard(ctx).then(resolve).catch(() => resolve());
@@ -179,6 +203,8 @@ Page({
             for (const tag of tags) {
                 const textWidth = ctx.measureText(tag).width;
                 const boxW = textWidth + 20;
+                if (tagX + boxW > W - 20)
+                    break;
                 drawRoundRect(ctx, tagX, tagY, boxW, tagH, 13);
                 ctx.fillStyle = '#E8F5F3';
                 ctx.fill();
@@ -195,15 +221,23 @@ Page({
             y = wrapText(ctx, event.judgementSummary, 20, y, W - 40, 22, 4);
         }
         // 8. 小程序码区域（底部右侧）
-        const codeSize = 80;
-        const codeX = W - 20 - codeSize;
-        const codeY = H - 20 - codeSize - 24;
+        const fixedFooterY = H - 156;
+        const raisedFooterY = H - 280;
+        const footerPanelY = Math.min(fixedFooterY, Math.max(raisedFooterY, y + 24));
+        const footerPanelH = 112;
+        const codeSize = 82;
+        const codeX = W - 32 - codeSize;
+        const codeY = footerPanelY + 15;
+        drawRoundRect(ctx, 20, footerPanelY, W - 40, footerPanelH, 14);
+        ctx.fillStyle = '#F8FAFC';
+        ctx.fill();
         ctx.fillStyle = '#64748B';
         ctx.font = '12px sans-serif';
-        ctx.fillText('扫码查看赛事决策卡', 20, codeY + 28);
+        ctx.fillText('扫码查看赛事决策卡', 36, footerPanelY + 30);
         ctx.fillStyle = '#94A3B8';
         ctx.font = '11px sans-serif';
-        ctx.fillText('更多跑者评测 · 报名清单', 20, codeY + 48);
+        ctx.fillText('更多跑者评测', 36, footerPanelY + 52);
+        ctx.fillText('报名清单与官方确认', 36, footerPanelY + 72);
         let codeImage = null;
         try {
             const codeUrl = `${index_1.config.apiBaseUrl}/api/wxacode?eventId=${event.id}`;
@@ -225,7 +259,7 @@ Page({
                     image.src = codeImage.path;
                 });
                 await loaded;
-                ctx.drawImage(image, codeX + 4, codeY + 4, codeSize - 8, codeSize - 8);
+                ctx.drawImage(image, codeX + 6, codeY + 6, codeSize - 12, codeSize - 12);
             }
             catch (_b) {
                 this.drawCodePlaceholder(ctx, codeX, codeY, codeSize);
@@ -238,7 +272,7 @@ Page({
         ctx.fillStyle = '#94A3B8';
         ctx.font = '11px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('AI 整理，仅供参考｜报名以官方为准', W / 2, H - 24);
+        ctx.fillText('AI 整理，仅供参考｜报名以官方为准', W / 2, H - 26);
         ctx.textAlign = 'left';
         this.toTempFile();
     },

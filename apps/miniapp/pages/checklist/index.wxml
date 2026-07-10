@@ -1,4 +1,9 @@
-<view class="page">
+<view class="page checklist-page">
+  <view class="checklist-head">
+    <view class="checklist-title">赛前清单</view>
+    <view class="checklist-subtitle">报名、领物、装备和风险项，按类型逐项确认。</view>
+  </view>
+
   <picker range="{{groups}}" value="{{groupIndex}}" bindchange="onGroupChange">
     <view class="picker-box">类型：{{groups[groupIndex]}}</view>
   </picker>

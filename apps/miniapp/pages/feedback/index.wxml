@@ -1,4 +1,9 @@
-<view class="page">
+<view class="page feedback-page">
+  <view class="feedback-head">
+    <view class="feedback-title">反馈纠错</view>
+    <view class="feedback-subtitle">赛事信息可能变化，发现问题可以直接告诉我们。</view>
+  </view>
+
   <view class="form-card">
     <view class="field">
       <view class="field-label">反馈类型</view>

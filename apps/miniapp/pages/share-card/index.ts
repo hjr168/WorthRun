@@ -6,6 +6,19 @@ import { getUserKey } from '../../utils/user';
 const CANVAS_W = 375;
 const CANVAS_H = 667;
 
+function getCanvasDisplaySize() {
+  const windowInfo =
+    typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+  const windowWidth = Number(windowInfo?.windowWidth) || CANVAS_W;
+  const rpx = windowWidth / 750;
+  const horizontalChrome = 68 * rpx; // page horizontal padding + canvas wrapper padding.
+  const displayW = Math.max(260, Math.min(CANVAS_W, Math.floor(windowWidth - horizontalChrome)));
+  return {
+    width: displayW,
+    height: Math.round((displayW * CANVAS_H) / CANVAS_W),
+  };
+}
+
 /** 自动换行绘制，超出 maxLines 截断加省略号。返回绘制后下一个 y 坐标。 */
 function wrapText(
   ctx: WechatMiniprogram.CanvasContext.CanvasRenderingContext2D,
@@ -88,10 +101,12 @@ interface ShareCardData {
   error: string;
   saving: boolean;
   event: EventDetail | null;
-  canvasW: number;
-  canvasH: number;
+  canvasDisplayW: number;
+  canvasDisplayH: number;
   tempFilePath: string;
 }
+
+const initialCanvasSize = getCanvasDisplaySize();
 
 Page({
   data: {
@@ -101,8 +116,8 @@ Page({
     error: '',
     saving: false,
     event: null as EventDetail | null,
-    canvasW: CANVAS_W,
-    canvasH: CANVAS_H,
+    canvasDisplayW: initialCanvasSize.width,
+    canvasDisplayH: initialCanvasSize.height,
     tempFilePath: '',
   } as ShareCardData,
 
@@ -110,10 +125,21 @@ Page({
 
   onLoad(query: { id?: string }) {
     this.setData({ id: query.id || '', userKey: getUserKey() });
+    this.updateCanvasDisplaySize();
     this.load();
   },
 
+  onResize() {
+    this.updateCanvasDisplaySize();
+  },
+
+  updateCanvasDisplaySize() {
+    const size = getCanvasDisplaySize();
+    this.setData({ canvasDisplayW: size.width, canvasDisplayH: size.height });
+  },
+
   reload() {
+    this.updateCanvasDisplaySize();
     this.load();
   },
 
@@ -125,7 +151,9 @@ Page({
     this.setData({ loading: true, error: '' });
     try {
       const detail = await getEventDetail(this.data.id);
-      this.setData({ event: detail.event, loading: false });
+      await new Promise<void>((resolve) => {
+        this.setData({ event: detail.event, loading: false }, () => resolve());
+      });
       await this.initCanvasAndDraw();
     } catch (error) {
       this.setData({
@@ -151,9 +179,11 @@ Page({
           const canvas = res.node as unknown as CanvasNode;
           this.canvasNode = canvas;
           const ctx = canvas.getContext('2d');
-          const dpr = wx.getWindowInfo().pixelRatio;
-          canvas.width = res.width * dpr;
-          canvas.height = res.height * dpr;
+          const windowInfo =
+            typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+          const dpr = Number(windowInfo?.pixelRatio) || 1;
+          canvas.width = CANVAS_W * dpr;
+          canvas.height = CANVAS_H * dpr;
           ctx.scale(dpr, dpr);
           // 先渲染布局，再异步绘制（等小程序码图片加载）
           wx.nextTick(() => {
@@ -241,6 +271,7 @@ Page({
       for (const tag of tags) {
         const textWidth = ctx.measureText(tag).width;
         const boxW = textWidth + 20;
+        if (tagX + boxW > W - 20) break;
         drawRoundRect(ctx, tagX, tagY, boxW, tagH, 13);
         ctx.fillStyle = '#E8F5F3';
         ctx.fill();
@@ -258,18 +289,27 @@ Page({
       y = wrapText(ctx, event.judgementSummary, 20, y, W - 40, 22, 4);
     }
 
-    // 8. 小程序码区域（底部右侧）— 异步加载图片
-    const codeSize = 80;
-    const codeX = W - 20 - codeSize;
-    const codeY = H - 20 - codeSize - 24; // 留出底部提示空间
+    // 8. 小程序码区域（底部右侧）— 内容较少时上移，减少海报中部留白。
+    const fixedFooterY = H - 156;
+    const raisedFooterY = H - 280;
+    const footerPanelY = Math.min(fixedFooterY, Math.max(raisedFooterY, y + 24));
+    const footerPanelH = 112;
+    const codeSize = 82;
+    const codeX = W - 32 - codeSize;
+    const codeY = footerPanelY + 15;
+
+    drawRoundRect(ctx, 20, footerPanelY, W - 40, footerPanelH, 14);
+    ctx.fillStyle = '#F8FAFC';
+    ctx.fill();
 
     // 先绘制左侧提示文字
     ctx.fillStyle = '#64748B';
     ctx.font = '12px sans-serif';
-    ctx.fillText('扫码查看赛事决策卡', 20, codeY + 28);
+    ctx.fillText('扫码查看赛事决策卡', 36, footerPanelY + 30);
     ctx.fillStyle = '#94A3B8';
     ctx.font = '11px sans-serif';
-    ctx.fillText('更多跑者评测 · 报名清单', 20, codeY + 48);
+    ctx.fillText('更多跑者评测', 36, footerPanelY + 52);
+    ctx.fillText('报名清单与官方确认', 36, footerPanelY + 72);
 
     // 尝试加载小程序码
     let codeImage: CanvasImage | null = null;
@@ -295,8 +335,8 @@ Page({
           image.src = codeImage!.path;
         });
         await loaded;
-        // 居中绘制（保持正方形，留 4px 内边距）
-        ctx.drawImage(image, codeX + 4, codeY + 4, codeSize - 8, codeSize - 8);
+        // 居中绘制（保持正方形，留出小程序码安静区）
+        ctx.drawImage(image, codeX + 6, codeY + 6, codeSize - 12, codeSize - 12);
       } catch {
         this.drawCodePlaceholder(ctx, codeX, codeY, codeSize);
       }
@@ -308,7 +348,7 @@ Page({
     ctx.fillStyle = '#94A3B8';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('AI 整理，仅供参考｜报名以官方为准', W / 2, H - 24);
+    ctx.fillText('AI 整理，仅供参考｜报名以官方为准', W / 2, H - 26);
     ctx.textAlign = 'left';
 
     // 生成临时图片

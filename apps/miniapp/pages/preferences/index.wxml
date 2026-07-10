@@ -1,6 +1,11 @@
-<view class="page">
+<view class="page preferences-page">
   <loading-state wx:if="{{loading}}" text="正在读取偏好" />
   <block wx:else>
+    <view class="preference-head">
+      <view class="preference-head-title">跑赛偏好</view>
+      <view class="preference-head-subtitle">用几个标签帮首页优先展示更接近你的赛事。</view>
+    </view>
+
     <view wx:if="{{error}}" class="error-tip">{{error}}</view>
     <view class="form-card">
       <view class="chip-section">

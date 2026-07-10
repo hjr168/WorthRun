@@ -1,4 +1,9 @@
-<view class="page">
+<view class="page events-page">
+  <view class="list-head">
+    <view class="list-title">赛事列表</view>
+    <view class="list-subtitle">按城市、距离和报名状态快速筛选。</view>
+  </view>
+
   <view class="filters">
     <view class="search-row">
       <input class="search" value="{{search}}" placeholder="搜索赛事名称 / 城市" confirm-type="search" bindinput="onSearch" bindconfirm="submitSearch" />
