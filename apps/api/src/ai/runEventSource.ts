@@ -128,7 +128,15 @@ function allowedDomainsForSource(entryUrl: string, allowedDomains: string[]) {
 
 function inferStatus(error: unknown) {
   const message = errorMessage(error);
-  if (message.includes('OPENAI_API_KEY')) return 503;
+  if (
+    message.includes('OPENAI_API_KEY') ||
+    message.includes('ZHIPUAI_API_KEY') ||
+    message.includes('GLM_API_KEY') ||
+    message.includes('DEEPSEEK_API_KEY') ||
+    message.includes('AI_INGEST_API_KEY')
+  ) {
+    return 503;
+  }
   if (message.includes('robots.txt') || message.includes('不在允许域名')) return 403;
   if (message.includes('访问验证') || message.includes('验证码')) return 403;
   if (message.includes('不是可解析') || message.includes('正文过短')) return 422;

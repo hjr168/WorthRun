@@ -12,8 +12,12 @@
   - `NODE_ENV=production`：线上 API 必须使用生产环境。
   - `ADMIN_TOKEN_SECRET`：后台登录 token 签名密钥，正式环境必须使用高强度随机值。
   - `CORS_ORIGINS`：后台管理站点浏览器跨域白名单，多个域名用英文逗号分隔。
-  - `OPENAI_API_KEY`：后台 AI 赛事源抽取候选赛事所需；不配置时不影响普通赛事 API，但手动抓取会失败。
-  - `AI_INGEST_MODEL`：AI 赛事源结构化抽取模型，默认 `gpt-5.5`。
+  - `AI_INGEST_PROVIDER`：后台 AI 赛事源抽取模型提供方，支持 `glm`、`deepseek` 和 `openai`；推荐先用 `glm`，也可切到 `deepseek` 测试。
+  - `ZHIPUAI_API_KEY` / `GLM_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=glm` 时调用 GLM 抽取所需；不配置时不影响普通赛事 API，但手动抓取会失败。
+  - `DEEPSEEK_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=deepseek` 时调用 DeepSeek 抽取所需；默认模型为 `deepseek-v4-flash`，DeepSeek 官方说明旧模型名 `deepseek-chat` / `deepseek-reasoner` 将于 2026-07-24 废弃，不建议新接入使用。
+  - `OPENAI_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=openai` 时调用 OpenAI 抽取所需。
+  - `AI_INGEST_MODEL`：AI 赛事源结构化抽取模型；留空时按 provider 使用默认值：GLM 为 `glm-5.2`，DeepSeek 为 `deepseek-v4-flash`，OpenAI 为 `gpt-5.5`。
+  - `AI_INGEST_BASE_URL`：兼容 OpenAI SDK 的模型服务地址；留空时按 provider 使用默认值：GLM 为 `https://open.bigmodel.cn/api/paas/v4/`，DeepSeek 为 `https://api.deepseek.com`。
   - `AI_INGEST_USER_AGENT`：抓取来源页使用的 User-Agent，建议使用可联系到运营方的标识。
 - 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。
 - API 对外访问需要 HTTPS 域名，体验版和提审不能使用 `localhost`、局域网 IP 或 HTTP。
