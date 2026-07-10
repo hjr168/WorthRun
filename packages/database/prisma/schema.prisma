@@ -65,6 +65,7 @@ enum AdminStatus {
 
 enum EventSourceType {
   page_url
+  chinaath_api
   search_query
   rss
 }
@@ -280,6 +281,9 @@ model EventCandidate {
   acceptedEventId  String?              @map("accepted_event_id")
   aiModel          String?              @map("ai_model")
   aiPromptVersion  String?              @map("ai_prompt_version")
+  sourceExternalId String?              @map("source_external_id")
+  rawPayload       Json?                @map("raw_payload")
+  extractorVersion String?              @map("extractor_version")
   reviewedBy       String?              @map("reviewed_by")
   reviewedAt       DateTime?            @map("reviewed_at")
   rejectReason     String?              @map("reject_reason")
@@ -288,6 +292,7 @@ model EventCandidate {
 
   source EventSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
 
+  @@unique([sourceId, sourceExternalId])
   @@index([status])
   @@index([sourceId])
   @@index([eventName, city, eventDate])

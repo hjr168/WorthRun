@@ -22,6 +22,7 @@ import type {
 } from '@worth-running/shared';
 import { z, ZodError } from 'zod';
 import { aiEventCandidateSchema } from './ai/eventCandidateSchema.js';
+import { eventSourceSchema } from './ai/eventSourceConfig.js';
 import { AiIngestError, runEventSource } from './ai/runEventSource.js';
 import { getMiniProgramCode } from './wxacode.js';
 
@@ -153,26 +154,6 @@ const feedbackHandleSchema = z.object({
 const systemConfigSchema = z.object({
   configValue: z.unknown().refine((value) => value !== undefined, 'configValue 不能为空'),
   description: z.string().trim().max(500).optional().nullable(),
-});
-
-const optionalUrlSchema = z
-  .union([
-    z.string().trim().url('入口 URL 必须是有效 URL'),
-    z.string().trim().length(0).transform(() => null),
-    z.null(),
-    z.undefined().transform(() => null),
-  ])
-  .transform((value): string | null => value ?? null);
-
-const eventSourceSchema = z.object({
-  name: z.string().trim().min(1, '赛事源名称不能为空'),
-  sourceType: z.enum(['page_url', 'search_query', 'rss']).default('page_url'),
-  entryUrl: optionalUrlSchema,
-  searchQuery: z.string().trim().optional().nullable(),
-  allowedDomains: z.array(z.string().trim().min(1)).default([]),
-  cityHints: z.array(z.string().trim().min(1)).default([]),
-  status: z.enum(['active', 'paused']).default('active'),
-  notes: z.string().trim().optional().nullable(),
 });
 
 const eventCandidateStatusSchema = z.enum([
