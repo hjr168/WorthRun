@@ -964,16 +964,16 @@ app.post(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
     try {
-      const candidate = await runEventSource(req.params.id);
+      const summary = await runEventSource(req.params.id);
       await writeOperationLog({
         adminUserId: admin.id,
         action: 'event_source.run',
         targetType: 'event_sources',
         targetId: req.params.id,
-        afterValue: { candidateId: candidate.id, status: candidate.status },
-        note: '手动触发 AI 赛事源抽取',
+        afterValue: summary,
+        note: `手动抓取赛事源：新增 ${summary.created}，更新 ${summary.updated}，跳过 ${summary.skippedReviewed}`,
       });
-      res.status(201).json(candidate);
+      res.status(201).json(summary);
     } catch (error) {
       await writeOperationLog({
         adminUserId: admin.id,
