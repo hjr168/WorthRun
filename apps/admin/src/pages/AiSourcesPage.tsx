@@ -18,14 +18,21 @@ import { useNavigate } from 'react-router-dom';
 import { apiGet, apiSend } from '../api';
 import { runJudgementOptions, signupStatusOptions, sourceLevelOptions } from '../constants';
 import { useAdmin } from '../context/AdminContext';
-import { EventCandidateItem, EventSourceItem } from '../types';
+import { EventCandidateItem, EventSourceItem, EventSourceRunSummary } from '../types';
+import { formatEventSourceRunSummary } from '../utils/aiSources';
 import { showError } from '../utils/helpers';
 
 const sourceTypeOptions = [
-  { value: 'page_url', label: '页面 URL' },
-  { value: 'search_query', label: '搜索关键词' },
-  { value: 'rss', label: 'RSS' },
+  { value: 'page_url', label: '网页 AI 抽取' },
+  { value: 'chinaath_api', label: '中国田协官方赛事目录' },
 ];
+
+const sourceTypeLabels: Record<EventSourceItem['sourceType'], string> = {
+  page_url: '网页 AI 抽取',
+  chinaath_api: '中国田协目录',
+  search_query: '搜索关键词',
+  rss: 'RSS',
+};
 
 const sourceStatusLabels: Record<EventSourceItem['status'], string> = {
   active: '启用',
@@ -73,29 +80,48 @@ export function AiSourcesPage() {
   const { can } = useAdmin();
   const [sourceForm] = Form.useForm<SourceFormValues>();
   const [candidateForm] = Form.useForm<CandidateFormValues>();
+  const selectedSourceType = Form.useWatch('sourceType', sourceForm) || 'page_url';
   const [sources, setSources] = useState<EventSourceItem[]>([]);
   const [candidates, setCandidates] = useState<EventCandidateItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [sourcesLoading, setSourcesLoading] = useState(false);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [sourceModalOpen, setSourceModalOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<EventCandidateItem | null>(null);
   const [savingSource, setSavingSource] = useState(false);
   const [savingCandidate, setSavingCandidate] = useState(false);
+  const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
+  const [candidateSourceId, setCandidateSourceId] = useState<string>('');
+  const [candidateStatus, setCandidateStatus] = useState<string>('');
 
-  const load = () => {
-    setLoading(true);
-    Promise.all([
-      apiGet<{ items: EventSourceItem[] }>('/api/admin/event-sources'),
-      apiGet<{ items: EventCandidateItem[] }>('/api/admin/event-candidates'),
-    ])
-      .then(([sourceResult, candidateResult]) => {
-        setSources(sourceResult.items);
-        setCandidates(candidateResult.items);
-      })
+  const loadSources = () => {
+    setSourcesLoading(true);
+    return apiGet<{ items: EventSourceItem[] }>('/api/admin/event-sources')
+      .then((result) => setSources(result.items))
       .catch(showError)
-      .finally(() => setLoading(false));
+      .finally(() => setSourcesLoading(false));
   };
 
-  useEffect(load, []);
+  const loadCandidates = () => {
+    setCandidatesLoading(true);
+    const params = new URLSearchParams();
+    if (candidateSourceId) params.set('sourceId', candidateSourceId);
+    if (candidateStatus) params.set('status', candidateStatus);
+    const query = params.toString();
+    return apiGet<{ items: EventCandidateItem[] }>(
+      `/api/admin/event-candidates${query ? `?${query}` : ''}`,
+    )
+      .then((result) => setCandidates(result.items))
+      .catch(showError)
+      .finally(() => setCandidatesLoading(false));
+  };
+
+  useEffect(() => {
+    void loadSources();
+  }, []);
+
+  useEffect(() => {
+    void loadCandidates();
+  }, [candidateSourceId, candidateStatus]);
 
   const createSource = async () => {
     try {
@@ -114,7 +140,7 @@ export function AiSourcesPage() {
       message.success('赛事源已创建');
       setSourceModalOpen(false);
       sourceForm.resetFields();
-      load();
+      await loadSources();
     } catch (error) {
       showError(error);
     } finally {
@@ -124,12 +150,18 @@ export function AiSourcesPage() {
 
   const runSource = async (source: EventSourceItem) => {
     try {
-      await apiSend('POST', `/api/admin/event-sources/${source.id}/run`, {});
-      message.success('已生成候选赛事，请在候选列表复核');
+      setRunningSourceId(source.id);
+      const summary = await apiSend<EventSourceRunSummary>(
+        'POST',
+        `/api/admin/event-sources/${source.id}/run`,
+        {},
+      );
+      message.success(formatEventSourceRunSummary(summary));
     } catch (error) {
       showError(error);
     } finally {
-      load();
+      setRunningSourceId(null);
+      await Promise.all([loadSources(), loadCandidates()]);
     }
   };
 
@@ -174,7 +206,7 @@ export function AiSourcesPage() {
       message.success('候选赛事已保存');
       setEditingCandidate(null);
       candidateForm.resetFields();
-      load();
+      await loadCandidates();
     } catch (error) {
       showError(error);
     } finally {
@@ -208,7 +240,7 @@ export function AiSourcesPage() {
         );
         message.success('已采纳为赛事草稿，请继续人工核验和补充');
         if (result.event?.id) navigate(`/events/edit/${result.event.id}`);
-        else load();
+        else await loadCandidates();
       } catch (error) {
         showError(error);
       }
@@ -237,7 +269,7 @@ export function AiSourcesPage() {
             rejectReason: normalizeOptionalString(rejectReason),
           });
           message.success('候选赛事已驳回');
-          load();
+          await loadCandidates();
         } catch (error) {
           showError(error);
         }
@@ -277,12 +309,18 @@ export function AiSourcesPage() {
           <h2>赛事源</h2>
           <Table<EventSourceItem>
             rowKey="id"
-            loading={loading}
+            loading={sourcesLoading}
             dataSource={sources}
             pagination={false}
             scroll={{ x: 980 }}
             columns={[
               { title: '名称', dataIndex: 'name', width: 180, fixed: 'left' },
+              {
+                title: '类型',
+                dataIndex: 'sourceType',
+                width: 140,
+                render: (value: EventSourceItem['sourceType']) => sourceTypeLabels[value],
+              },
               {
                 title: '入口',
                 width: 280,
@@ -325,6 +363,8 @@ export function AiSourcesPage() {
                     <Button
                       size="small"
                       icon={<RobotOutlined />}
+                      loading={runningSourceId === record.id}
+                      disabled={Boolean(runningSourceId && runningSourceId !== record.id)}
                       onClick={() => runSource(record)}
                     >
                       手动抓取
@@ -339,13 +379,43 @@ export function AiSourcesPage() {
 
         <section className="form-section">
           <h2>候选赛事</h2>
+          <Space wrap style={{ marginBottom: 12 }}>
+            <Select
+              aria-label="候选来源"
+              style={{ width: 220 }}
+              value={candidateSourceId}
+              onChange={setCandidateSourceId}
+              options={[
+                { value: '', label: '全部来源' },
+                ...sources.map((source) => ({ value: source.id, label: source.name })),
+              ]}
+            />
+            <Select
+              aria-label="候选状态"
+              style={{ width: 150 }}
+              value={candidateStatus}
+              onChange={setCandidateStatus}
+              options={[
+                { value: '', label: '全部状态' },
+                ...Object.entries(candidateStatusLabels).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+            />
+          </Space>
           <Table<EventCandidateItem>
             rowKey="id"
-            loading={loading}
+            loading={candidatesLoading}
             dataSource={candidates}
             scroll={{ x: 1320 }}
             columns={[
               { title: '赛事', dataIndex: 'eventName', width: 210, fixed: 'left' },
+              {
+                title: '来源',
+                width: 170,
+                render: (_, record) => record.source?.name || '-',
+              },
               { title: '城市', dataIndex: 'city', width: 100 },
               {
                 title: '日期',
@@ -437,15 +507,32 @@ export function AiSourcesPage() {
           >
             <Select options={sourceTypeOptions} />
           </Form.Item>
-          <Form.Item label="入口 URL" name="entryUrl">
-            <Input placeholder="https://..." />
-          </Form.Item>
-          <Form.Item label="搜索关键词" name="searchQuery">
-            <Input placeholder="例如：2026 广州 马拉松 报名" />
-          </Form.Item>
-          <Form.Item label="允许域名" name="allowedDomains" extra="多个域名用逗号或换行分隔">
-            <Input.TextArea rows={2} placeholder="example.com, www.example.com" />
-          </Form.Item>
+          {selectedSourceType === 'chinaath_api' ? (
+            <Alert
+              showIcon
+              type="info"
+              style={{ marginBottom: 16 }}
+              message="固定读取中国田协公开赛事目录"
+              description="每次最多读取 20 条候选；官方报名入口和报名状态仍需人工补充。"
+            />
+          ) : (
+            <>
+              <Form.Item
+                label="入口 URL"
+                name="entryUrl"
+                rules={[{ required: true, message: '请输入入口 URL' }]}
+              >
+                <Input placeholder="https://..." />
+              </Form.Item>
+              <Form.Item
+                label="允许域名"
+                name="allowedDomains"
+                extra="多个域名用逗号或换行分隔；留空时使用入口 URL 域名"
+              >
+                <Input.TextArea rows={2} placeholder="example.com, www.example.com" />
+              </Form.Item>
+            </>
+          )}
           <Form.Item label="城市提示" name="cityHints" extra="多个城市用逗号或换行分隔">
             <Input placeholder="广州, 深圳, 佛山" />
           </Form.Item>
