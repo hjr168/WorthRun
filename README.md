@@ -135,11 +135,15 @@ export const config = testConfig;
 
 可选配置：
 
-- `CORS_ORIGINS`：后台管理站点浏览器跨域白名单，多个域名用英文逗号分隔，例如 `https://admin.huangjiarong.top,https://ops.huangjiarong.top`。未携带 `Origin` 的小程序请求不依赖浏览器 CORS；本地非生产环境默认允许 `localhost` 和 `127.0.0.1`。
+- `CORS_ORIGINS`：后台管理站点浏览器跨域白名单，多个域名用英文逗号分隔，例如 `https://admin.huangjiarong.top,https://ops.huangjiarong.top`。未携带 `Origin` 的小程序请求不依赖浏览器 CORS；本地非生产环境默认允许 `localhost`、loopback 和私有局域网 IP（如 `192.168.x.x`）。
 - `ALLOW_DEV_ADMIN=true`：仅本地开发调试时允许无 token 使用默认 `seed-admin / super_admin`。测试、体验版和正式环境禁止设置为 `true`。
 - `WX_APPID` / `WX_APPSECRET`：小程序 AppID 和 AppSecret，用于生成赛事决策卡分享图上的小程序码（`/api/wxacode`）。从微信公众平台「开发管理 → 开发设置」获取。未配置时小程序码接口返回 503，分享图自动降级为占位提示，不阻塞其他功能。
-- `OPENAI_API_KEY`：后台 AI 赛事源抽取候选赛事所需。未配置时，赛事源可保存，但手动抓取会返回错误并在后台记录失败状态。
-- `AI_INGEST_MODEL`：AI 结构化抽取模型，默认 `gpt-5.5`。
+- `AI_INGEST_PROVIDER`：后台 AI 赛事源抽取模型提供方，支持 `glm`、`deepseek` 和 `openai`；本项目推荐先用 `glm`，也可切到 `deepseek` 测试。
+- `ZHIPUAI_API_KEY` / `GLM_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=glm` 时调用 GLM 抽取所需。未配置时，赛事源可保存，但手动抓取会返回错误并在后台记录失败状态。
+- `DEEPSEEK_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=deepseek` 时调用 DeepSeek 抽取所需。默认模型为 `deepseek-v4-flash`，DeepSeek 官方说明旧模型名 `deepseek-chat` / `deepseek-reasoner` 将于 2026-07-24 废弃，不建议新接入使用。
+- `OPENAI_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=openai` 时调用 OpenAI 抽取所需。
+- `AI_INGEST_MODEL`：AI 结构化抽取模型；留空时按 provider 使用默认值：GLM 为 `glm-5.2`，DeepSeek 为 `deepseek-v4-flash`，OpenAI 为 `gpt-5.5`。
+- `AI_INGEST_BASE_URL`：兼容 OpenAI SDK 的模型服务地址；留空时按 provider 使用默认值：GLM 为 `https://open.bigmodel.cn/api/paas/v4/`，DeepSeek 为 `https://api.deepseek.com`。
 - `AI_INGEST_USER_AGENT`：抓取来源页使用的 User-Agent，默认 `WorthRunBot/0.1`。上线前建议改成带联系方式的标识。
 
 生产环境缺少 `ADMIN_TOKEN_SECRET` 时 API 会直接启动失败，避免使用开发密钥上线。
