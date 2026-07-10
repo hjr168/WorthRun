@@ -19,6 +19,8 @@
   - `AI_INGEST_MODEL`：AI 赛事源结构化抽取模型；留空时按 provider 使用默认值：GLM 为 `glm-5.2`，DeepSeek 为 `deepseek-v4-flash`，OpenAI 为 `gpt-5.5`。
   - `AI_INGEST_BASE_URL`：兼容 OpenAI SDK 的模型服务地址；留空时按 provider 使用默认值：GLM 为 `https://open.bigmodel.cn/api/paas/v4/`，DeepSeek 为 `https://api.deepseek.com`。
   - `AI_INGEST_USER_AGENT`：抓取来源页使用的 User-Agent，建议使用可联系到运营方的标识。
+- `chinaath_api` 来源使用固定的中国田协公开赛事目录，不需要 AI Key；每次最多读取 20 条，并只生成后台候选。该接口是当前观察到的公开接口，不是承诺稳定的开放平台契约，响应结构变化时适配器会明确失败并记录状态。
+- 中国田协目录不提供可直接采信的赛事官方报名入口；运营人员必须人工补充并核验 `officialUrl` 和报名状态后才能采纳为赛事草稿。
 - 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。
 - API 对外访问需要 HTTPS 域名，体验版和提审不能使用 `localhost`、局域网 IP 或 HTTP。
 

@@ -40,7 +40,7 @@
 - API 生产环境强制要求 `ADMIN_TOKEN_SECRET`，默认后台 fallback 仅允许显式本地开发开启。
 - **V0.2 分享传播**：赛事详情页微信转发/朋友圈分享、赛事决策卡 Canvas 分享图（可保存到相册）、小程序码生成、分享数据统计页。
 - **V0.1 后台收口**：系统设置页（合规文案/管理员管理）、内容配置页（城市/距离/标签/清单模板）、独立操作日志页、归档与恢复发布、按角色显隐操作按钮、枚举去重。
-- **V0.3 AI 辅助赛事源**：后台可配置页面 URL 赛事源，手动触发 robots-aware 抓取和 AI 结构化抽取；结果只进入候选赛事，必须人工编辑、采纳为草稿后再核验发布。
+- **V0.3 AI 辅助赛事源**：后台支持页面 URL AI 抽取，以及中国田协公开赛事目录批量候选；结果只进入候选赛事，必须人工编辑、采纳为草稿后再核验发布。
 
 ## 目录说明
 
@@ -138,9 +138,15 @@ export const config = testConfig;
 - `CORS_ORIGINS`：后台管理站点浏览器跨域白名单，多个域名用英文逗号分隔，例如 `https://admin.huangjiarong.top,https://ops.huangjiarong.top`。未携带 `Origin` 的小程序请求不依赖浏览器 CORS；本地非生产环境默认允许 `localhost` 和 `127.0.0.1`。
 - `ALLOW_DEV_ADMIN=true`：仅本地开发调试时允许无 token 使用默认 `seed-admin / super_admin`。测试、体验版和正式环境禁止设置为 `true`。
 - `WX_APPID` / `WX_APPSECRET`：小程序 AppID 和 AppSecret，用于生成赛事决策卡分享图上的小程序码（`/api/wxacode`）。从微信公众平台「开发管理 → 开发设置」获取。未配置时小程序码接口返回 503，分享图自动降级为占位提示，不阻塞其他功能。
-- `OPENAI_API_KEY`：后台 AI 赛事源抽取候选赛事所需。未配置时，赛事源可保存，但手动抓取会返回错误并在后台记录失败状态。
-- `AI_INGEST_MODEL`：AI 结构化抽取模型，默认 `gpt-5.5`。
+- `AI_INGEST_PROVIDER`：页面 URL 赛事源使用的模型提供方，支持 `glm`、`deepseek` 和 `openai`。中国田协目录为结构化映射，不需要 AI Key。
+- `ZHIPUAI_API_KEY` / `GLM_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=glm` 时使用。
+- `DEEPSEEK_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=deepseek` 时使用，默认模型 `deepseek-v4-flash`。
+- `OPENAI_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=openai` 时使用。
+- `AI_INGEST_MODEL`：留空时按 provider 使用默认值：GLM 为 `glm-5.2`，DeepSeek 为 `deepseek-v4-flash`，OpenAI 为 `gpt-5.5`。
+- `AI_INGEST_BASE_URL`：留空时 GLM 使用 `https://open.bigmodel.cn/api/paas/v4/`，DeepSeek 使用 `https://api.deepseek.com`。
 - `AI_INGEST_USER_AGENT`：抓取来源页使用的 User-Agent，默认 `WorthRunBot/0.1`。上线前建议改成带联系方式的标识。
+
+中国田协赛事目录适配器每次最多读取 20 条。该目录只证明赛事记录来源，不代表官方报名入口；管理员仍需人工核验并补充 `officialUrl` 和报名状态。重复抓取只更新待审核候选，不覆盖已采纳或已驳回结果。
 
 生产环境缺少 `ADMIN_TOKEN_SECRET` 时 API 会直接启动失败，避免使用开发密钥上线。
 
