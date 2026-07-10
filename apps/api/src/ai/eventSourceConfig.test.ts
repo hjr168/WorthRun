@@ -1,0 +1,32 @@
+import { describe, expect, it } from 'vitest';
+import { CHINAATH_PUBLIC_LIST_URL, eventSourceSchema } from './eventSourceConfig.js';
+
+describe('eventSourceSchema', () => {
+  it('normalizes a fixed China Athletics source', () => {
+    const parsed = eventSourceSchema.parse({
+      name: '中国田协官方赛事目录',
+      sourceType: 'chinaath_api',
+      entryUrl: 'https://attacker.example/ignored',
+      allowedDomains: ['attacker.example'],
+      cityHints: ['天津'],
+      status: 'active',
+    });
+
+    expect(parsed.entryUrl).toBe(CHINAATH_PUBLIC_LIST_URL);
+    expect(parsed.allowedDomains).toEqual([
+      'www.runchina.org.cn',
+      'runchina.org.cn',
+      'api-changzheng.chinaath.com',
+    ]);
+    expect(parsed.searchQuery).toBeNull();
+  });
+
+  it('requires an entry URL for a page source', () => {
+    expect(() =>
+      eventSourceSchema.parse({
+        name: '空页面源',
+        sourceType: 'page_url',
+      }),
+    ).toThrow('页面 URL 赛事源缺少入口 URL');
+  });
+});

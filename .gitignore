@@ -7,5 +7,7 @@ coverage
 *.log
 *.tsbuildinfo
 apps/admin/.vite
+.playwright-cli/
+output/playwright/
 packages/database/prisma/dev.db
 docs/real-events.local.csv

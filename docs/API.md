@@ -47,13 +47,33 @@ Authorization: Bearer <token>
 - `POST /api/admin/event-sources`
 - `PUT /api/admin/event-sources/:id`
 - `POST /api/admin/event-sources/:id/run`
-- `GET /api/admin/event-candidates`
+- `GET /api/admin/event-candidates?status=<status>&sourceId=<sourceId>`
 - `PUT /api/admin/event-candidates/:id`
 - `POST /api/admin/event-candidates/:id/review`
 
 AI 赛事源只生成候选草稿。管理员可以先编辑候选字段和证据，再采纳为 `publishStatus=draft` 的赛事；仍需进入赛事编辑页继续核验、补充和发布。
 
-当前 `POST /api/admin/event-sources/:id/run` 支持 `page_url` 类型：后端会校验允许域名、遵守 `robots.txt`、读取页面正文并调用 AI 结构化抽取候选赛事。页面源必须能被服务端直接读取到赛事正文；如果目标站返回验证码、腾讯 EdgeOne 访问验证、纯前端壳或反爬状态码，会返回错误并记录 `lastRunStatus`。`search_query` 与 `rss` 类型已保留配置字段，抽取能力后续接入。
+当前 `POST /api/admin/event-sources/:id/run` 支持两种来源：
+
+- `page_url`：校验允许域名、遵守 `robots.txt`、读取页面正文，并调用配置的 GLM、DeepSeek 或 OpenAI 模型生成候选。页面必须能被服务端直接读取到赛事正文；验证码、腾讯 EdgeOne 访问验证、纯前端壳或反爬状态会作为失败记录到 `lastRunStatus`。
+- `chinaath_api`：读取固定的中国田协公开赛事目录，一次最多映射 20 条结构化候选，不需要 AI API Key。目录链接只作为来源证据，不得当成赛事官方报名入口。
+
+运行成功返回批量摘要：
+
+```json
+{
+  "sourceId": "cm...",
+  "totalAvailable": 2830,
+  "fetched": 20,
+  "created": 16,
+  "updated": 2,
+  "skippedReviewed": 2,
+  "duplicateEvents": 1,
+  "candidateIds": ["cm...", "cm..."]
+}
+```
+
+`GET /api/admin/event-candidates` 的 `status` 和 `sourceId` 都是可选筛选参数。`search_query` 与 `rss` 仍只保留配置字段，本版本不执行。
 
 ## 工作台
 

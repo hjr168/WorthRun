@@ -22,6 +22,7 @@ import type {
 } from '@worth-running/shared';
 import { z, ZodError } from 'zod';
 import { aiEventCandidateSchema } from './ai/eventCandidateSchema.js';
+import { eventSourceSchema } from './ai/eventSourceConfig.js';
 import { AiIngestError, runEventSource } from './ai/runEventSource.js';
 import { getMiniProgramCode } from './wxacode.js';
 
@@ -185,26 +186,6 @@ const feedbackHandleSchema = z.object({
 const systemConfigSchema = z.object({
   configValue: z.unknown().refine((value) => value !== undefined, 'configValue 不能为空'),
   description: z.string().trim().max(500).optional().nullable(),
-});
-
-const optionalUrlSchema = z
-  .union([
-    z.string().trim().url('入口 URL 必须是有效 URL'),
-    z.string().trim().length(0).transform(() => null),
-    z.null(),
-    z.undefined().transform(() => null),
-  ])
-  .transform((value): string | null => value ?? null);
-
-const eventSourceSchema = z.object({
-  name: z.string().trim().min(1, '赛事源名称不能为空'),
-  sourceType: z.enum(['page_url', 'search_query', 'rss']).default('page_url'),
-  entryUrl: optionalUrlSchema,
-  searchQuery: z.string().trim().optional().nullable(),
-  allowedDomains: z.array(z.string().trim().min(1)).default([]),
-  cityHints: z.array(z.string().trim().min(1)).default([]),
-  status: z.enum(['active', 'paused']).default('active'),
-  notes: z.string().trim().optional().nullable(),
 });
 
 const eventCandidateStatusSchema = z.enum([
@@ -1015,16 +996,16 @@ app.post(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
     try {
-      const candidate = await runEventSource(req.params.id);
+      const summary = await runEventSource(req.params.id);
       await writeOperationLog({
         adminUserId: admin.id,
         action: 'event_source.run',
         targetType: 'event_sources',
         targetId: req.params.id,
-        afterValue: { candidateId: candidate.id, status: candidate.status },
-        note: '手动触发 AI 赛事源抽取',
+        afterValue: summary,
+        note: `手动抓取赛事源：新增 ${summary.created}，更新 ${summary.updated}，跳过 ${summary.skippedReviewed}`,
       });
-      res.status(201).json(candidate);
+      res.status(201).json(summary);
     } catch (error) {
       await writeOperationLog({
         adminUserId: admin.id,
@@ -1052,6 +1033,8 @@ app.get(
       if (!parsedStatus.success) throw new HttpError(400, '候选状态无效');
       where.status = parsedStatus.data as EventCandidateStatus;
     }
+    const sourceId = typeof req.query.sourceId === 'string' ? req.query.sourceId.trim() : '';
+    if (sourceId) where.sourceId = sourceId;
     const items = await prisma.eventCandidate.findMany({
       where,
       include: { source: true },

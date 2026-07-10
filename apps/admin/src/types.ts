@@ -92,7 +92,7 @@ export interface SystemConfigItem {
 export interface EventSourceItem {
   id: string;
   name: string;
-  sourceType: 'page_url' | 'search_query' | 'rss';
+  sourceType: 'page_url' | 'chinaath_api' | 'search_query' | 'rss';
   entryUrl?: string | null;
   searchQuery?: string | null;
   allowedDomains: string[];
@@ -103,6 +103,17 @@ export interface EventSourceItem {
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EventSourceRunSummary {
+  sourceId: string;
+  totalAvailable: number | null;
+  fetched: number;
+  created: number;
+  updated: number;
+  skippedReviewed: number;
+  duplicateEvents: number;
+  candidateIds: string[];
 }
 
 export interface EventCandidateItem {
