@@ -1001,6 +1001,8 @@ app.get(
       if (!parsedStatus.success) throw new HttpError(400, '候选状态无效');
       where.status = parsedStatus.data as EventCandidateStatus;
     }
+    const sourceId = typeof req.query.sourceId === 'string' ? req.query.sourceId.trim() : '';
+    if (sourceId) where.sourceId = sourceId;
     const items = await prisma.eventCandidate.findMany({
       where,
       include: { source: true },
