@@ -280,7 +280,7 @@ curl -s http://localhost:4000/api/preferences \
 ```bash
 curl -s http://localhost:4000/api/feedback \
   -H "Content-Type: application/json" \
-  -d '{"eventId":"<published-event-id>","userKey":"demo-user","feedbackType":"info_error","content":"报名截止时间可能有误"}'
+  -d '{"eventId":"<published-event-id>","userKey":"demo-user","requestId":"feedback_demo_request_001","feedbackType":"日期有误","content":"报名截止时间可能有误"}'
 ```
 
 ## 小程序当前功能

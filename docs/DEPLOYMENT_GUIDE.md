@@ -11,6 +11,7 @@
   - `API_PORT`：API 监听端口，例如 `4000`。
   - `NODE_ENV=production`：线上 API 必须使用生产环境。
   - `ADMIN_TOKEN_SECRET`：后台登录 token 签名密钥，正式环境必须使用高强度随机值。
+  - `FEEDBACK_ABUSE_SECRET`：反馈防刷与 IP 摘要使用的独立 HMAC 密钥，正式环境必须配置高强度随机值，不能写入代码或日志。
   - `CORS_ORIGINS`：后台管理站点浏览器跨域白名单，多个域名用英文逗号分隔。
   - `AI_INGEST_PROVIDER`：后台 AI 赛事源抽取模型提供方，支持 `glm`、`deepseek` 和 `openai`；推荐先用 `glm`，也可切到 `deepseek` 测试。
   - `ZHIPUAI_API_KEY` / `GLM_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=glm` 时调用 GLM 抽取所需；不配置时不影响普通赛事 API，但手动抓取会失败。
@@ -23,6 +24,8 @@
 - 中国田协目录不提供可直接采信的赛事官方报名入口；运营人员必须人工补充并核验 `officialUrl` 和报名状态后才能采纳为赛事草稿。
 - 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。
 - API 对外访问需要 HTTPS 域名，体验版和提审不能使用 `localhost`、局域网 IP 或 HTTP。
+- API 保持 `HOST=127.0.0.1`，仅由单层 Nginx 反向代理公开；Nginx 必须传递 `X-Forwarded-For` 与 `X-Forwarded-Proto`，不要把 API 端口直接暴露到公网。
+- 每日执行一次 `pnpm cleanup-feedback-rate-limits` 清理 48 小时以前的限流计数。该任务只清理摘要计数，不会删除反馈或操作日志。
 
 常用命令：
 
@@ -82,3 +85,4 @@ VITE_API_BASE_URL=https://run-api.huangjiarong.top pnpm --filter @worth-running/
 7. 线上 API 已设置 `NODE_ENV=production` 和强随机 `ADMIN_TOKEN_SECRET`。
 8. 线上 API 未设置 `ALLOW_DEV_ADMIN=true`。
 9. 默认 `admin/admin` 不再用于测试或正式环境。
+10. 线上已配置 `FEEDBACK_ABUSE_SECRET`，并验证 `POST /api/feedback` 在重复提交时返回已有结果、频繁提交时返回 HTTP 429。

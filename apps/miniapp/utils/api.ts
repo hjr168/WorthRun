@@ -58,6 +58,16 @@ interface RequestOptions {
   silent?: boolean;
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode?: number,
+    public retryAfterSeconds?: number,
+  ) {
+    super(message);
+  }
+}
+
 function getBaseUrl() {
   return config.apiBaseUrl;
 }
@@ -93,12 +103,20 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
 
         const message = data?.message || '请求失败';
         if (!options.silent) wx.showToast({ title: message, icon: 'none' });
-        reject(new Error(message));
+        const retryAfterHeader = res.header?.['Retry-After'] || res.header?.['retry-after'];
+        const retryAfterSeconds = Number(retryAfterHeader);
+        reject(
+          new ApiError(
+            message,
+            res.statusCode,
+            Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
+          ),
+        );
       },
       fail(error) {
         const message = error.errMsg || '网络异常';
         if (!options.silent) wx.showToast({ title: message, icon: 'none' });
-        reject(new Error(message));
+        reject(new ApiError(message));
       },
       complete() {
         if (options.loadingText) wx.hideLoading();
@@ -160,10 +178,16 @@ export function removeFavorite(userKey: string, eventId: string) {
 export function submitFeedback(data: {
   eventId: string;
   userKey: string;
+  requestId: string;
   feedbackType: string;
   content: string;
 }) {
-  return request('/api/feedback', { method: 'POST', data, loadingText: '提交中' });
+  return request<{ id: string; duplicate: boolean; message?: string }>('/api/feedback', {
+    method: 'POST',
+    data,
+    loadingText: '提交中',
+    silent: true,
+  });
 }
 
 export function getChecklistTemplates(type?: string) {

@@ -72,6 +72,12 @@ export interface FeedbackItem {
   event?: { id: string; eventName: string; city: string } | null;
 }
 
+export interface FeedbackDuplicateGroup {
+  primary: FeedbackItem;
+  duplicates: FeedbackItem[];
+  count: number;
+}
+
 export interface AdminUserListItem {
   id: string;
   username: string;

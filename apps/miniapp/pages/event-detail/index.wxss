@@ -106,6 +106,46 @@
   box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
 }
 
+.feedback-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  border: 1rpx solid #b9dfd8;
+  border-radius: 16rpx;
+  background: #f2fbf9;
+  padding: 22rpx 24rpx;
+}
+
+.feedback-entry-copy {
+  min-width: 0;
+}
+
+.feedback-entry-title {
+  color: #164e48;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.feedback-entry-subtitle {
+  margin-top: 6rpx;
+  color: #47716b;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.feedback-entry-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 174rpx;
+  flex: 0 0 174rpx;
+  min-height: 68rpx;
+  padding: 0;
+  font-size: 25rpx;
+  line-height: 1.2;
+}
+
 .share-entry-copy {
   min-width: 0;
 }

@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ApiError = void 0;
 exports.request = request;
 exports.getEvents = getEvents;
 exports.getEventDetail = getEventDetail;
@@ -11,6 +12,14 @@ exports.removeFavorite = removeFavorite;
 exports.submitFeedback = submitFeedback;
 exports.getChecklistTemplates = getChecklistTemplates;
 const index_1 = require("../config/index");
+class ApiError extends Error {
+    constructor(message, statusCode, retryAfterSeconds) {
+        super(message);
+        this.statusCode = statusCode;
+        this.retryAfterSeconds = retryAfterSeconds;
+    }
+}
+exports.ApiError = ApiError;
 function getBaseUrl() {
     return index_1.config.apiBaseUrl;
 }
@@ -44,13 +53,15 @@ function request(path, options = {}) {
                 const message = (data === null || data === void 0 ? void 0 : data.message) || '请求失败';
                 if (!options.silent)
                     wx.showToast({ title: message, icon: 'none' });
-                reject(new Error(message));
+                const retryAfterHeader = (res.header === null || res.header === void 0 ? void 0 : res.header['Retry-After']) || (res.header === null || res.header === void 0 ? void 0 : res.header['retry-after']);
+                const retryAfterSeconds = Number(retryAfterHeader);
+                reject(new ApiError(message, res.statusCode, Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined));
             },
             fail(error) {
                 const message = error.errMsg || '网络异常';
                 if (!options.silent)
                     wx.showToast({ title: message, icon: 'none' });
-                reject(new Error(message));
+                reject(new ApiError(message));
             },
             complete() {
                 if (options.loadingText)
@@ -95,7 +106,7 @@ function removeFavorite(userKey, eventId) {
     });
 }
 function submitFeedback(data) {
-    return request('/api/feedback', { method: 'POST', data, loadingText: '提交中' });
+    return request('/api/feedback', { method: 'POST', data, loadingText: '提交中', silent: true });
 }
 function getChecklistTemplates(type) {
     var query = type ? "?type=" + encodeURIComponent(type) : '';

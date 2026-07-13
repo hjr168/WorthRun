@@ -20,6 +20,14 @@
       <judgement-card event="{{event}}" />
     </view>
 
+    <view class="section feedback-entry">
+      <view class="feedback-entry-copy">
+        <view class="feedback-entry-title">发现赛事信息有误？</view>
+        <view class="feedback-entry-subtitle">日期、报名状态或官方链接有变化，都可以告诉我们。</view>
+      </view>
+      <button class="primary-button feedback-entry-button" bindtap="openFeedback">反馈纠错</button>
+    </view>
+
     <view class="section share-entry">
       <view class="share-entry-copy">
         <view class="share-entry-title">分享卡片</view>

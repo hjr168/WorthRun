@@ -24,6 +24,15 @@ import { z, ZodError } from 'zod';
 import { aiEventCandidateSchema } from './ai/eventCandidateSchema.js';
 import { eventSourceSchema } from './ai/eventSourceConfig.js';
 import { AiIngestError, runEventSource } from './ai/runEventSource.js';
+import {
+  createFeedbackFingerprint,
+  feedbackRateLimits,
+  getRetryAfterSeconds,
+  getWindowStart,
+  hmacDigest,
+  normalizeFeedbackContent,
+  publicFeedbackTypes,
+} from './feedbackAbuse.js';
 import { getMiniProgramCode } from './wxacode.js';
 
 const app = express();
@@ -35,8 +44,12 @@ const allowDevAdmin = process.env.ALLOW_DEV_ADMIN === 'true';
 if (isProduction && !process.env.ADMIN_TOKEN_SECRET) {
   throw new Error('生产环境必须配置 ADMIN_TOKEN_SECRET');
 }
+if (isProduction && !process.env.FEEDBACK_ABUSE_SECRET) {
+  throw new Error('生产环境必须配置 FEEDBACK_ABUSE_SECRET');
+}
 
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'worth-running-dev-secret';
+const feedbackAbuseSecret = process.env.FEEDBACK_ABUSE_SECRET || tokenSecret;
 const corsOrigins = (process.env.CORS_ORIGINS ?? '')
   .split(',')
   .map((origin) => origin.trim())
@@ -88,6 +101,8 @@ const corsOptions: CorsOptions = {
   },
 };
 
+// API 仅监听本机，由单层 Nginx 反向代理暴露；因此只信任最近一层代理提供的客户端地址。
+app.set('trust proxy', 1);
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 
@@ -102,6 +117,15 @@ class HttpError extends Error {
     message: string,
   ) {
     super(message);
+  }
+}
+
+class RateLimitError extends HttpError {
+  constructor(
+    message: string,
+    public retryAfterSeconds: number,
+  ) {
+    super(429, message);
   }
 }
 
@@ -234,7 +258,13 @@ const favoriteSchema = z.object({
 const publicFeedbackSchema = z.object({
   eventId: z.string().trim().min(1, 'eventId 不能为空'),
   userKey: z.string().trim().min(1, 'userKey 不能为空'),
-  feedbackType: z.string().trim().min(1, '反馈类型不能为空'),
+  requestId: z
+    .string()
+    .trim()
+    .min(16, 'requestId 无效')
+    .max(128, 'requestId 无效')
+    .regex(/^[A-Za-z0-9_-]+$/, 'requestId 无效'),
+  feedbackType: z.enum(publicFeedbackTypes, { required_error: '反馈类型无效' }),
   content: z.string().trim().min(1, '反馈内容不能为空').max(2000, '反馈内容过长'),
 });
 
@@ -280,6 +310,15 @@ const adminEventsQuerySchema = paginationQuerySchema.extend({
 
 const adminFeedbackQuerySchema = paginationQuerySchema.extend({
   status: z.enum(feedbackStatusValues).optional(),
+});
+
+const adminFeedbackDuplicateQuerySchema = z.object({
+  hours: z.coerce.number().int().min(1).max(24 * 30).default(24),
+});
+
+const feedbackDuplicateResolveSchema = z.object({
+  primaryId: z.string().trim().min(1),
+  duplicateIds: z.array(z.string().trim().min(1)).min(1).max(100),
 });
 
 const operationLogsQuerySchema = paginationQuerySchema.extend({
@@ -489,6 +528,55 @@ async function writeOperationLog(params: {
       note: params.note,
     },
   });
+}
+
+function getClientIp(req: Request) {
+  return (req.ip || req.socket.remoteAddress || 'unknown').slice(0, 128);
+}
+
+async function consumeFeedbackRateLimit(
+  tx: Prisma.TransactionClient,
+  config: (typeof feedbackRateLimits)[keyof typeof feedbackRateLimits],
+  value: string,
+  now: Date,
+) {
+  const windowStart = getWindowStart(now, config.windowMs);
+  const keyHash = hmacDigest(feedbackAbuseSecret, `${config.scope}\n${value}`);
+  const result = await tx.feedbackRateLimit.upsert({
+    where: {
+      scope_keyHash_windowStart: { scope: config.scope, keyHash, windowStart },
+    },
+    create: { scope: config.scope, keyHash, windowStart, count: 1 },
+    update: { count: { increment: 1 } },
+  });
+  if (result.count > config.limit) {
+    throw new RateLimitError('提交过于频繁，请稍后再试', getRetryAfterSeconds(now, config.windowMs));
+  }
+}
+
+async function findExistingFeedback(requestId: string, fingerprint: string) {
+  const byRequestId = await prisma.feedback.findUnique({ where: { requestId } });
+  if (byRequestId) return byRequestId;
+  const byFingerprint = await prisma.feedbackFingerprint.findUnique({
+    where: { fingerprint },
+    include: { feedback: true },
+  });
+  if (byFingerprint && byFingerprint.expiresAt > new Date()) return byFingerprint.feedback;
+  return null;
+}
+
+function feedbackDuplicateKey(item: {
+  eventId: string | null;
+  userKey: string | null;
+  feedbackType: string;
+  content: string;
+}) {
+  return [
+    item.eventId || '',
+    item.userKey || '',
+    item.feedbackType,
+    normalizeFeedbackContent(item.content),
+  ].join('\u0000');
 }
 
 app.get(
@@ -770,6 +858,89 @@ app.get(
       prisma.feedback.count({ where }),
     ]);
     res.json({ items, total, page, pageSize });
+  }),
+);
+
+app.get(
+  '/api/admin/feedback/duplicates',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const { hours = 24 } = validateQuery(adminFeedbackDuplicateQuerySchema, req.query);
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const items = await prisma.feedback.findMany({
+      where: { status: { in: ['pending', 'handling'] }, createdAt: { gte: since } },
+      include: { event: { select: { id: true, eventName: true, city: true } } },
+      orderBy: { createdAt: 'asc' },
+      take: 1000,
+    });
+    const buckets = new Map<string, typeof items>();
+    for (const item of items) {
+      const key = feedbackDuplicateKey(item);
+      buckets.set(key, [...(buckets.get(key) || []), item]);
+    }
+
+    const groups = Array.from(buckets.values()).flatMap((bucket) => {
+      const clusters: Array<typeof bucket> = [];
+      for (const item of bucket) {
+        const current = clusters.at(-1);
+        if (!current || item.createdAt.getTime() - current[0].createdAt.getTime() > 24 * 60 * 60 * 1000) {
+          clusters.push([item]);
+        } else {
+          current.push(item);
+        }
+      }
+      return clusters
+        .filter((cluster) => cluster.length > 1)
+        .map((cluster) => ({ primary: cluster[0], duplicates: cluster.slice(1), count: cluster.length }));
+    });
+    res.json({ groups });
+  }),
+);
+
+app.post(
+  '/api/admin/feedback/duplicates/reject',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(feedbackDuplicateResolveSchema, req.body);
+    const duplicateIds = [...new Set(input.duplicateIds)].filter((id) => id !== input.primaryId);
+    if (duplicateIds.length === 0) throw new HttpError(400, '请至少选择一条重复反馈');
+    const records = await prisma.feedback.findMany({
+      where: { id: { in: [input.primaryId, ...duplicateIds] } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const primary = records.find((item) => item.id === input.primaryId);
+    const duplicates = records.filter((item) => duplicateIds.includes(item.id));
+    if (!primary || duplicates.length !== duplicateIds.length) throw new HttpError(404, '反馈不存在');
+    if (duplicates.some((item) => !['pending', 'handling'].includes(item.status))) {
+      throw new HttpError(409, '只能批量驳回待处理或处理中反馈');
+    }
+    const key = feedbackDuplicateKey(primary);
+    const withinWindow = duplicates.every(
+      (item) =>
+        feedbackDuplicateKey(item) === key &&
+        Math.abs(item.createdAt.getTime() - primary.createdAt.getTime()) <= 24 * 60 * 60 * 1000,
+    );
+    if (!withinWindow) throw new HttpError(400, '所选反馈不属于同一重复组');
+
+    const result = await prisma.feedback.updateMany({
+      where: { id: { in: duplicateIds }, status: { in: ['pending', 'handling'] } },
+      data: {
+        status: 'rejected',
+        adminNote: '系统判定：重复提交',
+        handledBy: admin.id,
+        handledAt: new Date(),
+      },
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'feedback.deduplicate',
+      targetType: 'feedback',
+      targetId: primary.id,
+      beforeValue: duplicates,
+      afterValue: { rejectedIds: duplicateIds, count: result.count },
+      note: '系统判定：重复提交',
+    });
+    res.json({ primaryId: primary.id, rejectedCount: result.count });
   }),
 );
 
@@ -1403,15 +1574,63 @@ app.post(
       where: { id: input.eventId, publishStatus: 'published' },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
-    const feedback = await prisma.feedback.create({
-      data: {
-        eventId: input.eventId,
-        userKey: input.userKey,
-        feedbackType: input.feedbackType,
-        content: input.content,
-      },
+    const content = normalizeFeedbackContent(input.content);
+    const fingerprint = createFeedbackFingerprint(feedbackAbuseSecret, {
+      eventId: input.eventId,
+      feedbackType: input.feedbackType,
+      content,
     });
-    res.status(201).json(feedback);
+    const existing = await findExistingFeedback(input.requestId, fingerprint);
+    if (existing) {
+      res.status(200).json({ id: existing.id, duplicate: true, message: '相同反馈已收到' });
+      return;
+    }
+
+    const now = new Date();
+    const sourceIp = getClientIp(req);
+    try {
+      const feedback = await prisma.$transaction(async (tx) => {
+        // 先占用指纹，再写限流计数；并发相同提交会在唯一约束处回滚为一条记录。
+        await tx.feedbackFingerprint.deleteMany({ where: { fingerprint, expiresAt: { lte: now } } });
+        const created = await tx.feedback.create({
+          data: {
+            eventId: input.eventId,
+            userKey: input.userKey,
+            requestId: input.requestId,
+            fingerprint,
+            feedbackType: input.feedbackType,
+            content,
+          },
+        });
+        await tx.feedbackFingerprint.create({
+          data: {
+            fingerprint,
+            feedbackId: created.id,
+            expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+          },
+        });
+        await consumeFeedbackRateLimit(
+          tx,
+          feedbackRateLimits.userEvent,
+          `${input.userKey}\n${input.eventId}`,
+          now,
+        );
+        await consumeFeedbackRateLimit(tx, feedbackRateLimits.ipShort, sourceIp, now);
+        await consumeFeedbackRateLimit(tx, feedbackRateLimits.ipDaily, sourceIp, now);
+        return created;
+      });
+      res.status(201).json({ id: feedback.id, duplicate: false });
+    } catch (error) {
+      if (error instanceof RateLimitError) throw error;
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const duplicate = await findExistingFeedback(input.requestId, fingerprint);
+        if (duplicate) {
+          res.status(200).json({ id: duplicate.id, duplicate: true, message: '相同反馈已收到' });
+          return;
+        }
+      }
+      throw error;
+    }
   }),
 );
 
@@ -1511,6 +1730,9 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     return;
   }
   if (err instanceof HttpError) {
+    if (err instanceof RateLimitError) {
+      res.setHeader('Retry-After', String(err.retryAfterSeconds));
+    }
     res.status(err.status).json({ message: err.message });
     return;
   }

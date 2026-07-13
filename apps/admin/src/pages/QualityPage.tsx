@@ -1,9 +1,9 @@
-import { Button, Input, Modal, Select, Space, Table, message } from 'antd';
+import { Button, Card, Input, Modal, Select, Space, Table, message } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet, apiSend } from '../api';
-import { FeedbackItem } from '../types';
+import { FeedbackDuplicateGroup, FeedbackItem } from '../types';
 import { feedbackStatusOptions } from '../constants';
 import { showError } from '../utils/helpers';
 import { useAdmin } from '../context/AdminContext';
@@ -12,11 +12,15 @@ export function QualityPage() {
   const navigate = useNavigate();
   const { can } = useAdmin();
   const [items, setItems] = useState<FeedbackItem[]>([]);
+  const [duplicateGroups, setDuplicateGroups] = useState<FeedbackDuplicateGroup[]>([]);
   const [status, setStatus] = useState<string>();
 
   const load = () => {
     apiGet<{ items: FeedbackItem[] }>(`/api/admin/feedback${status ? `?status=${status}` : ''}`)
       .then((result) => setItems(result.items))
+      .catch(showError);
+    apiGet<{ groups: FeedbackDuplicateGroup[] }>('/api/admin/feedback/duplicates?hours=720')
+      .then((result) => setDuplicateGroups(result.groups))
       .catch(showError);
   };
 
@@ -41,6 +45,23 @@ export function QualityPage() {
           adminNote: note,
         });
         message.success('反馈已更新');
+        load();
+      },
+    });
+  };
+
+  const rejectDuplicates = (group: FeedbackDuplicateGroup) => {
+    Modal.confirm({
+      title: `批量驳回 ${group.duplicates.length} 条重复反馈？`,
+      content: '将保留最早的一条反馈，其余待处理记录会标记为“系统判定：重复提交”。',
+      okText: '批量驳回',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        await apiSend('POST', '/api/admin/feedback/duplicates/reject', {
+          primaryId: group.primary.id,
+          duplicateIds: group.duplicates.map((item) => item.id),
+        });
+        message.success('重复反馈已批量驳回');
         load();
       },
     });
@@ -113,6 +134,27 @@ export function QualityPage() {
           },
         ]}
       />
+      {duplicateGroups.length > 0 && (
+        <Card title={`重复提交待处理（${duplicateGroups.length} 组）`} style={{ marginTop: 24 }}>
+          {duplicateGroups.map((group) => (
+            <div
+              key={group.primary.id}
+              style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}
+            >
+              <div style={{ flex: 1 }}>
+                <strong>{group.primary.event?.eventName || '未关联赛事'}</strong>
+                <span> · {group.primary.feedbackType} · {group.primary.content}</span>
+                <span>（{group.count} 条）</span>
+              </div>
+              {can('handle_feedback') && (
+                <Button danger size="small" onClick={() => rejectDuplicates(group)}>
+                  批量驳回重复项
+                </Button>
+              )}
+            </div>
+          ))}
+        </Card>
+      )}
     </main>
   );
 }

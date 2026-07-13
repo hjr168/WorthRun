@@ -12,6 +12,7 @@
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev --schema prisma/schema.prisma",
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "db:import-events": "dotenv -e ../../.env -- tsx scripts/import-events-from-csv.ts",
+    "cleanup-feedback-rate-limits": "dotenv -e ../../.env -- tsx scripts/cleanup-feedback-rate-limits.ts",
     "reset-admin-password": "dotenv -e ../../.env -- tsx scripts/reset-admin-password.ts"
   },
   "dependencies": {
