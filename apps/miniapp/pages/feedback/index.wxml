@@ -4,7 +4,13 @@
     <view class="feedback-subtitle">赛事信息可能变化，发现问题可以直接告诉我们。</view>
   </view>
 
-  <view class="form-card">
+  <view wx:if="{{!hasEvent}}" class="select-event-card">
+    <view class="select-event-title">先选择要反馈的赛事</view>
+    <view class="select-event-desc">提交反馈需要关联具体赛事。请从赛事详情页点击“反馈纠错”。</view>
+    <button class="secondary-button select-event-button" bindtap="goEvents">去选择赛事</button>
+  </view>
+
+  <view wx:else class="form-card">
     <view class="field">
       <view class="field-label">反馈类型</view>
       <picker range="{{feedbackTypes}}" value="{{typeIndex}}" bindchange="onTypeChange">
@@ -16,5 +22,5 @@
       <textarea class="textarea" value="{{content}}" placeholder="请说明你发现的问题" bindinput="onContentInput" />
     </view>
   </view>
-  <button class="primary-button submit" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">提交反馈</button>
+  <button wx:if="{{hasEvent}}" class="primary-button submit" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">提交反馈</button>
 </view>

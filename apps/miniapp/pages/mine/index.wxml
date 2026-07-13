@@ -39,7 +39,7 @@
       </button>
       <button class="menu-button" bindtap="openFeedback">
         <text class="menu-mark">改</text>
-        <text>我的反馈</text>
+        <text>提交反馈</text>
       </button>
       <button class="menu-button" bindtap="openPreferences">
         <text class="menu-mark">偏</text>

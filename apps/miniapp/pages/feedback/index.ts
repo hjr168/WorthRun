@@ -14,19 +14,24 @@ Page({
   data: {
     eventId: '',
     userKey: '',
+    hasEvent: false,
     feedbackTypes,
     typeIndex: 0,
     content: '',
     submitting: false,
   },
   onLoad(query: { eventId?: string }) {
-    this.setData({ eventId: query.eventId || '', userKey: getUserKey() });
+    const eventId = query.eventId || '';
+    this.setData({ eventId, userKey: getUserKey(), hasEvent: Boolean(eventId) });
   },
   onTypeChange(event: WechatMiniprogram.PickerChange) {
     this.setData({ typeIndex: Number(event.detail.value) });
   },
   onContentInput(event: WechatMiniprogram.Input) {
     this.setData({ content: event.detail.value });
+  },
+  goEvents() {
+    wx.switchTab({ url: '/pages/events/index' });
   },
   async submit() {
     if (this.data.submitting) return;

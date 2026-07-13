@@ -35,6 +35,31 @@
   box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
 }
 
+.select-event-card {
+  border: 1rpx solid #d8e5e3;
+  border-radius: 16rpx;
+  background: #ffffff;
+  padding: 28rpx 24rpx;
+  box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
+}
+
+.select-event-title {
+  color: #1e293b;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.select-event-desc {
+  margin-top: 12rpx;
+  color: #64748b;
+  font-size: 26rpx;
+  line-height: 1.6;
+}
+
+.select-event-button {
+  margin-top: 24rpx;
+}
+
 .field {
   margin-bottom: 26rpx;
 }

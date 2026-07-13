@@ -14,19 +14,24 @@ Page({
     data: {
         eventId: '',
         userKey: '',
+        hasEvent: false,
         feedbackTypes,
         typeIndex: 0,
         content: '',
         submitting: false,
     },
     onLoad(query) {
-        this.setData({ eventId: query.eventId || '', userKey: (0, user_1.getUserKey)() });
+        const eventId = query.eventId || '';
+        this.setData({ eventId, userKey: (0, user_1.getUserKey)(), hasEvent: Boolean(eventId) });
     },
     onTypeChange(event) {
         this.setData({ typeIndex: Number(event.detail.value) });
     },
     onContentInput(event) {
         this.setData({ content: event.detail.value });
+    },
+    goEvents() {
+        wx.switchTab({ url: '/pages/events/index' });
     },
     async submit() {
         if (this.data.submitting)

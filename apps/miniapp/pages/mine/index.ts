@@ -59,11 +59,7 @@ Page({
     wx.navigateTo({ url: '/pages/favorites/index' });
   },
   openFeedback() {
-    if (this.data.nextEvent) {
-      wx.navigateTo({ url: `/pages/feedback/index?eventId=${this.data.nextEvent.id}` });
-      return;
-    }
-    wx.switchTab({ url: '/pages/events/index' });
+    wx.navigateTo({ url: '/pages/feedback/index' });
   },
   openTools() {
     wx.navigateTo({ url: '/pages/tools/index' });
