@@ -1,9 +1,4 @@
-import {
-  InfoStatus,
-  PublishStatus,
-  RunJudgement,
-  SignupStatus,
-} from '@worth-running/shared';
+import { InfoStatus, PublishStatus, RunJudgement, SignupStatus } from '@worth-running/shared';
 
 export interface AdminEvent {
   id: string;
@@ -104,22 +99,67 @@ export interface EventSourceItem {
   allowedDomains: string[];
   cityHints: string[];
   status: 'active' | 'paused';
+  scheduleEnabled: boolean;
+  scheduleIntervalHours: number;
+  pageSize: number;
+  maxPagesPerRun: number;
+  nextPage: number;
+  nextRunAt?: string | null;
   lastRunAt?: string | null;
   lastRunStatus?: string | null;
+  lastSuccessAt?: string | null;
+  consecutiveFailures: number;
+  runLockExpiresAt?: string | null;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface EventSourceRunSummary {
+  runId: string;
   sourceId: string;
+  trigger: 'manual' | 'scheduled';
   totalAvailable: number | null;
+  startPage: number | null;
+  endPage: number | null;
+  pageCount: number;
+  nextPage: number;
   fetched: number;
   created: number;
   updated: number;
   skippedReviewed: number;
   duplicateEvents: number;
   candidateIds: string[];
+}
+
+export interface EventSourceRunItem {
+  id: string;
+  sourceId: string;
+  trigger: 'manual' | 'scheduled';
+  status: 'running' | 'succeeded' | 'failed';
+  startedAt: string;
+  finishedAt?: string | null;
+  startPage?: number | null;
+  endPage?: number | null;
+  pageCount: number;
+  totalAvailable?: number | null;
+  fetched: number;
+  created: number;
+  updated: number;
+  skippedReviewed: number;
+  duplicateEvents: number;
+  errorMessage?: string | null;
+  source?: Pick<EventSourceItem, 'id' | 'name' | 'sourceType'>;
+}
+
+export type CandidateReviewIssue =
+  'missing_event_date' | 'missing_official_url' | 'missing_source_url' | 'duplicate_event';
+
+export interface EventCandidateStats {
+  pending: number;
+  urgent: number;
+  missingOfficialUrl: number;
+  duplicates: number;
 }
 
 export interface EventCandidateItem {
@@ -140,6 +180,8 @@ export interface EventCandidateItem {
   reviewedBy?: string | null;
   reviewedAt?: string | null;
   rejectReason?: string | null;
+  priorityScore: number;
+  reviewIssues: CandidateReviewIssue[];
   createdAt: string;
   updatedAt: string;
   source?: EventSourceItem | null;

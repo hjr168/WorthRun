@@ -1224,6 +1224,30 @@ app.get(
 );
 
 app.get(
+  '/api/admin/event-candidate-stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const sourceId = typeof req.query.sourceId === 'string' ? req.query.sourceId.trim() : '';
+    const sourceWhere: Prisma.EventCandidateWhereInput = sourceId ? { sourceId } : {};
+    const pendingWhere: Prisma.EventCandidateWhereInput = {
+      ...sourceWhere,
+      status: { in: ['new', 'needs_review'] },
+    };
+    const [pending, urgent, missingOfficialUrl, duplicates] = await Promise.all([
+      prisma.eventCandidate.count({ where: pendingWhere }),
+      prisma.eventCandidate.count({ where: { ...pendingWhere, priorityScore: 100 } }),
+      prisma.eventCandidate.count({
+        where: { ...pendingWhere, reviewIssues: { has: 'missing_official_url' } },
+      }),
+      prisma.eventCandidate.count({
+        where: { ...pendingWhere, reviewIssues: { has: 'duplicate_event' } },
+      }),
+    ]);
+    res.json({ pending, urgent, missingOfficialUrl, duplicates });
+  }),
+);
+
+app.get(
   '/api/admin/event-candidates',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);

@@ -50,6 +50,7 @@ Authorization: Bearer <token>
 - `PUT /api/admin/event-sources/:id`
 - `POST /api/admin/event-sources/:id/run`
 - `GET /api/admin/event-source-runs?sourceId=<sourceId>&status=<status>&page=1&pageSize=20`
+- `GET /api/admin/event-candidate-stats?sourceId=<sourceId>`
 - `GET /api/admin/event-candidates?status=<status>&sourceId=<sourceId>&issue=<issue>&sort=priority&page=1&pageSize=20`
 - `PUT /api/admin/event-candidates/:id`
 - `POST /api/admin/event-candidates/:id/review`
