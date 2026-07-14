@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideCandidateWrite } from './persistEventCandidates.js';
+import { decideCandidateWrite, shouldPersistCandidateByDate } from './persistEventCandidates.js';
 
 describe('decideCandidateWrite', () => {
   it('creates a new candidate when no source record exists', () => {
@@ -15,5 +15,21 @@ describe('decideCandidateWrite', () => {
     expect(decideCandidateWrite({ status: 'accepted' })).toBe('skip_reviewed');
     expect(decideCandidateWrite({ status: 'rejected' })).toBe('skip_reviewed');
     expect(decideCandidateWrite({ status: 'merged' })).toBe('skip_reviewed');
+  });
+});
+
+describe('shouldPersistCandidateByDate', () => {
+  const now = new Date('2026-07-14T16:00:00.000Z');
+
+  it('keeps only dates strictly after today', () => {
+    expect(shouldPersistCandidateByDate('2026-07-13', now)).toBe(false);
+    expect(shouldPersistCandidateByDate('2026-07-14', now)).toBe(false);
+    expect(shouldPersistCandidateByDate('2026-07-15', now)).toBe(true);
+  });
+
+  it('keeps missing or invalid dates for manual completion', () => {
+    expect(shouldPersistCandidateByDate(null, now)).toBe(true);
+    expect(shouldPersistCandidateByDate(undefined, now)).toBe(true);
+    expect(shouldPersistCandidateByDate('not-a-date', now)).toBe(true);
   });
 });

@@ -10,6 +10,19 @@ export function decideCandidateWrite(existing: ExistingCandidate) {
   return 'skip_reviewed' as const;
 }
 
+export function shouldPersistCandidateByDate(
+  eventDate: string | null | undefined,
+  now: Date = new Date(),
+) {
+  if (!eventDate) return true;
+
+  const parsedEventDate = Date.parse(`${eventDate}T00:00:00.000Z`);
+  if (Number.isNaN(parsedEventDate)) return true;
+
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return parsedEventDate > today;
+}
+
 export interface PersistSummary {
   fetched: number;
   created: number;
@@ -35,9 +48,9 @@ export async function persistEventCandidates(
 
   for (const item of items) {
     const candidate = item.candidate;
-    const eventDate = candidate.eventDate
-      ? new Date(`${candidate.eventDate}T00:00:00.000Z`)
-      : null;
+    if (!shouldPersistCandidateByDate(candidate.eventDate, now)) continue;
+
+    const eventDate = candidate.eventDate ? new Date(`${candidate.eventDate}T00:00:00.000Z`) : null;
     const duplicate = eventDate
       ? await prisma.event.findFirst({
           where: { eventName: candidate.eventName, city: candidate.city, eventDate },
@@ -88,9 +101,7 @@ export async function persistEventCandidates(
       extractedData: candidate as Prisma.InputJsonObject,
       evidence: candidate.evidence as Prisma.InputJsonArray,
       confidence: candidate.confidence as Prisma.InputJsonObject,
-      rawPayload: item.rawPayload
-        ? (item.rawPayload as Prisma.InputJsonObject)
-        : Prisma.JsonNull,
+      rawPayload: item.rawPayload ? (item.rawPayload as Prisma.InputJsonObject) : Prisma.JsonNull,
       extractorVersion: item.extractorVersion,
       duplicateEventId: duplicate?.id ?? null,
       priorityScore: classification.priorityScore,
