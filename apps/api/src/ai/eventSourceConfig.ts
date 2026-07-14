@@ -26,6 +26,10 @@ const baseEventSourceSchema = z.object({
   allowedDomains: z.array(z.string().trim().min(1)).default([]),
   cityHints: z.array(z.string().trim().min(1)).default([]),
   status: z.enum(['active', 'paused']).default('active'),
+  scheduleEnabled: z.boolean().default(false),
+  scheduleIntervalHours: z.number().int().min(1).max(168).default(24),
+  pageSize: z.number().int().min(1).max(20).default(20),
+  maxPagesPerRun: z.number().int().min(1).max(2).default(1),
   notes: z.string().trim().optional().nullable().default(null),
 });
 
@@ -40,6 +44,9 @@ export const eventSourceSchema = baseEventSourceSchema
     }
   })
   .transform((input) => {
+    if (input.sourceType === 'page_url') {
+      return { ...input, pageSize: 1, maxPagesPerRun: 1 };
+    }
     if (input.sourceType !== 'chinaath_api') return input;
 
     return {

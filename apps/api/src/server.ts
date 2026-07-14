@@ -2,7 +2,7 @@ import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypt
 import cors from 'cors';
 import type { CorsOptions } from 'cors';
 import express, { NextFunction, Request, Response } from 'express';
-import { EventCandidateStatus, Prisma, prisma } from '@worth-running/database';
+import { Prisma, prisma } from '@worth-running/database';
 import {
   AdminRole,
   feedbackStatusValues,
@@ -23,6 +23,14 @@ import type {
 import { z, ZodError } from 'zod';
 import { aiEventCandidateSchema } from './ai/eventCandidateSchema.js';
 import { eventSourceSchema } from './ai/eventSourceConfig.js';
+import { classifyCandidate } from './ai/eventSourceOperations.js';
+import {
+  buildCandidateOrderBy,
+  buildCandidateWhere,
+  eventCandidateQuerySchema,
+  eventSourceRunQuerySchema,
+  nextRunAtForSourceConfig,
+} from './ai/eventSourceQueries.js';
 import { AiIngestError, runEventSource } from './ai/runEventSource.js';
 import {
   createFeedbackFingerprint,
@@ -211,14 +219,6 @@ const systemConfigSchema = z.object({
   configValue: z.unknown().refine((value) => value !== undefined, 'configValue 不能为空'),
   description: z.string().trim().max(500).optional().nullable(),
 });
-
-const eventCandidateStatusSchema = z.enum([
-  'new',
-  'needs_review',
-  'accepted',
-  'rejected',
-  'merged',
-]);
 
 const candidateReviewSchema = z.object({
   action: z.enum(['accept', 'reject']),
@@ -1124,8 +1124,13 @@ app.post(
   '/api/admin/event-sources',
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
-    const input = validateBody(eventSourceSchema, req.body);
-    const created = await prisma.eventSource.create({ data: input });
+    const input = eventSourceSchema.parse(req.body);
+    const created = await prisma.eventSource.create({
+      data: {
+        ...input,
+        nextRunAt: nextRunAtForSourceConfig(input, null, new Date()),
+      },
+    });
     await writeOperationLog({
       adminUserId: admin.id,
       action: 'event_source.create',
@@ -1142,12 +1147,15 @@ app.put(
   '/api/admin/event-sources/:id',
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
-    const input = validateBody(eventSourceSchema, req.body);
+    const input = eventSourceSchema.parse(req.body);
     const before = await prisma.eventSource.findUnique({ where: { id: req.params.id } });
     if (!before) throw new HttpError(404, '赛事源不存在');
     const updated = await prisma.eventSource.update({
       where: { id: before.id },
-      data: input,
+      data: {
+        ...input,
+        nextRunAt: nextRunAtForSourceConfig(input, before.nextRunAt, new Date()),
+      },
     });
     await writeOperationLog({
       adminUserId: admin.id,
@@ -1167,7 +1175,7 @@ app.post(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
     try {
-      const summary = await runEventSource(req.params.id);
+      const summary = await runEventSource(req.params.id, { trigger: 'manual' });
       await writeOperationLog({
         adminUserId: admin.id,
         action: 'event_source.run',
@@ -1194,25 +1202,44 @@ app.post(
 );
 
 app.get(
+  '/api/admin/event-source-runs',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = eventSourceRunQuerySchema.parse(req.query);
+    const where: Prisma.EventSourceRunWhereInput = {};
+    if (query.sourceId) where.sourceId = query.sourceId;
+    if (query.status) where.status = query.status;
+    const [items, total] = await Promise.all([
+      prisma.eventSourceRun.findMany({
+        where,
+        include: { source: { select: { id: true, name: true, sourceType: true } } },
+        orderBy: { startedAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      prisma.eventSourceRun.count({ where }),
+    ]);
+    res.json({ items, total, page: query.page, pageSize: query.pageSize });
+  }),
+);
+
+app.get(
   '/api/admin/event-candidates',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
-    const where: Prisma.EventCandidateWhereInput = {};
-    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-    if (status) {
-      const parsedStatus = eventCandidateStatusSchema.safeParse(status);
-      if (!parsedStatus.success) throw new HttpError(400, '候选状态无效');
-      where.status = parsedStatus.data as EventCandidateStatus;
-    }
-    const sourceId = typeof req.query.sourceId === 'string' ? req.query.sourceId.trim() : '';
-    if (sourceId) where.sourceId = sourceId;
-    const items = await prisma.eventCandidate.findMany({
-      where,
-      include: { source: true },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-    res.json({ items });
+    const query = eventCandidateQuerySchema.parse(req.query);
+    const where = buildCandidateWhere(query);
+    const [items, total] = await Promise.all([
+      prisma.eventCandidate.findMany({
+        where,
+        include: { source: true },
+        orderBy: buildCandidateOrderBy(query.sort),
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      prisma.eventCandidate.count({ where }),
+    ]);
+    res.json({ items, total, page: query.page, pageSize: query.pageSize });
   }),
 );
 
@@ -1226,6 +1253,11 @@ app.put(
     if (!['new', 'needs_review'].includes(before.status)) {
       throw new HttpError(400, '仅待复核候选可以编辑');
     }
+    const classification = classifyCandidate(
+      input.extractedData,
+      new Date(),
+      before.duplicateEventId,
+    );
 
     const updated = await prisma.eventCandidate.update({
       where: { id: before.id },
@@ -1240,6 +1272,8 @@ app.put(
         extractedData: input.extractedData as Prisma.InputJsonObject,
         evidence: input.extractedData.evidence as Prisma.InputJsonArray,
         confidence: input.extractedData.confidence as Prisma.InputJsonObject,
+        priorityScore: classification.priorityScore,
+        reviewIssues: classification.reviewIssues,
         status: 'needs_review',
       },
     });
