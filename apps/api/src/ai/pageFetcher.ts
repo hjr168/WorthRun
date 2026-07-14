@@ -2,8 +2,10 @@ import * as cheerio from 'cheerio';
 import robotsParserModule from 'robots-parser';
 
 const DEFAULT_USER_AGENT = process.env.AI_INGEST_USER_AGENT || 'WorthRunBot/0.1';
-const MAX_HTML_BYTES = 800_000;
-const MAX_TEXT_CHARS = 60_000;
+const MAX_ROBOTS_BYTES = 64_000;
+const MAX_HTML_BYTES = 400_000;
+const MAX_TEXT_CHARS = 30_000;
+const FETCH_TIMEOUT_MS = 15_000;
 const robotsParser = robotsParserModule as unknown as (
   url: string,
   robotstxt: string,
@@ -59,10 +61,11 @@ export async function fetchRobotsAllowedPage(
   const robotsUrl = `${parsed.origin}/robots.txt`;
   const robotsResponse = await fetch(robotsUrl, {
     headers: { 'User-Agent': DEFAULT_USER_AGENT },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   }).catch(() => null);
 
   if (robotsResponse?.ok) {
-    const robotsText = await robotsResponse.text();
+    const robotsText = await readResponseTextLimited(robotsResponse, MAX_ROBOTS_BYTES);
     const robotsBlockReason = detectFetchBlockReason({
       status: robotsResponse.status,
       server: robotsResponse.headers.get('server'),
@@ -78,8 +81,11 @@ export async function fetchRobotsAllowedPage(
     }
   }
 
-  const response = await fetch(url, { headers: { 'User-Agent': DEFAULT_USER_AGENT } });
-  const html = await response.text();
+  const response = await fetch(url, {
+    headers: { 'User-Agent': DEFAULT_USER_AGENT },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  const html = await readResponseTextLimited(response, MAX_HTML_BYTES);
   const blockReason = detectFetchBlockReason({
     status: response.status,
     server: response.headers.get('server'),
@@ -98,11 +104,45 @@ export async function fetchRobotsAllowedPage(
     throw new Error('来源页面不是可解析的 HTML 或文本');
   }
 
-  const $ = cheerio.load(html.slice(0, MAX_HTML_BYTES));
+  const $ = cheerio.load(html);
   $('script,style,noscript,svg,iframe').remove();
   const title = $('title').text().replace(/\s+/g, ' ').trim();
   const text = $('body').text().replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_CHARS);
   return { url, title, text };
+}
+
+export async function readResponseTextLimited(response: Response, maxBytes: number) {
+  if (!response.body || maxBytes <= 0) return '';
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  try {
+    while (byteLength < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const remaining = maxBytes - byteLength;
+      const chunk = value.byteLength > remaining ? value.subarray(0, remaining) : value;
+      chunks.push(chunk);
+      byteLength += chunk.byteLength;
+
+      if (byteLength >= maxBytes) {
+        await reader.cancel();
+        break;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 export function detectFetchBlockReason(probe: FetchBlockProbe) {

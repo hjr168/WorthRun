@@ -31,9 +31,11 @@ describe('fetchChinaAthOfficialCandidates', () => {
       ),
     );
 
-    const result = await fetchChinaAthOfficialCandidates({ fetchImpl });
+    const result = await fetchChinaAthOfficialCandidates({ fetchImpl, pageNo: 7, pageSize: 50 });
 
     expect(result.totalAvailable).toBe(2830);
+    expect(result).toMatchObject({ pageNo: 1, pageSize: 20, pageCount: 142 });
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toMatchObject({ pageNo: 7, pageSize: 20 });
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
       sourceExternalId: '1000419209',
@@ -96,5 +98,27 @@ describe('fetchChinaAthOfficialCandidates', () => {
     await expect(fetchChinaAthOfficialCandidates({ fetchImpl })).rejects.toThrow(
       '中国田协赛事接口返回失败',
     );
+  });
+
+  it('returns an empty batch when the requested page is past the remote page count', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { results: [], totalCount: 3, pageNo: 4, pageSize: 20, pageCount: 1 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const result = await fetchChinaAthOfficialCandidates({ fetchImpl, pageNo: 4 });
+
+    expect(result).toMatchObject({
+      totalAvailable: 3,
+      pageNo: 4,
+      pageSize: 20,
+      pageCount: 1,
+      candidates: [],
+    });
   });
 });

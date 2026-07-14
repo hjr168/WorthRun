@@ -97,6 +97,9 @@ async function fetchSourceCandidateBatch(source: EventSource): Promise<SourceCan
 
   return {
     totalAvailable: 1,
+    pageNo: null,
+    pageSize: null,
+    pageCount: 1,
     candidates: [
       {
         candidate,

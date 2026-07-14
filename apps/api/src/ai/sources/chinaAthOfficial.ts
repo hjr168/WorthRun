@@ -21,6 +21,9 @@ const responseSchema = z.object({
   data: z.object({
     results: z.array(raceSchema),
     totalCount: z.number().int().nonnegative(),
+    pageNo: z.number().int().positive().optional(),
+    pageSize: z.number().int().positive().optional(),
+    pageCount: z.number().int().nonnegative().optional(),
   }),
 });
 
@@ -36,7 +39,7 @@ export async function fetchChinaAthOfficialCandidates(
 ): Promise<SourceCandidateBatch> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const pageNo = options.pageNo ?? 1;
-  const pageSize = Math.min(Math.max(options.pageSize ?? DEFAULT_BATCH_SIZE, 1), 50);
+  const pageSize = Math.min(Math.max(options.pageSize ?? DEFAULT_BATCH_SIZE, 1), 20);
   const response = await fetchImpl(CHINAATH_LIST_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -67,15 +70,20 @@ export async function fetchChinaAthOfficialCandidates(
   }
 
   const hints = (options.cityHints ?? []).map(normalizeCityHint).filter(Boolean);
+  const data = parsed.data.data;
   const records = hints.length
-    ? parsed.data.data.results.filter((race) => {
+    ? data.results.filter((race) => {
         const haystack = `${race.raceName} ${race.raceAddress || ''}`;
         return hints.some((hint) => haystack.includes(hint));
       })
-    : parsed.data.data.results;
+    : data.results;
+  const remotePageSize = data.pageSize ?? pageSize;
 
   return {
-    totalAvailable: parsed.data.data.totalCount,
+    totalAvailable: data.totalCount,
+    pageNo: data.pageNo ?? pageNo,
+    pageSize: remotePageSize,
+    pageCount: data.pageCount ?? Math.ceil(data.totalCount / remotePageSize),
     candidates: records.map((race) => {
       const city = parseCity(race.raceAddress);
       const distances = parseRaceItems(race.raceItem);

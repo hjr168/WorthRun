@@ -12,4 +12,7 @@ export interface SourceCandidate {
 export interface SourceCandidateBatch {
   candidates: SourceCandidate[];
   totalAvailable: number | null;
+  pageNo: number | null;
+  pageSize: number | null;
+  pageCount: number | null;
 }
