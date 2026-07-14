@@ -19,9 +19,9 @@ describe('decideCandidateWrite', () => {
 });
 
 describe('shouldPersistCandidateByDate', () => {
-  const now = new Date('2026-07-14T16:00:00.000Z');
+  const now = new Date('2026-07-13T16:30:00.000Z');
 
-  it('keeps only dates strictly after today', () => {
+  it('keeps only dates strictly after today in China time', () => {
     expect(shouldPersistCandidateByDate('2026-07-13', now)).toBe(false);
     expect(shouldPersistCandidateByDate('2026-07-14', now)).toBe(false);
     expect(shouldPersistCandidateByDate('2026-07-15', now)).toBe(true);

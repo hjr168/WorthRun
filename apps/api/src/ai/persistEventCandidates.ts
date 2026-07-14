@@ -3,6 +3,7 @@ import { classifyCandidate } from './eventSourceOperations.js';
 import type { SourceCandidate } from './sources/sourceCandidate.js';
 
 type ExistingCandidate = { status: string } | null;
+const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 export function decideCandidateWrite(existing: ExistingCandidate) {
   if (!existing) return 'create' as const;
@@ -19,7 +20,8 @@ export function shouldPersistCandidateByDate(
   const parsedEventDate = Date.parse(`${eventDate}T00:00:00.000Z`);
   if (Number.isNaN(parsedEventDate)) return true;
 
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const chinaNow = new Date(now.getTime() + CHINA_TIME_OFFSET_MS);
+  const today = Date.UTC(chinaNow.getUTCFullYear(), chinaNow.getUTCMonth(), chinaNow.getUTCDate());
   return parsedEventDate > today;
 }
 
