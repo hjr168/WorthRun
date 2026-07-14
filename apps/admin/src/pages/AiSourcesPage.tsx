@@ -930,7 +930,6 @@ export function AiSourcesPage() {
             },
             {
               title: '操作',
-              fixed: 'right',
               width: 90,
               render: (_, record) =>
                 record.status === 'failed' && historySource && can('manage_ai_sources') ? (

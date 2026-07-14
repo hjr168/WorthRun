@@ -20,12 +20,14 @@
   - `AI_INGEST_MODEL`：AI 赛事源结构化抽取模型；留空时按 provider 使用默认值：GLM 为 `glm-5.2`，DeepSeek 为 `deepseek-v4-flash`，OpenAI 为 `gpt-5.5`。
   - `AI_INGEST_BASE_URL`：兼容 OpenAI SDK 的模型服务地址；留空时按 provider 使用默认值：GLM 为 `https://open.bigmodel.cn/api/paas/v4/`，DeepSeek 为 `https://api.deepseek.com`。
   - `AI_INGEST_USER_AGENT`：抓取来源页使用的 User-Agent，建议使用可联系到运营方的标识。
+  - `EVENT_SOURCE_MIN_AVAILABLE_MB`：一次性赛事源任务启动所需最低可用内存，默认 256MB。
 - `chinaath_api` 来源使用固定的中国田协公开赛事目录，不需要 AI Key；每次最多读取 20 条，并只生成后台候选。该接口是当前观察到的公开接口，不是承诺稳定的开放平台契约，响应结构变化时适配器会明确失败并记录状态。
 - 中国田协目录不提供可直接采信的赛事官方报名入口；运营人员必须人工补充并核验 `officialUrl` 和报名状态后才能采纳为赛事草稿。
 - 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。
 - API 对外访问需要 HTTPS 域名，体验版和提审不能使用 `localhost`、局域网 IP 或 HTTP。
 - API 保持 `HOST=127.0.0.1`，仅由单层 Nginx 反向代理公开；Nginx 必须传递 `X-Forwarded-For` 与 `X-Forwarded-Proto`，不要把 API 端口直接暴露到公网。
 - 每日执行一次 `pnpm cleanup-feedback-rate-limits` 清理 48 小时以前的限流计数。该任务只清理摘要计数，不会删除反馈或操作日志。
+- 生产 `DATABASE_URL` 建议追加 `connection_limit=2&pool_timeout=10`，降低 API 与短时赛事源任务并存时的数据库连接内存。
 
 常用命令：
 
@@ -36,6 +38,15 @@ pnpm db:migrate
 pnpm --filter @worth-running/api build
 pnpm --filter @worth-running/api start
 ```
+
+不足 1GB 运行内存的服务器使用仓库根目录 `ecosystem.config.cjs` 启动 API。赛事源自动运行不增加第二个 PM2 进程，而由系统 cron 启动一次性任务：
+
+```bash
+pm2 startOrReload ecosystem.config.cjs --only worth-running-api --env production --update-env
+pm2 save
+```
+
+具体 crontab、日志轮转、资源验收和失败恢复见 `docs/EVENT_SOURCE_OPERATIONS.md`。完成目标服务器资源验收前，不要开启来源的自动运行。
 
 ## 2. PostgreSQL
 

@@ -1,4 +1,4 @@
-# 哪场值得跑 V0.2
+# 哪场值得跑 V0.4
 
 面向粤港澳大湾区跑者的跑步赛事决策工具。本仓库已完成 V0.1 核心闭环、V0.1 后台收口（系统设置/内容配置/操作日志/归档/角色化 UI/清单接口联动）和 V0.2 分享传播版（微信页面分享、赛事决策卡 Canvas 分享图、小程序码、分享数据统计）。
 
@@ -41,6 +41,7 @@
 - **V0.2 分享传播**：赛事详情页微信转发/朋友圈分享、赛事决策卡 Canvas 分享图（可保存到相册）、小程序码生成、分享数据统计页。
 - **V0.1 后台收口**：系统设置页（合规文案/管理员管理）、内容配置页（城市/距离/标签/清单模板）、独立操作日志页、归档与恢复发布、按角色显隐操作按钮、枚举去重。
 - **V0.3 AI 辅助赛事源**：后台支持页面 URL AI 抽取，以及中国田协公开赛事目录批量候选；结果只进入候选赛事，必须人工编辑、采纳为草稿后再核验发布。
+- **V0.4 赛事源运营**：来源支持低内存定时运行、持久化分页游标、互斥锁、失败退避和运行历史；后台可查看来源健康并按候选优先级与缺失项筛选。
 
 ## 目录说明
 
@@ -145,8 +146,11 @@ export const config = testConfig;
 - `AI_INGEST_MODEL`：AI 结构化抽取模型；留空时按 provider 使用默认值：GLM 为 `glm-5.2`，DeepSeek 为 `deepseek-v4-flash`，OpenAI 为 `gpt-5.5`。
 - `AI_INGEST_BASE_URL`：兼容 OpenAI SDK 的模型服务地址；留空时按 provider 使用默认值：GLM 为 `https://open.bigmodel.cn/api/paas/v4/`，DeepSeek 为 `https://api.deepseek.com`。
 - `AI_INGEST_USER_AGENT`：抓取来源页使用的 User-Agent，默认 `WorthRunBot/0.1`。上线前建议改成带联系方式的标识。
+- `EVENT_SOURCE_MIN_AVAILABLE_MB`：一次性赛事源任务启动所需的最低可用内存，默认 256MB，有效范围 128 到 512MB。
 
 中国田协赛事目录适配器每次最多读取 20 条。该目录只证明赛事记录来源，不代表官方报名入口；管理员仍需人工核验并补充 `officialUrl` 和报名状态。重复抓取只更新待审核候选，不覆盖已采纳或已驳回结果。
+
+低内存服务器不增加常驻调度进程。生产环境使用系统 cron 启动一次性任务，每轮最多处理一个来源；部署和运营步骤见 `docs/EVENT_SOURCE_OPERATIONS.md`。
 
 生产环境缺少 `ADMIN_TOKEN_SECRET` 时 API 会直接启动失败，避免使用开发密钥上线。
 
@@ -211,6 +215,7 @@ packages/database/scripts/import-events-from-csv.ts
 
 ```bash
 pnpm db:import-events -- ./docs/real-events.local.csv
+pnpm event-source:run-due
 ```
 
 也可以直接运行 database 包脚本：

@@ -95,7 +95,7 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
 
   return (
     <Layout className="app-shell">
-      <Sider width={220}>
+      <Sider width={220} className="app-sider">
         <div className="app-logo">哪场值得跑后台</div>
         <Menu
           theme="dark"
