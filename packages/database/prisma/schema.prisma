@@ -83,6 +83,17 @@ enum EventCandidateStatus {
   merged
 }
 
+enum EventSourceRunTrigger {
+  manual
+  scheduled
+}
+
+enum EventSourceRunStatus {
+  running
+  succeeded
+  failed
+}
+
 model Event {
   id               String               @id @default(cuid())
   eventName        String               @map("event_name")
@@ -273,23 +284,35 @@ model SystemConfig {
 }
 
 model EventSource {
-  id             String            @id @default(cuid())
-  name           String
-  sourceType     EventSourceType   @default(page_url) @map("source_type")
-  entryUrl       String?           @map("entry_url")
-  searchQuery    String?           @map("search_query")
-  allowedDomains String[]          @default([]) @map("allowed_domains")
-  cityHints      String[]          @default([]) @map("city_hints")
-  status         EventSourceStatus @default(active)
-  lastRunAt      DateTime?         @map("last_run_at")
-  lastRunStatus  String?           @map("last_run_status")
-  notes          String?
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
+  id                    String            @id @default(cuid())
+  name                  String
+  sourceType            EventSourceType   @default(page_url) @map("source_type")
+  entryUrl              String?           @map("entry_url")
+  searchQuery           String?           @map("search_query")
+  allowedDomains        String[]          @default([]) @map("allowed_domains")
+  cityHints             String[]          @default([]) @map("city_hints")
+  status                EventSourceStatus @default(active)
+  scheduleEnabled       Boolean           @default(false) @map("schedule_enabled")
+  scheduleIntervalHours Int               @default(24) @map("schedule_interval_hours")
+  pageSize              Int               @default(20) @map("page_size")
+  maxPagesPerRun        Int               @default(1) @map("max_pages_per_run")
+  nextPage              Int               @default(1) @map("next_page")
+  nextRunAt             DateTime?         @map("next_run_at")
+  lastRunAt             DateTime?         @map("last_run_at")
+  lastRunStatus         String?           @map("last_run_status")
+  lastSuccessAt         DateTime?         @map("last_success_at")
+  consecutiveFailures   Int               @default(0) @map("consecutive_failures")
+  runLockToken          String?           @map("run_lock_token")
+  runLockExpiresAt      DateTime?         @map("run_lock_expires_at")
+  notes                 String?
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
 
   candidates EventCandidate[]
+  runs       EventSourceRun[]
 
   @@index([status])
+  @@index([status, scheduleEnabled, nextRunAt])
   @@map("event_sources")
 }
 
@@ -312,6 +335,8 @@ model EventCandidate {
   sourceExternalId String?              @map("source_external_id")
   rawPayload       Json?                @map("raw_payload")
   extractorVersion String?              @map("extractor_version")
+  priorityScore    Int                  @default(0) @map("priority_score")
+  reviewIssues     String[]             @default([]) @map("review_issues")
   reviewedBy       String?              @map("reviewed_by")
   reviewedAt       DateTime?            @map("reviewed_at")
   rejectReason     String?              @map("reject_reason")
@@ -325,6 +350,32 @@ model EventCandidate {
   @@index([sourceId])
   @@index([eventName, city, eventDate])
   @@map("event_candidates")
+}
+
+model EventSourceRun {
+  id              String               @id @default(cuid())
+  sourceId        String               @map("source_id")
+  trigger         EventSourceRunTrigger
+  status          EventSourceRunStatus @default(running)
+  startedAt       DateTime             @default(now()) @map("started_at")
+  finishedAt      DateTime?            @map("finished_at")
+  startPage       Int?                 @map("start_page")
+  endPage         Int?                 @map("end_page")
+  pageCount       Int                  @default(0) @map("page_count")
+  totalAvailable  Int?                 @map("total_available")
+  fetched         Int                  @default(0)
+  created         Int                  @default(0)
+  updated         Int                  @default(0)
+  skippedReviewed Int                  @default(0) @map("skipped_reviewed")
+  duplicateEvents Int                  @default(0) @map("duplicate_events")
+  errorMessage    String?              @map("error_message")
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  source EventSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId, startedAt])
+  @@index([status, startedAt])
+  @@map("event_source_runs")
 }
 
 model ShareRecord {
