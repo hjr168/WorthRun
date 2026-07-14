@@ -1,4 +1,5 @@
 import { EventCandidateStatus, Prisma, prisma } from '@worth-running/database';
+import { classifyCandidate } from './eventSourceOperations.js';
 import type { SourceCandidate } from './sources/sourceCandidate.js';
 
 type ExistingCandidate = { status: string } | null;
@@ -21,6 +22,7 @@ export interface PersistSummary {
 export async function persistEventCandidates(
   sourceId: string,
   items: SourceCandidate[],
+  now: Date = new Date(),
 ): Promise<PersistSummary> {
   const summary: PersistSummary = {
     fetched: items.length,
@@ -69,6 +71,7 @@ export async function persistEventCandidates(
     }
 
     if (duplicate) summary.duplicateEvents += 1;
+    const classification = classifyCandidate(candidate, now, duplicate?.id);
     const data = {
       sourceId,
       sourceExternalId: item.sourceExternalId,
@@ -90,6 +93,8 @@ export async function persistEventCandidates(
         : Prisma.JsonNull,
       extractorVersion: item.extractorVersion,
       duplicateEventId: duplicate?.id ?? null,
+      priorityScore: classification.priorityScore,
+      reviewIssues: classification.reviewIssues,
       aiModel: item.aiModel,
       aiPromptVersion: item.aiPromptVersion,
     };
