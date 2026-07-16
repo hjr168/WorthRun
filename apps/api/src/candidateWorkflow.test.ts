@@ -118,4 +118,11 @@ describe('candidate duplicate workflow', () => {
       'candidate_not_pending',
     );
   });
+
+  it('blocks candidates already linked to an existing event', () => {
+    const item = candidate({ reviewIssues: ['duplicate_event'] });
+    expect(candidateAcceptIssues(item, new Date('2026-07-16T00:00:00.000Z'))).toContain(
+      'duplicate_event',
+    );
+  });
 });

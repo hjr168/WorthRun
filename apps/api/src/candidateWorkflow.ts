@@ -53,6 +53,7 @@ export function candidateAcceptIssues(item: CandidateWorkflowItem, now = new Dat
   if (item.source?.sourceLevel === 'community' && !data.officialUrl) {
     issues.push('community_without_official_evidence');
   }
+  if (item.reviewIssues.includes('duplicate_event')) issues.push('duplicate_event');
   if (item.reviewIssues.includes('source_date_conflict')) issues.push('source_date_conflict');
   return [...new Set(issues)];
 }

@@ -1425,6 +1425,7 @@ function workflowIssueLabel(issue: string) {
     community_without_official_evidence: '社区来源缺少官方依据',
     source_date_conflict: '来源日期冲突',
     unmerged_duplicate_group: '需先归并疑似重复组',
+    duplicate_event: '已存在对应赛事',
     preview_snapshot_changed: '记录在预览后已更新',
   };
   return labels[issue] || issue;
