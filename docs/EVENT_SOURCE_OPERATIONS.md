@@ -1,6 +1,6 @@
 # 赛事源运营与低内存运行手册
 
-本手册用于后台 AI 赛事源的日常运营和服务器自动任务配置。赛事源只生成候选，不会自动采纳或发布。
+本手册用于后台 AI 赛事源的日常运营和服务器自动任务配置。新赛事只生成候选；官方或可信来源再次命中已发布赛事时只刷新检查时间或生成变更告警，不会自动采纳、修改或发布。
 
 ## 运营流程
 
@@ -11,6 +11,7 @@
 5. 在赛事库勾选草稿并预览发布；预览后被编辑过的记录会拒绝发布，其他合格项继续完成。
 6. 手动运行稳定后，再编辑来源开启自动运行，建议先使用 24 小时间隔、每页 10 条、每次 1 页。
 7. 定期查看下次运行、连续失败数和运行历史。失败后先确认远端来源、模型 Key、网络和内存，再手动重试。
+8. 运行历史出现“新变更”时进入“变更复核”，先查看来源证据并 dry-run；确认后才能应用、忽略或归档。
 
 公开内容必须保留：
 
@@ -59,6 +60,25 @@ pnpm data:backfill-candidate-confirmation-links -- --apply --expected <预览数
 
 补链只处理待审核的官方来源候选，不处理社区来源。执行后仍需在后台人工归并、预览采纳和预览发布，不会自动发布赛事。
 
+## 已发布赛事变更复核
+
+- 只有 `official` / `trusted` 来源能触发已发布赛事变更告警；其他等级仍只发现候选。
+- 无变化时只刷新 `events.source_checked_at`，不会改变赛事业务字段或展示用 `updated_at`。
+- 有变化时按规范化 fingerprint 去重。日期和取消/延期信号为严重，报名状态、截止时间和官方入口为重要，距离为一般。
+- 自动任务不会修改已发布赛事。管理员必须在“变更复核”查看当前值、来源值和最多 10 条证据，先 dry-run 再确认。
+- 延期必须补齐新日期才能应用；取消只能由 `event_operator` / `super_admin` 确认归档。忽略必须记录依据。
+
+线上检查开放告警和来源新鲜度：
+
+```bash
+curl -fsS -H "Authorization: Bearer $ADMIN_TOKEN" \
+  'https://run-api.huangjiarong.top/api/admin/event-change-alerts/summary'
+curl -fsS -H "Authorization: Bearer $ADMIN_TOKEN" \
+  'https://run-api.huangjiarong.top/api/admin/event-change-alerts?status=open&pageSize=20'
+```
+
+告警 dry-run 后再应用；若返回 HTTP 409，重新加载告警，不要复用旧快照。误应用时根据 `admin_operation_logs` 的前后值人工恢复赛事字段，再把相关来源改为暂停或关闭自动运行；保留告警表和迁移，不执行破坏性 down migration。
+
 ## 数据治理
 
 部署迁移后先执行 dry-run，核对数量和样例：
@@ -74,7 +94,7 @@ pnpm data-quality:cleanup
 - 服务器只保留 `worth-running-api` 一个常驻 Node/PM2 进程。
 - 不创建常驻赛事源调度进程；系统 cron 每 15 分钟启动一次性任务，完成后退出。
 - cron 每次最多处理 1 个到期来源；单来源每次最多 2 页，每页最多 20 条。
-- API V8 heap 上限 256MB，PM2 在进程达到 320MB 时重启；cron heap 上限 160MB。
+- API V8 heap 上限 256MB，PM2 保持单进程；实测 RSS 必须小于 220MB。cron heap 上限 160MB，来源任务峰值 RSS 必须小于 180MB。
 - cron 启动前检查 `MemAvailable`，默认低于 256MB 时跳过。
 - 生产 `DATABASE_URL` 建议追加 `connection_limit=2&pool_timeout=10`。
 
@@ -129,7 +149,7 @@ set -a && source .env && set +a
 curl -fsS http://127.0.0.1:4000/health
 ```
 
-必须同时满足：cron 峰值 RSS 不超过 220MB、运行期间 `MemAvailable` 不低于 128MB、系统日志无 OOM kill、API 始终健康、任务结束后没有残留 cron Node 进程。
+必须同时满足：API RSS 小于 220MB、来源任务峰值 RSS 小于 180MB、运行期间 `MemAvailable` 不低于 128MB、系统日志无 OOM kill、API 始终健康、任务结束后没有残留 cron Node 进程。
 
 若不满足，先将来源改为每页 10 条、每次 1 页后复测；仍不满足则关闭自动运行，只保留后台手动抓取。
 
