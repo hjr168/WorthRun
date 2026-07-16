@@ -53,3 +53,10 @@ V0.4.2 多赛事源变更：
 - `EventSourceType` 新增 `world_athletics`、`chinamarathon_sitemap`；`SourceLevel` 新增 `community`。
 - 中国田协来源改为一源一城，生产初始化为 9 个大湾区内地城市来源。
 - 年度计划导入使用暂停的审计来源和稳定 `source_external_id`，不会创建已发布赛事。
+
+V0.4.3 候选发布闭环变更：
+
+- `event_sources.source_level` 保存来源可信等级，固定官方来源由服务端维护，社区发现源固定为 `community`。
+- `event_candidates.merged_into_candidate_id` 自关联主候选；被归并记录使用 `merged` 状态并永久保留证据和操作日志。
+- 候选采纳仍只创建 `draft`，并按距离读取 `checklist_templates`；没有匹配项时使用通用清单。
+- 批量采纳和发布每批最多 20 条，应用时校验预览返回的 `updated_at`，单条失败不回滚其他合格记录。

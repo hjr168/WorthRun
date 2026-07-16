@@ -38,11 +38,24 @@ export interface PersistSummary {
   candidateIds: string[];
 }
 
+export function resolveCandidateOfficialUrl(
+  sourceLevel: string,
+  officialUrl: string | null | undefined,
+  sourceUrl: string | null | undefined,
+) {
+  return officialUrl || (sourceLevel === 'official' ? sourceUrl || null : null);
+}
+
 export async function persistEventCandidates(
   sourceId: string,
   items: SourceCandidate[],
   now: Date = new Date(),
 ): Promise<PersistSummary> {
+  const source = await prisma.eventSource.findUnique({
+    where: { id: sourceId },
+    select: { sourceLevel: true },
+  });
+  if (!source) throw new Error('赛事源不存在');
   const summary: PersistSummary = {
     fetched: items.length,
     created: 0,
@@ -55,7 +68,15 @@ export async function persistEventCandidates(
   };
 
   for (const item of items) {
-    const candidate = item.candidate;
+    const candidate = {
+      ...item.candidate,
+      sourceLevel: source.sourceLevel,
+      officialUrl: resolveCandidateOfficialUrl(
+        source.sourceLevel,
+        item.candidate.officialUrl,
+        item.candidate.sourceUrl,
+      ),
+    };
     const exclusionReason = candidateExclusionReason(candidate, now);
     if (exclusionReason === 'expired') {
       summary.skippedExpired += 1;

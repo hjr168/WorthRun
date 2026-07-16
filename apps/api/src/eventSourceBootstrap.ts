@@ -17,6 +17,7 @@ interface SourceDefinition {
   entryUrl: string;
   allowedDomains: string[];
   cityHints: string[];
+  sourceLevel: 'official' | 'community';
   scheduleIntervalHours: number;
   pageSize: number;
   maxPagesPerRun: number;
@@ -30,6 +31,7 @@ export function v042EventSourceDefinitions(): SourceDefinition[] {
     entryUrl: CHINAATH_PUBLIC_LIST_URL,
     allowedDomains: [...CHINAATH_ALLOWED_DOMAINS],
     cityHints: [city],
+    sourceLevel: 'official' as const,
     scheduleIntervalHours: 24,
     pageSize: 20,
     maxPagesPerRun: 2,
@@ -43,6 +45,7 @@ export function v042EventSourceDefinitions(): SourceDefinition[] {
       entryUrl: WORLD_ATHLETICS_CALENDAR_URL,
       allowedDomains: ['worldathletics.org'],
       cityHints: ['香港'],
+      sourceLevel: 'official',
       scheduleIntervalHours: 24,
       pageSize: 20,
       maxPagesPerRun: 1,
@@ -54,6 +57,7 @@ export function v042EventSourceDefinitions(): SourceDefinition[] {
       entryUrl: CHINAMARATHON_SITEMAP_URL,
       allowedDomains: ['chinamarathon.com', 'heilianapp.com'],
       cityHints: [...greaterBayAreaCities],
+      sourceLevel: 'community',
       scheduleIntervalHours: 24,
       pageSize: 10,
       maxPagesPerRun: 1,
@@ -65,6 +69,7 @@ export function v042EventSourceDefinitions(): SourceDefinition[] {
       entryUrl: MACAO_MARATHON_URL,
       allowedDomains: ['macaomarathon.com'],
       cityHints: ['澳门'],
+      sourceLevel: 'official',
       scheduleIntervalHours: 168,
       pageSize: 1,
       maxPagesPerRun: 1,
@@ -76,6 +81,7 @@ export function v042EventSourceDefinitions(): SourceDefinition[] {
       entryUrl: HZMB_HALF_MARATHON_URL,
       allowedDomains: ['hzmb-halfmarathon.com'],
       cityHints: ['香港'],
+      sourceLevel: 'official',
       scheduleIntervalHours: 168,
       pageSize: 1,
       maxPagesPerRun: 1,

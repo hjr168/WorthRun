@@ -47,6 +47,9 @@ const baseEventSourceSchema = z.object({
   searchQuery: z.string().trim().optional().nullable().default(null),
   allowedDomains: z.array(z.string().trim().min(1)).default([]),
   cityHints: z.array(z.string().trim().min(1)).default([]),
+  sourceLevel: z
+    .enum(['official', 'trusted', 'community', 'secondary', 'unknown'])
+    .default('unknown'),
   status: z.enum(['active', 'paused']).default('active'),
   scheduleEnabled: z.boolean().default(false),
   scheduleIntervalHours: z.number().int().min(1).max(168).default(24),
@@ -100,6 +103,7 @@ export const eventSourceSchema = baseEventSourceSchema
     if (normalized.sourceType === 'world_athletics') {
       return {
         ...normalized,
+        sourceLevel: 'official' as const,
         entryUrl: WORLD_ATHLETICS_CALENDAR_URL,
         searchQuery: null,
         allowedDomains: ['worldathletics.org'],
@@ -110,6 +114,7 @@ export const eventSourceSchema = baseEventSourceSchema
     if (normalized.sourceType === 'chinamarathon_sitemap') {
       return {
         ...normalized,
+        sourceLevel: 'community' as const,
         entryUrl: CHINAMARATHON_SITEMAP_URL,
         searchQuery: null,
         allowedDomains: ['chinamarathon.com', 'heilianapp.com'],
@@ -122,6 +127,7 @@ export const eventSourceSchema = baseEventSourceSchema
 
     return {
       ...normalized,
+      sourceLevel: 'official' as const,
       entryUrl: CHINAATH_PUBLIC_LIST_URL,
       searchQuery: null,
       allowedDomains: [...CHINAATH_ALLOWED_DOMAINS],

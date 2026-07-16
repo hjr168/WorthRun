@@ -104,6 +104,7 @@ export interface EventSourceItem {
   searchQuery?: string | null;
   allowedDomains: string[];
   cityHints: string[];
+  sourceLevel: 'official' | 'trusted' | 'community' | 'secondary' | 'unknown';
   status: 'active' | 'paused';
   scheduleEnabled: boolean;
   scheduleIntervalHours: number;
@@ -189,6 +190,7 @@ export interface EventCandidateItem {
   confidence?: Record<string, unknown> | null;
   duplicateEventId?: string | null;
   acceptedEventId?: string | null;
+  mergedIntoCandidateId?: string | null;
   aiModel?: string | null;
   aiPromptVersion?: string | null;
   reviewedBy?: string | null;
@@ -199,6 +201,41 @@ export interface EventCandidateItem {
   createdAt: string;
   updatedAt: string;
   source?: EventSourceItem | null;
+}
+
+export interface CandidateDuplicateGroup {
+  groupKey: string;
+  suggestedPrimaryId: string;
+  items: EventCandidateItem[];
+}
+
+export interface WorkflowPreviewItem {
+  id: string;
+  eventName: string;
+  ready: boolean;
+  issues: string[];
+  updatedAt: string | null;
+}
+
+export interface BulkAcceptResult {
+  dryRun: boolean;
+  items: WorkflowPreviewItem[];
+  accepted: Array<{ candidateId: string; eventId: string; eventName: string }>;
+  failed: Array<{ id: string; eventName: string; issues: string[] }>;
+}
+
+export interface BulkPublishResult {
+  dryRun: boolean;
+  items: WorkflowPreviewItem[];
+  published: Array<{ id: string; eventName: string }>;
+  failed: Array<{ id: string; eventName: string; issues: string[] }>;
+}
+
+export interface WorkflowStats {
+  duplicateGroups: number;
+  readyCandidates: number;
+  publishableDrafts: number;
+  missingOfficialEvidence: number;
 }
 
 export type DataCleanupAction =

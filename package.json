@@ -19,7 +19,8 @@
     "event-source:run-due": "pnpm --filter @worth-running/api event-source:run-due",
     "data-quality:cleanup": "pnpm --filter @worth-running/api data-quality:cleanup",
     "data:import-chinaath-plan": "pnpm --filter @worth-running/api data:import-chinaath-plan",
-    "event-source:bootstrap-v0.4.2": "pnpm --filter @worth-running/api event-source:bootstrap-v0.4.2"
+    "event-source:bootstrap-v0.4.2": "pnpm --filter @worth-running/api event-source:bootstrap-v0.4.2",
+    "data:backfill-candidate-confirmation-links": "pnpm --filter @worth-running/api data:backfill-candidate-confirmation-links"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

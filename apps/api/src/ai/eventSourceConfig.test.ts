@@ -26,6 +26,7 @@ describe('eventSourceSchema', () => {
     expect(parsed.searchQuery).toBeNull();
     expect(parsed.cityHints).toEqual(['广州']);
     expect(parsed).toMatchObject({
+      sourceLevel: 'official',
       scheduleEnabled: false,
       scheduleIntervalHours: 24,
       pageSize: 20,
@@ -103,6 +104,7 @@ describe('eventSourceSchema', () => {
     expect(world).toMatchObject({
       entryUrl: WORLD_ATHLETICS_CALENDAR_URL,
       cityHints: ['香港'],
+      sourceLevel: 'official',
       maxPagesPerRun: 1,
     });
 
@@ -114,6 +116,7 @@ describe('eventSourceSchema', () => {
     });
     expect(sitemap).toMatchObject({
       entryUrl: CHINAMARATHON_SITEMAP_URL,
+      sourceLevel: 'community',
       pageSize: 10,
       maxPagesPerRun: 1,
     });

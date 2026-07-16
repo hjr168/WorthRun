@@ -9,6 +9,7 @@ import {
   DataQualitySummary,
   InteractionStats,
   OperationLog,
+  WorkflowStats,
 } from '../types';
 import { showError } from '../utils/helpers';
 import { OperationLogTable } from '../components/OperationLogTable';
@@ -42,6 +43,7 @@ export function WorkbenchPage() {
     recentLogs: OperationLog[];
   }>();
   const [quality, setQuality] = useState<DataQualitySummary>();
+  const [workflow, setWorkflow] = useState<WorkflowStats>();
   const [metricDays, setMetricDays] = useState<7 | 30>(30);
   const [metrics, setMetrics] = useState<InteractionStats>();
   const [cleaning, setCleaning] = useState(false);
@@ -50,6 +52,7 @@ export function WorkbenchPage() {
     Promise.all([
       apiGet<typeof data>('/api/admin/dashboard').then(setData),
       apiGet<DataQualitySummary>('/api/admin/data-quality/summary').then(setQuality),
+      apiGet<WorkflowStats>('/api/admin/workflow-stats').then(setWorkflow),
     ]).catch(showError);
 
   useEffect(() => void load(), []);
@@ -132,6 +135,28 @@ export function WorkbenchPage() {
             <Statistic title="待处理反馈数" value={data?.pendingFeedback ?? 0} />
           </Card>
         </div>
+        <section className="form-section">
+          <div className="section-heading">
+            <h2>发布工作流</h2>
+            <Link to="/ai-sources">
+              <Button>处理候选赛事</Button>
+            </Link>
+          </div>
+          <div className="stat-grid">
+            <Card>
+              <Statistic title="候选重复组" value={workflow?.duplicateGroups ?? 0} />
+            </Card>
+            <Card>
+              <Statistic title="可采纳候选" value={workflow?.readyCandidates ?? 0} />
+            </Card>
+            <Card>
+              <Statistic title="可发布草稿" value={workflow?.publishableDrafts ?? 0} />
+            </Card>
+            <Card>
+              <Statistic title="缺少官方依据" value={workflow?.missingOfficialEvidence ?? 0} />
+            </Card>
+          </div>
+        </section>
         <section className="form-section">
           <div className="section-heading">
             <h2>数据质量</h2>

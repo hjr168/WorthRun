@@ -12,6 +12,7 @@
     "data-quality:cleanup": "node --max-old-space-size=160 dist/apps/api/src/dataGovernanceCli.js",
     "data:import-chinaath-plan": "node --max-old-space-size=160 dist/apps/api/src/chinaAthPlanImportCli.js",
     "event-source:bootstrap-v0.4.2": "node --max-old-space-size=160 dist/apps/api/src/eventSourceBootstrapCli.js",
+    "data:backfill-candidate-confirmation-links": "node --max-old-space-size=160 dist/apps/api/src/candidateConfirmationBackfillCli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

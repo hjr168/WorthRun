@@ -300,6 +300,7 @@ model EventSource {
   searchQuery           String?           @map("search_query")
   allowedDomains        String[]          @default([]) @map("allowed_domains")
   cityHints             String[]          @default([]) @map("city_hints")
+  sourceLevel           SourceLevel       @default(unknown) @map("source_level")
   status                EventSourceStatus @default(active)
   scheduleEnabled       Boolean           @default(false) @map("schedule_enabled")
   scheduleIntervalHours Int               @default(24) @map("schedule_interval_hours")
@@ -339,6 +340,7 @@ model EventCandidate {
   confidence       Json?
   duplicateEventId String?              @map("duplicate_event_id")
   acceptedEventId  String?              @map("accepted_event_id")
+  mergedIntoCandidateId String?         @map("merged_into_candidate_id")
   aiModel          String?              @map("ai_model")
   aiPromptVersion  String?              @map("ai_prompt_version")
   sourceExternalId String?              @map("source_external_id")
@@ -352,11 +354,14 @@ model EventCandidate {
   createdAt        DateTime             @default(now()) @map("created_at")
   updatedAt        DateTime             @updatedAt @map("updated_at")
 
-  source EventSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  source           EventSource?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  mergedInto       EventCandidate?  @relation("EventCandidateMerges", fields: [mergedIntoCandidateId], references: [id], onDelete: SetNull)
+  mergedCandidates EventCandidate[] @relation("EventCandidateMerges")
 
   @@unique([sourceId, sourceExternalId])
   @@index([status])
   @@index([sourceId])
+  @@index([mergedIntoCandidateId])
   @@index([eventName, city, eventDate])
   @@map("event_candidates")
 }

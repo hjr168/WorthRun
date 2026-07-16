@@ -25,6 +25,7 @@ describe('event source admin queries', () => {
       sourceId: 'source-1',
       status: 'needs_review',
       issue: 'missing_official_url',
+      readiness: 'blocked',
     });
 
     expect(buildCandidateWhere(query)).toEqual({
@@ -38,6 +39,7 @@ describe('event source admin queries', () => {
       { createdAt: 'desc' },
     ]);
     expect(() => eventCandidateQuerySchema.parse({ issue: 'unknown_issue' })).toThrow();
+    expect(() => eventCandidateQuerySchema.parse({ readiness: 'unknown' })).toThrow();
   });
 
   it('uses newest ordering only when explicitly requested', () => {

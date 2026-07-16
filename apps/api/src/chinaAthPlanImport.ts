@@ -42,12 +42,18 @@ export async function runChinaAthPlanImport(options: ChinaAthPlanImportOptions) 
         entryUrl: CHINAATH_PLAN_2026_URL,
         allowedDomains: ['file.shuzixindong.com'],
         cityHints: [],
+        sourceLevel: 'official',
         status: 'paused',
         scheduleEnabled: false,
         pageSize: 1,
         maxPagesPerRun: 1,
         notes: '仅供年度计划导入命令使用，不由 cron 执行。',
       },
+    });
+  } else if (source.sourceLevel !== 'official') {
+    source = await prisma.eventSource.update({
+      where: { id: source.id },
+      data: { sourceLevel: 'official' },
     });
   }
 

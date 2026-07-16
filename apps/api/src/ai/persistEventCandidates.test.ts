@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   candidateExclusionReason,
   decideCandidateWrite,
+  resolveCandidateOfficialUrl,
   shouldPersistCandidateByDate,
 } from './persistEventCandidates.js';
 
@@ -19,6 +20,27 @@ describe('decideCandidateWrite', () => {
     expect(decideCandidateWrite({ status: 'accepted' })).toBe('skip_reviewed');
     expect(decideCandidateWrite({ status: 'rejected' })).toBe('skip_reviewed');
     expect(decideCandidateWrite({ status: 'merged' })).toBe('skip_reviewed');
+  });
+});
+
+describe('resolveCandidateOfficialUrl', () => {
+  it('uses an official source URL as the confirmation link', () => {
+    expect(resolveCandidateOfficialUrl('official', null, 'https://official.example/notice')).toBe(
+      'https://official.example/notice',
+    );
+    expect(
+      resolveCandidateOfficialUrl(
+        'official',
+        'https://official.example/event',
+        'https://official.example/notice',
+      ),
+    ).toBe('https://official.example/event');
+  });
+
+  it('never promotes a community discovery URL', () => {
+    expect(
+      resolveCandidateOfficialUrl('community', null, 'https://community.example/event'),
+    ).toBeNull();
   });
 });
 

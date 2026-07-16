@@ -22,6 +22,7 @@ export const eventCandidateQuerySchema = boundedPagination.extend({
   sourceId: optionalQueryString,
   status: z.enum(['new', 'needs_review', 'accepted', 'rejected', 'merged']).optional(),
   issue: z.enum(candidateReviewIssues).optional(),
+  readiness: z.enum(['ready', 'blocked']).optional(),
   sort: z.enum(['priority', 'newest']).default('priority'),
 });
 

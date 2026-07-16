@@ -1,4 +1,4 @@
-# 哪场值得跑 V0.4.2
+# 哪场值得跑 V0.4.3
 
 面向粤港澳大湾区跑者的跑步赛事决策工具。本仓库已完成 V0.1 核心闭环、V0.1 后台收口（系统设置/内容配置/操作日志/归档/角色化 UI/清单接口联动）和 V0.2 分享传播版（微信页面分享、赛事决策卡 Canvas 分享图、小程序码、分享数据统计）。
 
@@ -44,6 +44,7 @@
 - **V0.4 赛事源运营**：来源支持低内存定时运行、持久化分页游标、互斥锁、失败退避和运行历史；后台可查看来源健康并按候选优先级与缺失项筛选。
 - **V0.4.1 数据运营闭环**：公开赛事与抓取候选统一限制为北京时间未来的大湾区赛事；后台支持可预览、可追溯的数据治理，并统计匿名详情访问和官方入口复制行为。
 - **V0.4.2 多赛事源**：中国田协按大湾区内地城市查询，并增加世界田联香港路跑、中国马拉松社区发现和澳门/香港官方单页来源；所有结果仍需人工审核。
+- **V0.4.3 发布闭环**：后台可人工归并同城同日同距离候选，批量预览采纳为草稿，并按快照批量发布合格赛事；官方来源可回填为确认依据，社区来源仍不能冒充官方入口。
 
 ## 目录说明
 
@@ -159,6 +160,8 @@ pnpm event-source:bootstrap-v0.4.2
 pnpm event-source:bootstrap-v0.4.2 -- --apply
 pnpm data:import-chinaath-plan -- --year 2026
 pnpm data:import-chinaath-plan -- --year 2026 --apply --expected 14
+pnpm data:backfill-candidate-confirmation-links
+pnpm data:backfill-candidate-confirmation-links -- --apply --expected <预览数量>
 ```
 
 低内存服务器不增加常驻调度进程。生产环境使用系统 cron 启动一次性任务，每轮最多处理一个来源；部署和运营步骤见 `docs/EVENT_SOURCE_OPERATIONS.md`。
