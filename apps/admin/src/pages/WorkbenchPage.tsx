@@ -21,6 +21,9 @@ const cleanupActions: DataCleanupAction[] = [
   'archive_expired_events',
   'archive_outside_region_events',
   'reject_invalid_feedback',
+  'reject_suspicious_feedback',
+  'reject_low_information_feedback',
+  'reject_unpublished_event_feedback',
   'reject_duplicate_feedback',
 ];
 
@@ -30,6 +33,9 @@ const cleanupActionLabels: Record<DataCleanupAction, string> = {
   archive_expired_events: '归档过期赛事',
   archive_outside_region_events: '归档区域外赛事',
   reject_invalid_feedback: '驳回非法反馈',
+  reject_suspicious_feedback: '驳回异常探测反馈',
+  reject_low_information_feedback: '驳回低信息反馈',
+  reject_unpublished_event_feedback: '驳回非公开赛事反馈',
   reject_duplicate_feedback: '驳回重复反馈',
 };
 

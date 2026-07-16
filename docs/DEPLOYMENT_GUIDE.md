@@ -26,7 +26,8 @@
 - 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。
 - API 对外访问需要 HTTPS 域名，体验版和提审不能使用 `localhost`、局域网 IP 或 HTTP。
 - API 保持 `HOST=127.0.0.1`，仅由单层 Nginx 反向代理公开；Nginx 必须传递 `X-Forwarded-For` 与 `X-Forwarded-Proto`，不要把 API 端口直接暴露到公网。
-- 每日执行一次 `pnpm cleanup-feedback-rate-limits` 清理 48 小时以前的限流计数。该任务只清理摘要计数，不会删除反馈或操作日志。
+- 每日执行一次 `pnpm feedback:maintenance`，清理过期反馈指纹、48 小时以前的限流摘要和 90 天以前的拦截聚合计数。该任务不会删除反馈正文或操作日志，Node heap 上限为 96MB。
+- Nginx 使用仓库 `ops/nginx/worth-running.conf`；仅 `/api/feedback` 使用 16KB 请求体上限和每 IP 每分钟 6 次、burst 3 的限流，其他公开和后台接口不受影响。
 - 生产 `DATABASE_URL` 建议追加 `connection_limit=2&pool_timeout=10`，降低 API 与短时赛事源任务并存时的数据库连接内存。
 
 常用命令：

@@ -1,6 +1,11 @@
 import { Prisma, prisma } from '@worth-running/database';
 import { chinaDateOnly, isGreaterBayAreaCity } from '@worth-running/shared';
-import { normalizeFeedbackContent, publicFeedbackTypes } from './feedbackAbuse.js';
+import {
+  classifyFeedbackRisk,
+  isLowInformationFeedback,
+  normalizeFeedbackContent,
+  publicFeedbackTypes,
+} from './feedbackAbuse.js';
 
 export const dataCleanupActions = [
   'reject_expired_candidates',
@@ -8,6 +13,9 @@ export const dataCleanupActions = [
   'archive_expired_events',
   'archive_outside_region_events',
   'reject_invalid_feedback',
+  'reject_suspicious_feedback',
+  'reject_low_information_feedback',
+  'reject_unpublished_event_feedback',
   'reject_duplicate_feedback',
 ] as const;
 
@@ -35,6 +43,9 @@ interface FeedbackSnapshot {
   feedbackType: string;
   content: string;
   createdAt: Date;
+  eventPublishStatus?: string | null;
+  eventCity?: string | null;
+  eventDate?: Date | null;
 }
 
 export interface GovernanceSnapshot {
@@ -73,6 +84,9 @@ export function buildDataCleanupPlan(snapshot: GovernanceSnapshot, now: Date = n
     archive_expired_events: [],
     archive_outside_region_events: [],
     reject_invalid_feedback: [],
+    reject_suspicious_feedback: [],
+    reject_low_information_feedback: [],
+    reject_unpublished_event_feedback: [],
     reject_duplicate_feedback: [],
   };
   const labels = new Map<string, string>();
@@ -96,14 +110,35 @@ export function buildDataCleanupPlan(snapshot: GovernanceSnapshot, now: Date = n
   }
 
   const validTypes = new Set<string>(publicFeedbackTypes);
-  const validFeedback = snapshot.feedback.filter((item) => {
-    labels.set(item.id, `${item.feedbackType}：${item.content.slice(0, 40)}`);
-    if (validTypes.has(item.feedbackType)) return true;
-    ids.reject_invalid_feedback.push(item.id);
-    return false;
-  });
+  const actionableFeedback: FeedbackSnapshot[] = [];
+  for (const item of snapshot.feedback) {
+    labels.set(item.id, `反馈 ${item.id.slice(0, 8)}（${item.feedbackType}）`);
+    if (!validTypes.has(item.feedbackType)) {
+      ids.reject_invalid_feedback.push(item.id);
+      continue;
+    }
+    const risk = classifyFeedbackRisk(item.content);
+    if (risk.suspicious) {
+      ids.reject_suspicious_feedback.push(item.id);
+      labels.set(item.id, `反馈 ${item.id.slice(0, 8)}（${risk.reason}）`);
+      continue;
+    }
+    if (isLowInformationFeedback(item.feedbackType, item.content)) {
+      ids.reject_low_information_feedback.push(item.id);
+      continue;
+    }
+    const eventIsPublic =
+      item.eventPublishStatus === 'published' &&
+      Boolean(item.eventDate && item.eventDate > today) &&
+      isGreaterBayAreaCity(item.eventCity);
+    if (!eventIsPublic) {
+      ids.reject_unpublished_event_feedback.push(item.id);
+      continue;
+    }
+    actionableFeedback.push(item);
+  }
   const duplicateBuckets = new Map<string, FeedbackSnapshot[]>();
-  for (const item of validFeedback) {
+  for (const item of actionableFeedback) {
     const key = [
       item.eventId || '',
       item.userKey || '',
@@ -150,10 +185,22 @@ async function loadSnapshot(
         feedbackType: true,
         content: true,
         createdAt: true,
+        event: {
+          select: { publishStatus: true, city: true, eventDate: true },
+        },
       },
     }),
   ]);
-  return { candidates, events, feedback };
+  return {
+    candidates,
+    events,
+    feedback: feedback.map(({ event, ...item }) => ({
+      ...item,
+      eventPublishStatus: event?.publishStatus || null,
+      eventCity: event?.city || null,
+      eventDate: event?.eventDate || null,
+    })),
+  };
 }
 
 export async function getDataQualitySummary(now: Date = new Date()) {
@@ -220,6 +267,30 @@ export async function runDataCleanup(input: {
       plan.ids.reject_invalid_feedback,
       actions.includes('reject_invalid_feedback'),
       '系统治理：非法反馈类型',
+      input.adminUserId,
+      handledAt,
+    );
+    await applyFeedbackAction(
+      tx,
+      plan.ids.reject_suspicious_feedback,
+      actions.includes('reject_suspicious_feedback'),
+      '系统治理：异常探测内容',
+      input.adminUserId,
+      handledAt,
+    );
+    await applyFeedbackAction(
+      tx,
+      plan.ids.reject_low_information_feedback,
+      actions.includes('reject_low_information_feedback'),
+      '系统治理：缺少具体补充说明',
+      input.adminUserId,
+      handledAt,
+    );
+    await applyFeedbackAction(
+      tx,
+      plan.ids.reject_unpublished_event_feedback,
+      actions.includes('reject_unpublished_event_feedback'),
+      '系统治理：关联赛事当前不公开',
       input.adminUserId,
       handledAt,
     );

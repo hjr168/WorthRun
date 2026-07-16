@@ -64,7 +64,49 @@ export interface FeedbackItem {
   handledBy?: string | null;
   handledAt?: string | null;
   createdAt: string;
-  event?: { id: string; eventName: string; city: string } | null;
+  updatedAt: string;
+  riskReason?: string | null;
+  lowInformation?: boolean;
+  eventScope?: 'public' | 'unpublished';
+  event?: {
+    id: string;
+    eventName: string;
+    city: string;
+    eventDate?: string;
+    publishStatus?: string;
+  } | null;
+}
+
+export interface FeedbackSummary {
+  pending: number;
+  actionable: number;
+  suspicious: number;
+  lowInformation: number;
+  unpublishedEvent: number;
+  exactDuplicates: number;
+  blocked7d: number;
+  blocked30d: number;
+  truncated: boolean;
+  topEvents: Array<{ eventId: string | null; eventName: string; count: number }>;
+}
+
+export interface FeedbackBulkPreviewItem {
+  id: string;
+  ready: boolean;
+  issues: string[];
+  updatedAt: string | null;
+  feedbackType?: string;
+  eventName?: string;
+  riskReason?: string | null;
+  lowInformation?: boolean;
+  eventScope?: 'public' | 'unpublished';
+}
+
+export interface FeedbackBulkResult {
+  dryRun: boolean;
+  items: FeedbackBulkPreviewItem[];
+  handled: Array<{ id: string }>;
+  failed: Array<{ id: string; issues: string[] }>;
 }
 
 export interface FeedbackDuplicateGroup {
@@ -244,6 +286,9 @@ export type DataCleanupAction =
   | 'archive_expired_events'
   | 'archive_outside_region_events'
   | 'reject_invalid_feedback'
+  | 'reject_suspicious_feedback'
+  | 'reject_low_information_feedback'
+  | 'reject_unpublished_event_feedback'
   | 'reject_duplicate_feedback';
 
 export interface DataQualitySummary {
@@ -253,6 +298,9 @@ export interface DataQualitySummary {
   archive_expired_events: number;
   archive_outside_region_events: number;
   reject_invalid_feedback: number;
+  reject_suspicious_feedback: number;
+  reject_low_information_feedback: number;
+  reject_unpublished_event_feedback: number;
   reject_duplicate_feedback: number;
 }
 

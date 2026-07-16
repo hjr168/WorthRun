@@ -140,6 +140,64 @@
   line-height: 1;
 }
 
+.receipt-section {
+  margin-top: 28rpx;
+}
+
+.receipt-note {
+  margin-top: -6rpx;
+  margin-bottom: 12rpx;
+  color: #64748b;
+  font-size: 23rpx;
+  line-height: 1.5;
+}
+
+.receipt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  border-bottom: 1rpx solid #e5edf0;
+  background: #ffffff;
+  padding: 20rpx 22rpx;
+}
+
+.receipt-row:first-of-type {
+  border-radius: 12rpx 12rpx 0 0;
+}
+
+.receipt-row:last-child {
+  border-bottom: 0;
+  border-radius: 0 0 12rpx 12rpx;
+}
+
+.receipt-main {
+  min-width: 0;
+}
+
+.receipt-event {
+  overflow: hidden;
+  color: #1e293b;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipt-meta {
+  margin-top: 6rpx;
+  color: #64748b;
+  font-size: 23rpx;
+}
+
+.receipt-status {
+  flex: 0 0 auto;
+  color: #2a7f75;
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
 .dev-tools {
   display: grid;
   gap: 16rpx;

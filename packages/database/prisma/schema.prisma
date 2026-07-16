@@ -248,6 +248,17 @@ model FeedbackRateLimit {
   @@map("feedback_rate_limits")
 }
 
+model FeedbackAbuseMetric {
+  day       DateTime @db.Date
+  reason    String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([day, reason])
+  @@index([day])
+  @@map("feedback_abuse_metrics")
+}
+
 model AdminUser {
   id           String      @id @default(cuid())
   username     String      @unique

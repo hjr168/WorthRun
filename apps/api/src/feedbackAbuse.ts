@@ -9,6 +9,19 @@ export const publicFeedbackTypes = [
   '其他',
 ] as const;
 
+export const feedbackRiskReasons = [
+  'sql_probe',
+  'jndi_probe',
+  'script_probe',
+  'path_probe',
+  'control_character',
+] as const;
+
+export type FeedbackRiskReason = (typeof feedbackRiskReasons)[number];
+export type FeedbackRisk =
+  | { suspicious: false }
+  | { suspicious: true; reason: FeedbackRiskReason };
+
 export const feedbackRateLimits = {
   userEvent: { scope: 'user_event_10m', windowMs: 10 * 60 * 1000, limit: 1 },
   ipShort: { scope: 'ip_10m', windowMs: 10 * 60 * 1000, limit: 5 },
@@ -17,6 +30,35 @@ export const feedbackRateLimits = {
 
 export function normalizeFeedbackContent(value: string) {
   return value.trim().replace(/\s+/g, ' ');
+}
+
+export function classifyFeedbackRisk(value: string): FeedbackRisk {
+  const content = normalizeFeedbackContent(value);
+  if (/\u0000|[\u0001-\u0008\u000b\u000c\u000e-\u001f]/.test(content)) {
+    return { suspicious: true, reason: 'control_character' };
+  }
+  if (/\$\{\s*jndi\s*:/i.test(content)) {
+    return { suspicious: true, reason: 'jndi_probe' };
+  }
+  if (
+    /\bunion\s+(?:all\s+)?select\b/i.test(content) ||
+    /\b(?:sleep|benchmark)\s*\(/i.test(content) ||
+    /(?:'|")\s*(?:or|and)\s+\d+\s*=\s*\d+/i.test(content)
+  ) {
+    return { suspicious: true, reason: 'sql_probe' };
+  }
+  if (/<script\b|javascript\s*:|\bon(?:error|load)\s*=/i.test(content)) {
+    return { suspicious: true, reason: 'script_probe' };
+  }
+  if (/(?:\.\.\/){2,}|\/etc\/passwd/i.test(content)) {
+    return { suspicious: true, reason: 'path_probe' };
+  }
+  return { suspicious: false };
+}
+
+export function isLowInformationFeedback(feedbackType: string, content: string) {
+  const normalized = normalizeFeedbackContent(content);
+  return normalized.length < 6 || normalized === normalizeFeedbackContent(feedbackType);
 }
 
 export function hmacDigest(secret: string, value: string) {

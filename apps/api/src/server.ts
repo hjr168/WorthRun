@@ -33,14 +33,17 @@ import {
 } from './ai/eventSourceQueries.js';
 import { AiIngestError, runEventSource } from './ai/runEventSource.js';
 import {
+  classifyFeedbackRisk,
   createFeedbackFingerprint,
   feedbackRateLimits,
   getRetryAfterSeconds,
   getWindowStart,
   hmacDigest,
+  isLowInformationFeedback,
   normalizeFeedbackContent,
   publicFeedbackTypes,
 } from './feedbackAbuse.js';
+import { recordBlockedFeedback } from './feedbackMaintenance.js';
 import { getMiniProgramCode } from './wxacode.js';
 import { buildPublicEventWhere } from './dataPolicy.js';
 import {
@@ -62,6 +65,12 @@ import {
 } from './candidateWorkflow.js';
 import { previewBulkAccept, runBulkAccept } from './candidateAcceptWorkflow.js';
 import { eventPublishIssues, previewBulkPublish, runBulkPublish } from './eventPublishWorkflow.js';
+import {
+  buildFeedbackSummary,
+  feedbackDisposition,
+  runFeedbackBulk,
+} from './feedbackWorkflow.js';
+import { chinaDay } from './feedbackMaintenance.js';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -305,18 +314,32 @@ const favoriteSchema = z.object({
   eventId: z.string().trim().min(1, 'eventId 不能为空'),
 });
 
-const publicFeedbackSchema = z.object({
-  eventId: z.string().trim().min(1, 'eventId 不能为空'),
-  userKey: z.string().trim().min(1, 'userKey 不能为空'),
-  requestId: z
-    .string()
-    .trim()
-    .min(16, 'requestId 无效')
-    .max(128, 'requestId 无效')
-    .regex(/^[A-Za-z0-9_-]+$/, 'requestId 无效'),
-  feedbackType: z.enum(publicFeedbackTypes, { required_error: '反馈类型无效' }),
-  content: z.string().trim().min(1, '反馈内容不能为空').max(2000, '反馈内容过长'),
-});
+const publicFeedbackSchema = z
+  .object({
+    eventId: z.string().trim().min(1, 'eventId 不能为空'),
+    userKey: z.string().trim().min(1, 'userKey 不能为空').max(100, 'userKey 无效'),
+    requestId: z
+      .string()
+      .trim()
+      .min(16, 'requestId 无效')
+      .max(128, 'requestId 无效')
+      .regex(/^[A-Za-z0-9_-]+$/, 'requestId 无效'),
+    feedbackType: z.enum(publicFeedbackTypes, { required_error: '反馈类型无效' }),
+    content: z
+      .string()
+      .trim()
+      .min(6, '补充说明至少需要 6 个字')
+      .max(500, '反馈内容不能超过 500 个字'),
+  })
+  .superRefine((input, context) => {
+    if (isLowInformationFeedback(input.feedbackType, input.content)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message: '请补充具体变化或信息出处',
+      });
+    }
+  });
 
 const shareRecordSchema = z.object({
   userKey: z.string().trim().min(1, 'userKey 不能为空').max(100),
@@ -366,6 +389,9 @@ const adminEventsQuerySchema = paginationQuerySchema.extend({
 
 const adminFeedbackQuerySchema = paginationQuerySchema.extend({
   status: z.enum(feedbackStatusValues).optional(),
+  feedbackType: z.enum(publicFeedbackTypes).optional(),
+  eventScope: z.enum(['public', 'unpublished']).optional(),
+  search: queryStringSchema,
 });
 
 const adminFeedbackDuplicateQuerySchema = z.object({
@@ -380,6 +406,14 @@ const adminFeedbackDuplicateQuerySchema = z.object({
 const feedbackDuplicateResolveSchema = z.object({
   primaryId: z.string().trim().min(1),
   duplicateIds: z.array(z.string().trim().min(1)).min(1).max(100),
+});
+
+const feedbackBulkHandleSchema = z.object({
+  feedbackIds: z.array(z.string().trim().min(1)).min(1).max(50),
+  status: z.enum(['resolved', 'rejected']),
+  adminNote: z.string().trim().min(1, '请填写处理备注').max(1000),
+  dryRun: z.boolean().default(true),
+  expected: z.array(workflowSnapshotSchema).max(50).optional(),
 });
 
 const operationLogsQuerySchema = paginationQuerySchema.extend({
@@ -413,6 +447,9 @@ type AdminFeedbackQuery = {
   page: number;
   pageSize: number;
   status?: FeedbackStatus;
+  feedbackType?: (typeof publicFeedbackTypes)[number];
+  eventScope?: 'public' | 'unpublished';
+  search?: string;
 };
 
 type OperationLogsQuery = {
@@ -980,18 +1017,110 @@ app.get(
     const { page, pageSize, status } = query;
     const where: Prisma.FeedbackWhereInput = {};
     if (status) where.status = status;
+    if (query.feedbackType) where.feedbackType = query.feedbackType;
+    const clauses: Prisma.FeedbackWhereInput[] = [];
+    if (query.eventScope === 'public') {
+      clauses.push({ event: { is: buildPublicEventWhere() } });
+    } else if (query.eventScope === 'unpublished') {
+      clauses.push({
+        OR: [{ eventId: null }, { event: { isNot: buildPublicEventWhere() } }],
+      });
+    }
+    if (query.search) {
+      clauses.push({
+        OR: [
+          { content: { contains: query.search, mode: 'insensitive' } },
+          { event: { is: { eventName: { contains: query.search, mode: 'insensitive' } } } },
+        ],
+      });
+    }
+    if (clauses.length) where.AND = clauses;
 
     const [items, total] = await Promise.all([
       prisma.feedback.findMany({
         where,
-        include: { event: { select: { id: true, eventName: true, city: true } } },
+        include: {
+          event: {
+            select: {
+              id: true,
+              eventName: true,
+              city: true,
+              eventDate: true,
+              publishStatus: true,
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       prisma.feedback.count({ where }),
     ]);
-    res.json({ items, total, page, pageSize });
+    res.json({
+      items: items.map((item) => ({ ...item, ...feedbackDisposition(item) })),
+      total,
+      page,
+      pageSize,
+    });
+  }),
+);
+
+app.get(
+  '/api/admin/feedback/summary',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const now = new Date();
+    const day = chinaDay(now);
+    const sevenDaysAgo = new Date(day.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(day.getTime() - 29 * 24 * 60 * 60 * 1000);
+    const [records, blocked7d, blocked30d] = await Promise.all([
+      prisma.feedback.findMany({
+        where: { status: { in: ['pending', 'handling'] } },
+        include: {
+          event: {
+            select: {
+              id: true,
+              eventName: true,
+              city: true,
+              eventDate: true,
+              publishStatus: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 2001,
+      }),
+      prisma.feedbackAbuseMetric.aggregate({
+        where: { day: { gte: sevenDaysAgo } },
+        _sum: { count: true },
+      }),
+      prisma.feedbackAbuseMetric.aggregate({
+        where: { day: { gte: thirtyDaysAgo } },
+        _sum: { count: true },
+      }),
+    ]);
+    const truncated = records.length > 2000;
+    const items = records.slice(0, 2000);
+    res.json({
+      ...buildFeedbackSummary(
+        items,
+        blocked7d._sum.count || 0,
+        blocked30d._sum.count || 0,
+        now,
+      ),
+      truncated,
+    });
+  }),
+);
+
+app.post(
+  '/api/admin/feedback/bulk-handle',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(feedbackBulkHandleSchema, req.body);
+    res.json(
+      await runFeedbackBulk({ ...input, dryRun: input.dryRun ?? true, adminUserId: admin.id }),
+    );
   }),
 );
 
@@ -1799,11 +1928,20 @@ app.post(
   '/api/feedback',
   asyncHandler(async (req, res) => {
     const input = validateBody(publicFeedbackSchema, req.body);
+    const content = normalizeFeedbackContent(input.content);
+    const risk = classifyFeedbackRisk(content);
+    if (risk.suspicious) {
+      try {
+        await recordBlockedFeedback(risk.reason);
+      } catch (error) {
+        console.error('记录反馈拦截指标失败', error instanceof Error ? error.name : 'unknown');
+      }
+      throw new HttpError(400, '反馈内容格式异常，请修改后重试');
+    }
     const event = await prisma.event.findFirst({
       where: { id: input.eventId, ...buildPublicEventWhere() },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
-    const content = normalizeFeedbackContent(input.content);
     const fingerprint = createFeedbackFingerprint(feedbackAbuseSecret, {
       eventId: input.eventId,
       feedbackType: input.feedbackType,

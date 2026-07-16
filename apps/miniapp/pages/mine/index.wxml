@@ -39,7 +39,7 @@
       </button>
       <button class="menu-button" bindtap="openFeedback">
         <text class="menu-mark">改</text>
-        <text>提交反馈</text>
+        <text>赛事纠错</text>
       </button>
       <button class="menu-button" bindtap="openPreferences">
         <text class="menu-mark">偏</text>
@@ -49,6 +49,18 @@
         <text class="menu-mark">算</text>
         <text>工具</text>
       </button>
+    </view>
+
+    <view wx:if="{{feedbackReceipts.length}}" class="receipt-section">
+      <view class="section-title">本机最近反馈</view>
+      <view class="receipt-note">仅记录提交回执，不代表管理员处理进度。</view>
+      <view wx:for="{{feedbackReceipts}}" wx:key="requestId" class="receipt-row">
+        <view class="receipt-main">
+          <view class="receipt-event">{{item.eventName}}</view>
+          <view class="receipt-meta">{{item.feedbackType}} · {{item.createdAtText}}</view>
+        </view>
+        <view class="receipt-status">已提交</view>
+      </view>
     </view>
 
     <view wx:if="{{isDev}}" class="card section dev-tools">

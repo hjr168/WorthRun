@@ -33,12 +33,20 @@
   font-size: 26rpx;
 }
 
-.preference-card {
+.preference-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
   margin-top: 24rpx;
-  overflow: hidden;
-  border-color: #e5edf0;
+  border: 1rpx solid #dbe7e5;
   border-radius: 16rpx;
-  box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
+  background: #ffffff;
+  padding: 20rpx 22rpx;
+}
+
+.preference-empty {
+  display: block;
 }
 
 .preference-title {
@@ -50,21 +58,31 @@
 }
 
 .preference-action {
-  margin-top: 16rpx;
+  flex: 0 0 auto;
   color: #2a9d8f;
   font-size: 24rpx;
   font-weight: 700;
 }
 
-.actions,
-.tool-grid {
+.preference-label {
+  color: #64748b;
+  font-size: 23rpx;
+}
+
+.preference-value {
+  margin-top: 6rpx;
+  color: #1e293b;
+  font-size: 27rpx;
+  line-height: 1.4;
+}
+
+.actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16rpx;
 }
 
-.actions button,
-.tool-grid button {
+.actions button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -77,6 +95,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.all-events-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 76rpx;
+  margin-top: 28rpx;
+  line-height: 1.2;
 }
 
 .card-gap {

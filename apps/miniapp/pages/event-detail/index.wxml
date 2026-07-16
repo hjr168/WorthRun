@@ -20,22 +20,6 @@
       <judgement-card event="{{event}}" />
     </view>
 
-    <view class="section feedback-entry">
-      <view class="feedback-entry-copy">
-        <view class="feedback-entry-title">发现赛事信息有误？</view>
-        <view class="feedback-entry-subtitle">日期、报名状态或官方链接有变化，都可以告诉我们。</view>
-      </view>
-      <button class="primary-button feedback-entry-button" bindtap="openFeedback">反馈纠错</button>
-    </view>
-
-    <view class="section share-entry">
-      <view class="share-entry-copy">
-        <view class="share-entry-title">分享卡片</view>
-        <view class="share-entry-subtitle">赛事决策图</view>
-      </view>
-      <button class="secondary-button share-entry-button" bindtap="openShareCard">生成</button>
-    </view>
-
     <view class="section card">
       <view class="section-title">赛事基础信息</view>
       <view class="info-row"><text class="info-label">起点</text><text class="info-value">{{event.startPoint || '待确认'}}</text></view>
@@ -43,6 +27,8 @@
       <view class="info-row"><text class="info-label">来源</text><text class="info-value">{{event.sourceName}}</text></view>
       <view class="info-row"><text class="info-label">最近更新</text><text class="info-value">{{updatedAtText}}</text></view>
     </view>
+
+    <button class="feedback-link" bindtap="openFeedback">信息有误？反馈纠错</button>
 
     <view class="section card">
       <view class="section-title">适合谁</view>
@@ -74,7 +60,6 @@
   <view wx:if="{{event}}" class="bottom-bar">
     <button class="primary-button bottom-primary" bindtap="openOfficial">{{officialActionText}}</button>
     <button class="secondary-button" bindtap="toggleFavorite">{{isFavorite ? '取消收藏' : '收藏'}}</button>
-    <button class="secondary-button" bindtap="openShareCard">分享卡片</button>
-    <button class="secondary-button" bindtap="openFeedback">反馈纠错</button>
+    <button class="secondary-button" bindtap="openShareCard">分享</button>
   </view>
 </view>

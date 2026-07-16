@@ -91,6 +91,30 @@
   justify-content: flex-end;
 }
 
+.result-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-bottom: 18rpx;
+}
+
+.result-count {
+  flex: 0 0 auto;
+  color: #1e293b;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.active-filter {
+  min-width: 0;
+  color: #64748b;
+  font-size: 24rpx;
+  line-height: 1.4;
+  text-align: right;
+  word-break: break-all;
+}
+
 .reset-button {
   display: flex;
   align-items: center;
@@ -113,4 +137,14 @@
   color: #64748b;
   font-size: 24rpx;
   text-align: center;
+}
+
+.empty-reset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 220rpx;
+  min-height: 72rpx;
+  margin: 18rpx auto 0;
+  line-height: 1.2;
 }

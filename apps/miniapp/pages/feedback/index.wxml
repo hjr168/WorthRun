@@ -1,26 +1,68 @@
 <view class="page feedback-page">
   <view class="feedback-head">
     <view class="feedback-title">反馈纠错</view>
-    <view class="feedback-subtitle">赛事信息可能变化，发现问题可以直接告诉我们。</view>
+    <view class="feedback-subtitle">请提供具体变化，运营人员会按官方信息人工核对。</view>
   </view>
 
   <view wx:if="{{!hasEvent}}" class="select-event-card">
     <view class="select-event-title">先选择要反馈的赛事</view>
-    <view class="select-event-desc">提交反馈需要关联具体赛事。请从赛事详情页点击“反馈纠错”。</view>
+    <view class="select-event-desc">请从赛事详情页进入反馈，避免纠错关联到错误赛事。</view>
     <button class="secondary-button select-event-button" bindtap="goEvents">去选择赛事</button>
   </view>
 
-  <view wx:else class="form-card">
-    <view class="field">
-      <view class="field-label">反馈类型</view>
-      <picker range="{{feedbackTypes}}" value="{{typeIndex}}" bindchange="onTypeChange">
-        <view class="picker-box">{{feedbackTypes[typeIndex]}}</view>
-      </picker>
-    </view>
-    <view class="field">
-      <view class="field-label">补充说明</view>
-      <textarea class="textarea" value="{{content}}" placeholder="请说明你发现的问题" bindinput="onContentInput" />
+  <loading-state wx:elif="{{eventLoading}}" text="正在加载赛事" />
+
+  <view wx:elif="{{eventError}}" class="select-event-card">
+    <view class="select-event-title">赛事信息加载失败</view>
+    <view class="select-event-desc">{{eventError}}</view>
+    <button class="secondary-button select-event-button" bindtap="goEvents">重新选择赛事</button>
+  </view>
+
+  <view wx:elif="{{submitted}}" class="success-panel">
+    <view class="success-mark">已提交</view>
+    <view class="success-title">{{successMessage}}</view>
+    <view class="success-desc">本机已保存提交回执。该回执不代表处理进度，赛事信息仍以官方为准。</view>
+    <view class="success-actions">
+      <button class="primary-button" bindtap="backToEvent">返回赛事详情</button>
+      <button class="secondary-button" bindtap="goEvents">继续浏览赛事</button>
     </view>
   </view>
-  <button wx:if="{{hasEvent}}" class="primary-button submit" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">提交反馈</button>
+
+  <block wx:else>
+    <view class="event-context">
+      <view class="event-context-label">正在反馈</view>
+      <view class="event-context-name">{{event.eventName}}</view>
+      <view class="event-context-meta">{{event.city}} · {{eventDateText}}</view>
+    </view>
+
+    <view class="form-section">
+      <view class="field-label">反馈类型</view>
+      <view class="type-grid">
+        <button
+          wx:for="{{feedbackTypes}}"
+          wx:key="*this"
+          class="type-option {{typeIndex === index ? 'selected' : ''}}"
+          data-index="{{index}}"
+          bindtap="onTypeSelect"
+        >{{item}}</button>
+      </view>
+    </view>
+
+    <view class="form-section">
+      <view class="field-row">
+        <view class="field-label">补充说明</view>
+        <view class="character-count {{contentLength > 0 && contentLength < 6 ? 'invalid' : ''}}">{{contentLength}} / 500</view>
+      </view>
+      <textarea
+        class="textarea feedback-textarea"
+        value="{{content}}"
+        maxlength="500"
+        placeholder="{{feedbackHints[typeIndex]}}"
+        bindinput="onContentInput"
+      />
+      <view class="field-help">至少填写 6 个字，请不要提交账号、电话等个人信息。</view>
+    </view>
+
+    <button class="primary-button submit" loading="{{submitting}}" disabled="{{submitting || !canSubmit}}" bindtap="submit">提交反馈</button>
+  </block>
 </view>

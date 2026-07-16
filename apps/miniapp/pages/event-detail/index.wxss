@@ -1,7 +1,7 @@
 .detail-page {
-  padding-bottom: 280rpx;
-  padding-bottom: calc(280rpx + constant(safe-area-inset-bottom));
-  padding-bottom: calc(280rpx + env(safe-area-inset-bottom));
+  padding-bottom: 210rpx;
+  padding-bottom: calc(210rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(210rpx + env(safe-area-inset-bottom));
 }
 
 .detail-page .section {
@@ -94,83 +94,20 @@
   line-height: 1.6;
 }
 
-.share-entry {
+.feedback-link {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-  border: 1rpx solid #d8ebe7;
-  border-radius: 16rpx;
-  background: #ffffff;
-  padding: 22rpx 24rpx;
-  box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
-}
-
-.feedback-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-  border: 1rpx solid #b9dfd8;
-  border-radius: 16rpx;
-  background: #f2fbf9;
-  padding: 22rpx 24rpx;
-}
-
-.feedback-entry-copy {
-  min-width: 0;
-}
-
-.feedback-entry-title {
-  color: #164e48;
-  font-size: 30rpx;
-  font-weight: 700;
-}
-
-.feedback-entry-subtitle {
-  margin-top: 6rpx;
-  color: #47716b;
-  font-size: 24rpx;
-  line-height: 1.45;
-}
-
-.feedback-entry-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 174rpx;
-  flex: 0 0 174rpx;
-  min-height: 68rpx;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 64rpx;
+  margin-top: 10rpx;
+  background: transparent;
+  color: #2a7f75;
   padding: 0;
   font-size: 25rpx;
-  line-height: 1.2;
-}
-
-.share-entry-copy {
-  min-width: 0;
-}
-
-.share-entry-title {
-  color: #111827;
-  font-size: 30rpx;
   font-weight: 700;
-}
-
-.share-entry-subtitle {
-  margin-top: 6rpx;
-  color: #64748b;
-  font-size: 24rpx;
-}
-
-.share-entry-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 168rpx;
-  flex: 0 0 168rpx;
-  min-height: 68rpx;
-  padding: 0;
   line-height: 1.2;
+  text-align: left;
 }
 
 .notice {
@@ -187,7 +124,7 @@
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 12rpx;
   border-top: 1rpx solid #e2e8f0;
   background: #ffffff;

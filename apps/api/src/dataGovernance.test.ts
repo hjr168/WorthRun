@@ -60,24 +60,33 @@ describe('buildDataCleanupPlan', () => {
             eventId: 'e1',
             userKey: 'u1',
             feedbackType: '日期有误',
-            content: ' 日期 错了 ',
+            content: ' 比赛日期需要核对 ',
             createdAt: new Date('2026-07-01'),
+            eventPublishStatus: 'published',
+            eventCity: '广州',
+            eventDate: new Date('2026-07-20'),
           },
           {
             id: 'duplicate',
             eventId: 'e1',
             userKey: 'u1',
             feedbackType: '日期有误',
-            content: '日期 错了',
+            content: '比赛日期需要核对',
             createdAt: new Date('2026-07-02'),
+            eventPublishStatus: 'published',
+            eventCity: '广州',
+            eventDate: new Date('2026-07-20'),
           },
           {
             id: 'other-user',
             eventId: 'e1',
             userKey: 'u2',
             feedbackType: '日期有误',
-            content: '日期 错了',
+            content: '比赛日期需要核对',
             createdAt: new Date('2026-07-02'),
+            eventPublishStatus: 'published',
+            eventCity: '广州',
+            eventDate: new Date('2026-07-20'),
           },
         ],
       },
@@ -88,6 +97,69 @@ describe('buildDataCleanupPlan', () => {
     expect(plan.ids.reject_duplicate_feedback).toEqual(['duplicate']);
   });
 
+  it('classifies feedback into mutually exclusive governance actions', () => {
+    const plan = buildDataCleanupPlan(
+      {
+        candidates: [],
+        events: [],
+        feedback: [
+          {
+            id: 'probe',
+            eventId: 'e1',
+            userKey: 'u1',
+            feedbackType: '其他',
+            content: '${jndi:ldap://example.test/a}',
+            createdAt: new Date('2026-07-01'),
+            eventPublishStatus: 'archived',
+            eventCity: '广州',
+            eventDate: new Date('2026-07-20'),
+          },
+          {
+            id: 'low-info',
+            eventId: 'e1',
+            userKey: 'u2',
+            feedbackType: '日期有误',
+            content: '日期有误',
+            createdAt: new Date('2026-07-01'),
+            eventPublishStatus: 'published',
+            eventCity: '广州',
+            eventDate: new Date('2026-07-20'),
+          },
+          {
+            id: 'unpublished',
+            eventId: 'e2',
+            userKey: 'u3',
+            feedbackType: '官方链接失效',
+            content: '官网链接打开后显示页面不存在',
+            createdAt: new Date('2026-07-01'),
+            eventPublishStatus: 'archived',
+            eventCity: '广州',
+            eventDate: new Date('2026-07-20'),
+          },
+          {
+            id: 'keep',
+            eventId: 'e3',
+            userKey: 'u4',
+            feedbackType: '报名状态有误',
+            content: '官网目前显示报名已经结束',
+            createdAt: new Date('2026-07-01'),
+            eventPublishStatus: 'published',
+            eventCity: '深圳',
+            eventDate: new Date('2026-07-20'),
+          },
+        ],
+      },
+      now,
+    );
+
+    expect(plan.ids.reject_suspicious_feedback).toEqual(['probe']);
+    expect(plan.ids.reject_low_information_feedback).toEqual(['low-info']);
+    expect(plan.ids.reject_unpublished_event_feedback).toEqual(['unpublished']);
+    expect(plan.ids.reject_duplicate_feedback).toEqual([]);
+    expect(Object.values(plan.ids).flat().filter((id) => id === 'probe')).toHaveLength(1);
+    expect(plan.samples.reject_suspicious_feedback[0]).not.toContain('example.test');
+  });
+
   it('aborts apply when any preview count has changed', () => {
     const counts = {
       reject_expired_candidates: 2,
@@ -95,6 +167,9 @@ describe('buildDataCleanupPlan', () => {
       archive_expired_events: 0,
       archive_outside_region_events: 0,
       reject_invalid_feedback: 0,
+      reject_suspicious_feedback: 0,
+      reject_low_information_feedback: 0,
+      reject_unpublished_event_feedback: 0,
       reject_duplicate_feedback: 0,
     };
 

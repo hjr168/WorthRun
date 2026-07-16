@@ -4,6 +4,7 @@ const api_1 = require("../../utils/api");
 const index_1 = require("../../config/index");
 const format_1 = require("../../utils/format");
 const user_1 = require("../../utils/user");
+const feedback_1 = require("../../utils/feedback");
 Page({
     data: {
         loading: true,
@@ -16,6 +17,7 @@ Page({
         nextEventDate: '',
         complianceNotice: format_1.complianceNotice,
         isDev: index_1.config.env === 'dev',
+        feedbackReceipts: [],
     },
     onShow() {
         this.load();
@@ -33,6 +35,7 @@ Page({
             const preferenceText = preference
                 ? `${preference.cities.join('、') || '城市不限'} · ${preference.distances.join('、') || '距离不限'}`
                 : '尚未设置偏好';
+            const feedbackReceipts = (0, feedback_1.getFeedbackReceipts)().map((item) => (Object.assign(Object.assign({}, item), { createdAtText: (0, format_1.formatDateTime)(item.createdAt) })));
             this.setData({
                 loading: false,
                 userKey,
@@ -42,6 +45,7 @@ Page({
                 nextEvent,
                 nextEventDate: nextEvent ? (0, format_1.formatDate)(nextEvent.eventDate) : '',
                 complianceNotice: format_1.complianceNotice,
+                feedbackReceipts,
             });
         }
         catch (error) {
@@ -62,7 +66,10 @@ Page({
         wx.navigateTo({ url: '/pages/favorites/index' });
     },
     openFeedback() {
-        wx.navigateTo({ url: '/pages/feedback/index' });
+        wx.switchTab({
+            url: '/pages/events/index',
+            success: () => wx.showToast({ title: '请选择赛事后进入详情反馈', icon: 'none' }),
+        });
     },
     openTools() {
         wx.navigateTo({ url: '/pages/tools/index' });
@@ -81,6 +88,7 @@ Page({
                 if (!result.confirm)
                     return;
                 (0, user_1.clearUserKey)();
+                wx.removeStorageSync(feedback_1.feedbackReceiptStorageKey);
                 wx.showToast({ title: '已清除', icon: 'success' });
                 this.load();
             },
