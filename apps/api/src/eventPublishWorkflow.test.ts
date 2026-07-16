@@ -47,4 +47,17 @@ describe('event publish workflow', () => {
       expect.arrayContaining(['当前仅允许发布粤港澳大湾区赛事', 'risk_keyword:网传']),
     );
   });
+
+  it('rejects a community aggregation page used as official evidence', () => {
+    expect(
+      eventPublishIssues(
+        event({
+          sourceLevel: 'community',
+          officialUrl: 'https://chinamarathon.com/events/123',
+          sourceUrl: 'https://chinamarathon.com/events/123',
+        }),
+        new Date('2026-07-16T00:00:00.000Z'),
+      ),
+    ).toContain('community_without_official_evidence');
+  });
 });

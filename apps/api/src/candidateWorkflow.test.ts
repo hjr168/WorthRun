@@ -125,4 +125,22 @@ describe('candidate duplicate workflow', () => {
       'duplicate_event',
     );
   });
+
+  it('blocks a community aggregation page used as official evidence', () => {
+    const sourceUrl = 'https://chinamarathon.com/events/123';
+    const item = candidate({
+      officialUrl: sourceUrl,
+      sourceUrl,
+      source: {
+        id: 'community-source',
+        name: '社区发现',
+        sourceType: 'chinamarathon_sitemap',
+        sourceLevel: 'community',
+      },
+      extractedData: { officialUrl: sourceUrl, sourceUrl, sourceLevel: 'community' },
+    });
+    expect(candidateAcceptIssues(item, new Date('2026-07-16T00:00:00.000Z'))).toContain(
+      'community_without_official_evidence',
+    );
+  });
 });

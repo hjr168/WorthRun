@@ -394,6 +394,7 @@ function publishIssueLabel(issue: string) {
     missing_run_judgement: '缺少跑前判断',
     missing_judgement_reasons: '缺少判断理由',
     missing_checklist: '缺少赛前清单',
+    community_without_official_evidence: '社区来源缺少独立官网依据',
     user_flagged: '信息被用户标记',
     preview_snapshot_changed: '记录在预览后已更新',
     当前仅允许发布粤港澳大湾区赛事: '不在大湾区',

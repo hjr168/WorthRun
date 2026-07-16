@@ -1,5 +1,6 @@
 import { Prisma, prisma } from '@worth-running/database';
 import { publishBoundaryError } from './dataPolicy.js';
+import { hasOfficialEvidence } from './sourceAuthority.js';
 
 export const publishRiskKeywords = ['取消', '延期', '疑似', '网传', '非官方'];
 
@@ -34,6 +35,12 @@ export function eventPublishIssues(event: PublishWorkflowEvent, now = new Date()
   if (!event.sourceName) issues.push('missing_source_name');
   if (!event.sourceUrl) issues.push('missing_source_url');
   if (!event.sourceLevel) issues.push('missing_source_level');
+  if (
+    event.sourceLevel === 'community' &&
+    !hasOfficialEvidence(event.sourceLevel, event.officialUrl, event.sourceUrl)
+  ) {
+    issues.push('community_without_official_evidence');
+  }
   if (!event.runJudgement) issues.push('missing_run_judgement');
   if (!event.judgementReasons?.length) issues.push('missing_judgement_reasons');
   if (!event.checklistItems?.length) issues.push('missing_checklist');

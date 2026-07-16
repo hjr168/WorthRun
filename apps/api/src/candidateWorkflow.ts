@@ -6,6 +6,7 @@ import {
 } from '@worth-running/shared';
 import { aiEventCandidateSchema, type AiEventCandidate } from './ai/eventCandidateSchema.js';
 import { classifyCandidate } from './ai/eventSourceOperations.js';
+import { hasOfficialEvidence } from './sourceAuthority.js';
 
 const pendingStatuses = ['new', 'needs_review'] as const;
 
@@ -50,7 +51,10 @@ export function candidateAcceptIssues(item: CandidateWorkflowItem, now = new Dat
   if (!data.distanceItems.length) issues.push('missing_distance_items');
   if (!data.officialUrl) issues.push('missing_official_url');
   if (!data.sourceUrl) issues.push('missing_source_url');
-  if (item.source?.sourceLevel === 'community' && !data.officialUrl) {
+  if (
+    item.source?.sourceLevel === 'community' &&
+    !hasOfficialEvidence('community', data.officialUrl, data.sourceUrl)
+  ) {
     issues.push('community_without_official_evidence');
   }
   if (item.reviewIssues.includes('duplicate_event')) issues.push('duplicate_event');
