@@ -71,7 +71,11 @@ export function EventEditPage() {
   }, [form, id]);
 
   const submit = async () => {
-    const values = await form.validateFields();
+    // Tabs only mount their active panel on first visit. validateFields() returns
+    // the mounted fields, so using its return value here could omit values already
+    // loaded into the "跑前判断" and "来源与发布" tabs when saving from another tab.
+    await form.validateFields();
+    const values = form.getFieldsValue(true);
     const body = {
       ...values,
       city: Array.isArray(values.city) ? values.city[0] : values.city,
