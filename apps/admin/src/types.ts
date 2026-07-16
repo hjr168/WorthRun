@@ -128,6 +128,8 @@ export interface EventSourceRunSummary {
   created: number;
   updated: number;
   skippedReviewed: number;
+  skippedExpired: number;
+  skippedOutsideRegion: number;
   duplicateEvents: number;
   candidateIds: string[];
 }
@@ -147,6 +149,8 @@ export interface EventSourceRunItem {
   created: number;
   updated: number;
   skippedReviewed: number;
+  skippedExpired: number;
+  skippedOutsideRegion: number;
   duplicateEvents: number;
   errorMessage?: string | null;
   source?: Pick<EventSourceItem, 'id' | 'name' | 'sourceType'>;

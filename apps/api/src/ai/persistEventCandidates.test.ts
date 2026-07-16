@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { decideCandidateWrite, shouldPersistCandidateByDate } from './persistEventCandidates.js';
+import {
+  candidateExclusionReason,
+  decideCandidateWrite,
+  shouldPersistCandidateByDate,
+} from './persistEventCandidates.js';
 
 describe('decideCandidateWrite', () => {
   it('creates a new candidate when no source record exists', () => {
@@ -15,6 +19,27 @@ describe('decideCandidateWrite', () => {
     expect(decideCandidateWrite({ status: 'accepted' })).toBe('skip_reviewed');
     expect(decideCandidateWrite({ status: 'rejected' })).toBe('skip_reviewed');
     expect(decideCandidateWrite({ status: 'merged' })).toBe('skip_reviewed');
+  });
+});
+
+describe('candidateExclusionReason', () => {
+  const now = new Date('2026-07-13T16:30:00.000Z');
+
+  it('filters expired candidates before region checks', () => {
+    expect(candidateExclusionReason({ eventDate: '2026-07-14', city: '北京市' }, now)).toBe(
+      'expired',
+    );
+  });
+
+  it('filters future candidates outside the Greater Bay Area', () => {
+    expect(candidateExclusionReason({ eventDate: '2026-07-15', city: '北京市' }, now)).toBe(
+      'outside_region',
+    );
+  });
+
+  it('keeps future Greater Bay Area and missing-date candidates', () => {
+    expect(candidateExclusionReason({ eventDate: '2026-07-15', city: '广州市' }, now)).toBeNull();
+    expect(candidateExclusionReason({ eventDate: null, city: '香港特别行政区' }, now)).toBeNull();
   });
 });
 

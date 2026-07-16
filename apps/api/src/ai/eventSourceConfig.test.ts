@@ -8,7 +8,7 @@ describe('eventSourceSchema', () => {
       sourceType: 'chinaath_api',
       entryUrl: 'https://attacker.example/ignored',
       allowedDomains: ['attacker.example'],
-      cityHints: ['天津'],
+      cityHints: ['广州市'],
       status: 'active',
     });
 
@@ -19,6 +19,7 @@ describe('eventSourceSchema', () => {
       'api-changzheng.chinaath.com',
     ]);
     expect(parsed.searchQuery).toBeNull();
+    expect(parsed.cityHints).toEqual(['广州']);
     expect(parsed).toMatchObject({
       scheduleEnabled: false,
       scheduleIntervalHours: 24,
@@ -58,5 +59,15 @@ describe('eventSourceSchema', () => {
         maxPagesPerRun: 3,
       }),
     ).toThrow();
+  });
+
+  it('rejects target cities outside the Greater Bay Area', () => {
+    expect(() =>
+      eventSourceSchema.parse({
+        name: '全国来源',
+        sourceType: 'chinaath_api',
+        cityHints: ['北京'],
+      }),
+    ).toThrow('目标城市必须属于粤港澳大湾区');
   });
 });

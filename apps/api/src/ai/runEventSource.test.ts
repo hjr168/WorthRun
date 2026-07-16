@@ -22,10 +22,12 @@ describe('formatRunStatus', () => {
         created: 12,
         updated: 3,
         skippedReviewed: 5,
+        skippedExpired: 4,
+        skippedOutsideRegion: 3,
         duplicateEvents: 2,
         candidateIds: [],
       }),
-    ).toBe('success:fetched=20,created=12,updated=3,skipped=5,duplicates=2');
+    ).toBe('success:fetched=20,created=12,updated=3,skipped=5,expired=4,outside=3,duplicates=2');
   });
 });
 
@@ -90,6 +92,8 @@ describe('runEventSource', () => {
         created: 1,
         updated: 0,
         skippedReviewed: 0,
+        skippedExpired: 0,
+        skippedOutsideRegion: 0,
         duplicateEvents: 0,
         candidateIds: ['candidate-1'],
       })
@@ -98,6 +102,8 @@ describe('runEventSource', () => {
         created: 0,
         updated: 1,
         skippedReviewed: 0,
+        skippedExpired: 1,
+        skippedOutsideRegion: 0,
         duplicateEvents: 1,
         candidateIds: ['candidate-2'],
       });
@@ -126,6 +132,8 @@ describe('runEventSource', () => {
       created: 1,
       updated: 1,
       duplicateEvents: 1,
+      skippedExpired: 1,
+      skippedOutsideRegion: 0,
     });
     expect(fetchChinaAth).toHaveBeenNthCalledWith(1, {
       pageNo: 1,
@@ -138,7 +146,9 @@ describe('runEventSource', () => {
       cityHints: [],
     });
     expect(eventSourceRunUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'succeeded' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'succeeded', skippedExpired: 1 }),
+      }),
     );
     expect(eventSourceUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ nextPage: 3 }) }),

@@ -1,9 +1,9 @@
 import { EventCandidateStatus, Prisma, prisma } from '@worth-running/database';
+import { isFutureChinaDate, isGreaterBayAreaCity } from '@worth-running/shared';
 import { classifyCandidate } from './eventSourceOperations.js';
 import type { SourceCandidate } from './sources/sourceCandidate.js';
 
 type ExistingCandidate = { status: string } | null;
-const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 export function decideCandidateWrite(existing: ExistingCandidate) {
   if (!existing) return 'create' as const;
@@ -15,14 +15,16 @@ export function shouldPersistCandidateByDate(
   eventDate: string | null | undefined,
   now: Date = new Date(),
 ) {
-  if (!eventDate) return true;
+  return isFutureChinaDate(eventDate, now);
+}
 
-  const parsedEventDate = Date.parse(`${eventDate}T00:00:00.000Z`);
-  if (Number.isNaN(parsedEventDate)) return true;
-
-  const chinaNow = new Date(now.getTime() + CHINA_TIME_OFFSET_MS);
-  const today = Date.UTC(chinaNow.getUTCFullYear(), chinaNow.getUTCMonth(), chinaNow.getUTCDate());
-  return parsedEventDate > today;
+export function candidateExclusionReason(
+  candidate: { eventDate?: string | null; city?: string | null },
+  now: Date = new Date(),
+) {
+  if (!shouldPersistCandidateByDate(candidate.eventDate, now)) return 'expired' as const;
+  if (!isGreaterBayAreaCity(candidate.city)) return 'outside_region' as const;
+  return null;
 }
 
 export interface PersistSummary {
@@ -30,6 +32,8 @@ export interface PersistSummary {
   created: number;
   updated: number;
   skippedReviewed: number;
+  skippedExpired: number;
+  skippedOutsideRegion: number;
   duplicateEvents: number;
   candidateIds: string[];
 }
@@ -44,13 +48,23 @@ export async function persistEventCandidates(
     created: 0,
     updated: 0,
     skippedReviewed: 0,
+    skippedExpired: 0,
+    skippedOutsideRegion: 0,
     duplicateEvents: 0,
     candidateIds: [],
   };
 
   for (const item of items) {
     const candidate = item.candidate;
-    if (!shouldPersistCandidateByDate(candidate.eventDate, now)) continue;
+    const exclusionReason = candidateExclusionReason(candidate, now);
+    if (exclusionReason === 'expired') {
+      summary.skippedExpired += 1;
+      continue;
+    }
+    if (exclusionReason === 'outside_region') {
+      summary.skippedOutsideRegion += 1;
+      continue;
+    }
 
     const eventDate = candidate.eventDate ? new Date(`${candidate.eventDate}T00:00:00.000Z`) : null;
     const duplicate = eventDate

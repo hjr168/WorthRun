@@ -24,10 +24,14 @@ describe('formatEventSourceRunSummary', () => {
         created: 16,
         updated: 2,
         skippedReviewed: 2,
+        skippedExpired: 3,
+        skippedOutsideRegion: 4,
         duplicateEvents: 1,
         candidateIds: [],
       }),
-    ).toBe('读取 20 条，新增 16 条，更新 2 条，跳过已审核 2 条，疑似重复 1 条');
+    ).toBe(
+      '读取 20 条，新增 16 条，更新 2 条，跳过已审核 2 条，过滤过期 3 条，过滤区域外 4 条，疑似重复 1 条',
+    );
   });
 
   it('formats source schedules and run history fields', () => {

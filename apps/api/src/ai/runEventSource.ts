@@ -22,7 +22,11 @@ export class AiIngestError extends Error {
   }
 }
 
-export function buildCandidateFingerprint(eventName: string, city: string, eventDate: string | null) {
+export function buildCandidateFingerprint(
+  eventName: string,
+  city: string,
+  eventDate: string | null,
+) {
   return [eventName.trim(), city.trim(), eventDate || 'unknown-date'].join('|');
 }
 
@@ -111,6 +115,8 @@ export async function runEventSource(
         created: summary.created,
         updated: summary.updated,
         skippedReviewed: summary.skippedReviewed,
+        skippedExpired: summary.skippedExpired,
+        skippedOutsideRegion: summary.skippedOutsideRegion,
         duplicateEvents: summary.duplicateEvents,
       },
     });
@@ -229,6 +235,8 @@ function emptyPersistSummary(): PersistSummary {
     created: 0,
     updated: 0,
     skippedReviewed: 0,
+    skippedExpired: 0,
+    skippedOutsideRegion: 0,
     duplicateEvents: 0,
     candidateIds: [],
   };
@@ -239,6 +247,8 @@ function mergePersistSummary(target: PersistSummary, value: PersistSummary) {
   target.created += value.created;
   target.updated += value.updated;
   target.skippedReviewed += value.skippedReviewed;
+  target.skippedExpired += value.skippedExpired;
+  target.skippedOutsideRegion += value.skippedOutsideRegion;
   target.duplicateEvents += value.duplicateEvents;
   target.candidateIds.push(...value.candidateIds);
 }
@@ -302,6 +312,8 @@ export function formatRunStatus(summary: Pick<PersistSummary, keyof PersistSumma
     `created=${summary.created}`,
     `updated=${summary.updated}`,
     `skipped=${summary.skippedReviewed}`,
+    `expired=${summary.skippedExpired}`,
+    `outside=${summary.skippedOutsideRegion}`,
     `duplicates=${summary.duplicateEvents}`,
   ].join(',');
 }

@@ -1,3 +1,4 @@
+import { isGreaterBayAreaCity, normalizeGreaterBayAreaCity } from '@worth-running/shared';
 import { z } from 'zod';
 
 export const CHINAATH_PUBLIC_LIST_URL = 'https://www.runchina.org.cn/#/race/v/list';
@@ -10,7 +11,11 @@ export const CHINAATH_ALLOWED_DOMAINS = [
 const optionalUrlSchema = z
   .union([
     z.string().trim().url('入口 URL 必须是有效 URL'),
-    z.string().trim().length(0).transform(() => null),
+    z
+      .string()
+      .trim()
+      .length(0)
+      .transform(() => null),
     z.null(),
     z.undefined().transform(() => null),
   ])
@@ -18,9 +23,7 @@ const optionalUrlSchema = z
 
 const baseEventSourceSchema = z.object({
   name: z.string().trim().min(1, '赛事源名称不能为空'),
-  sourceType: z
-    .enum(['page_url', 'chinaath_api', 'search_query', 'rss'])
-    .default('page_url'),
+  sourceType: z.enum(['page_url', 'chinaath_api', 'search_query', 'rss']).default('page_url'),
   entryUrl: optionalUrlSchema,
   searchQuery: z.string().trim().optional().nullable().default(null),
   allowedDomains: z.array(z.string().trim().min(1)).default([]),
@@ -42,15 +45,28 @@ export const eventSourceSchema = baseEventSourceSchema
         message: '页面 URL 赛事源缺少入口 URL',
       });
     }
+    input.cityHints.forEach((city, index) => {
+      if (!isGreaterBayAreaCity(city)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['cityHints', index],
+          message: '目标城市必须属于粤港澳大湾区',
+        });
+      }
+    });
   })
   .transform((input) => {
-    if (input.sourceType === 'page_url') {
-      return { ...input, pageSize: 1, maxPagesPerRun: 1 };
+    const normalized = {
+      ...input,
+      cityHints: input.cityHints.map((city) => normalizeGreaterBayAreaCity(city) as string),
+    };
+    if (normalized.sourceType === 'page_url') {
+      return { ...normalized, pageSize: 1, maxPagesPerRun: 1 };
     }
-    if (input.sourceType !== 'chinaath_api') return input;
+    if (normalized.sourceType !== 'chinaath_api') return normalized;
 
     return {
-      ...input,
+      ...normalized,
       entryUrl: CHINAATH_PUBLIC_LIST_URL,
       searchQuery: null,
       allowedDomains: [...CHINAATH_ALLOWED_DOMAINS],

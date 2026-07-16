@@ -94,6 +94,11 @@ enum EventSourceRunStatus {
   failed
 }
 
+enum EventInteractionAction {
+  event_detail_view
+  official_link_copy
+}
+
 model Event {
   id               String               @id @default(cuid())
   eventName        String               @map("event_name")
@@ -128,6 +133,7 @@ model Event {
   favorites      UserFavorite[]
   feedback       Feedback[]
   shareRecords   ShareRecord[]
+  interactions   EventInteraction[]
 
   @@index([city])
   @@index([eventDate])
@@ -367,6 +373,8 @@ model EventSourceRun {
   created         Int                  @default(0)
   updated         Int                  @default(0)
   skippedReviewed Int                  @default(0) @map("skipped_reviewed")
+  skippedExpired  Int                  @default(0) @map("skipped_expired")
+  skippedOutsideRegion Int             @default(0) @map("skipped_outside_region")
   duplicateEvents Int                  @default(0) @map("duplicate_events")
   errorMessage    String?              @map("error_message")
   createdAt       DateTime             @default(now()) @map("created_at")
@@ -391,4 +399,20 @@ model ShareRecord {
   @@index([eventId])
   @@index([createdAt])
   @@map("share_records")
+}
+
+model EventInteraction {
+  id           String                 @id @default(cuid())
+  userKeyHash  String                 @map("user_key_hash")
+  eventId      String                 @map("event_id")
+  action       EventInteractionAction
+  occurredDate DateTime               @map("occurred_date") @db.Date
+  createdAt    DateTime               @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userKeyHash, eventId, action, occurredDate])
+  @@index([eventId, action, occurredDate])
+  @@index([action, occurredDate])
+  @@map("event_interactions")
 }

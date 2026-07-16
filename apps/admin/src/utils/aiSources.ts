@@ -6,6 +6,8 @@ export function formatEventSourceRunSummary(summary: EventSourceRunSummary) {
     `新增 ${summary.created} 条`,
     `更新 ${summary.updated} 条`,
     `跳过已审核 ${summary.skippedReviewed} 条`,
+    `过滤过期 ${summary.skippedExpired} 条`,
+    `过滤区域外 ${summary.skippedOutsideRegion} 条`,
     `疑似重复 ${summary.duplicateEvents} 条`,
   ].join('，');
 }

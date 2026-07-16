@@ -77,6 +77,8 @@ export async function main() {
       fetched: result?.fetched,
       created: result?.created,
       updated: result?.updated,
+      skippedExpired: result?.skippedExpired,
+      skippedOutsideRegion: result?.skippedOutsideRegion,
       rssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     }),
   );

@@ -808,7 +808,11 @@ export function AiSourcesPage() {
               </Form.Item>
             </>
           )}
-          <Form.Item label="城市提示" name="cityHints" extra="多个城市用逗号或换行分隔">
+          <Form.Item
+            label="目标城市"
+            name="cityHints"
+            extra="仅可填写大湾区城市；留空时仍执行全局大湾区过滤"
+          >
             <Input placeholder="广州, 深圳, 佛山" />
           </Form.Item>
           <div className="form-grid compact-form-grid">
@@ -906,9 +910,9 @@ export function AiSourcesPage() {
             },
             {
               title: '结果',
-              width: 220,
+              width: 320,
               render: (_, record) =>
-                `读取 ${record.fetched}，新增 ${record.created}，更新 ${record.updated}`,
+                `读取 ${record.fetched}，新增 ${record.created}，更新 ${record.updated}，过期 ${record.skippedExpired}，区域外 ${record.skippedOutsideRegion}`,
             },
             {
               title: '耗时',

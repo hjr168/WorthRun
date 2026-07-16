@@ -42,6 +42,7 @@ import {
   publicFeedbackTypes,
 } from './feedbackAbuse.js';
 import { getMiniProgramCode } from './wxacode.js';
+import { buildPublicEventWhere, publishBoundaryError } from './dataPolicy.js';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -65,7 +66,10 @@ const corsOrigins = (process.env.CORS_ORIGINS ?? '')
 
 function isPrivateIpv4Host(hostname: string) {
   const parts = hostname.split('.').map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
     return false;
   }
   const [first, second] = parts;
@@ -313,7 +317,12 @@ const adminFeedbackQuerySchema = paginationQuerySchema.extend({
 });
 
 const adminFeedbackDuplicateQuerySchema = z.object({
-  hours: z.coerce.number().int().min(1).max(24 * 30).default(24),
+  hours: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .default(24),
 });
 
 const feedbackDuplicateResolveSchema = z.object({
@@ -491,6 +500,7 @@ function validatePublish(event: Awaited<ReturnType<typeof prisma.event.findUniqu
   if (!event.sourceLevel) missing.push('来源等级');
   if (!event.runJudgement) missing.push('跑前判断');
   if (missing.length > 0) throw new HttpError(400, `发布前必填缺失：${missing.join('、')}`);
+  validatePublishBoundary(event.city, event.eventDate.toISOString().slice(0, 10));
 
   const text = [
     event.eventName,
@@ -506,6 +516,11 @@ function validatePublish(event: Awaited<ReturnType<typeof prisma.event.findUniqu
   if (event.infoStatus === 'user_flagged') {
     throw new HttpError(400, '信息状态为用户反馈异常，处理前不能发布');
   }
+}
+
+function validatePublishBoundary(city: string, eventDate: string, now: Date = new Date()) {
+  const message = publishBoundaryError(city, eventDate, now);
+  if (message) throw new HttpError(400, message);
 }
 
 async function writeOperationLog(params: {
@@ -550,7 +565,10 @@ async function consumeFeedbackRateLimit(
     update: { count: { increment: 1 } },
   });
   if (result.count > config.limit) {
-    throw new RateLimitError('提交过于频繁，请稍后再试', getRetryAfterSeconds(now, config.windowMs));
+    throw new RateLimitError(
+      '提交过于频繁，请稍后再试',
+      getRetryAfterSeconds(now, config.windowMs),
+    );
   }
 }
 
@@ -586,9 +604,7 @@ app.get(
       await prisma.$queryRaw`SELECT 1`;
       res.json({ ok: true, database: 'ok', timestamp: new Date().toISOString() });
     } catch {
-      res
-        .status(503)
-        .json({ ok: false, database: 'error', timestamp: new Date().toISOString() });
+      res.status(503).json({ ok: false, database: 'error', timestamp: new Date().toISOString() });
     }
   }),
 );
@@ -687,6 +703,9 @@ app.post(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
     const input = validateBody(eventSchema, req.body);
+    if (input.publishStatus === 'published') {
+      validatePublishBoundary(input.city, input.eventDate);
+    }
     const event = await prisma.event.create({
       data: {
         ...eventDataFromInput(input),
@@ -740,6 +759,9 @@ app.put(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
     const input = validateBody(eventSchema, req.body);
+    if (input.publishStatus === 'published') {
+      validatePublishBoundary(input.city, input.eventDate);
+    }
     const before = await prisma.event.findUnique({
       where: { id: req.params.id },
       include: { checklistItems: true, eventTags: true },
@@ -883,7 +905,10 @@ app.get(
       const clusters: Array<typeof bucket> = [];
       for (const item of bucket) {
         const current = clusters.at(-1);
-        if (!current || item.createdAt.getTime() - current[0].createdAt.getTime() > 24 * 60 * 60 * 1000) {
+        if (
+          !current ||
+          item.createdAt.getTime() - current[0].createdAt.getTime() > 24 * 60 * 60 * 1000
+        ) {
           clusters.push([item]);
         } else {
           current.push(item);
@@ -891,7 +916,11 @@ app.get(
       }
       return clusters
         .filter((cluster) => cluster.length > 1)
-        .map((cluster) => ({ primary: cluster[0], duplicates: cluster.slice(1), count: cluster.length }));
+        .map((cluster) => ({
+          primary: cluster[0],
+          duplicates: cluster.slice(1),
+          count: cluster.length,
+        }));
     });
     res.json({ groups });
   }),
@@ -910,7 +939,8 @@ app.post(
     });
     const primary = records.find((item) => item.id === input.primaryId);
     const duplicates = records.filter((item) => duplicateIds.includes(item.id));
-    if (!primary || duplicates.length !== duplicateIds.length) throw new HttpError(404, '反馈不存在');
+    if (!primary || duplicates.length !== duplicateIds.length)
+      throw new HttpError(404, '反馈不存在');
     if (duplicates.some((item) => !['pending', 'handling'].includes(item.status))) {
       throw new HttpError(409, '只能批量驳回待处理或处理中反馈');
     }
@@ -1182,7 +1212,7 @@ app.post(
         targetType: 'event_sources',
         targetId: req.params.id,
         afterValue: summary,
-        note: `手动抓取赛事源：新增 ${summary.created}，更新 ${summary.updated}，跳过 ${summary.skippedReviewed}`,
+        note: `手动抓取赛事源：新增 ${summary.created}，更新 ${summary.updated}，跳过已审核 ${summary.skippedReviewed}，过滤过期 ${summary.skippedExpired}，过滤区域外 ${summary.skippedOutsideRegion}`,
       });
       res.status(201).json(summary);
     } catch (error) {
@@ -1358,6 +1388,7 @@ app.post(
     const officialUrl = data.officialUrl;
     const sourceUrl = data.sourceUrl;
     const eventDate = data.eventDate;
+    validatePublishBoundary(data.city, eventDate);
 
     const result = await prisma.$transaction(async (tx) => {
       const event = await tx.event.create({
@@ -1512,7 +1543,7 @@ app.get(
   asyncHandler(async (req, res) => {
     const query = validateQuery(publicEventsQuerySchema, req.query) as PublicEventsQuery;
     const { page, pageSize } = query;
-    const where: Prisma.EventWhereInput = { publishStatus: 'published' };
+    const where: Prisma.EventWhereInput = buildPublicEventWhere();
     if (query.city) where.city = query.city;
     if (query.distance) where.distanceItems = { has: query.distance };
     if (query.signupStatus) where.signupStatus = query.signupStatus;
@@ -1550,7 +1581,7 @@ app.get(
   '/api/events/:id',
   asyncHandler(async (req, res) => {
     const event = await prisma.event.findFirst({
-      where: { id: req.params.id, publishStatus: 'published' },
+      where: { id: req.params.id, ...buildPublicEventWhere() },
       include: { checklistItems: { orderBy: { sortOrder: 'asc' } }, eventTags: true },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
@@ -1588,7 +1619,7 @@ app.post(
   asyncHandler(async (req, res) => {
     const input = validateBody(favoriteSchema, req.body);
     const event = await prisma.event.findFirst({
-      where: { id: input.eventId, publishStatus: 'published' },
+      where: { id: input.eventId, ...buildPublicEventWhere() },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
     const favorite = await prisma.userFavorite.upsert({
@@ -1616,7 +1647,7 @@ app.get(
     const userKey = String(req.query.userKey || '');
     if (!userKey) throw new HttpError(400, 'userKey 不能为空');
     const items = await prisma.userFavorite.findMany({
-      where: { userKey, event: { publishStatus: 'published' } },
+      where: { userKey, event: buildPublicEventWhere() },
       include: { event: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -1629,7 +1660,7 @@ app.post(
   asyncHandler(async (req, res) => {
     const input = validateBody(publicFeedbackSchema, req.body);
     const event = await prisma.event.findFirst({
-      where: { id: input.eventId, publishStatus: 'published' },
+      where: { id: input.eventId, ...buildPublicEventWhere() },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
     const content = normalizeFeedbackContent(input.content);
@@ -1649,7 +1680,9 @@ app.post(
     try {
       const feedback = await prisma.$transaction(async (tx) => {
         // 先占用指纹，再写限流计数；并发相同提交会在唯一约束处回滚为一条记录。
-        await tx.feedbackFingerprint.deleteMany({ where: { fingerprint, expiresAt: { lte: now } } });
+        await tx.feedbackFingerprint.deleteMany({
+          where: { fingerprint, expiresAt: { lte: now } },
+        });
         const created = await tx.feedback.create({
           data: {
             eventId: input.eventId,
@@ -1727,35 +1760,140 @@ const defaultChecklistTemplates: Record<
   Array<{ groupName: string; itemName: string; itemStatus: string; sortOrder: number }>
 > = {
   general: [
-    { groupName: '报名信息', itemName: '报名截止与是否抽签', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '领物安排', itemName: '领物时间、地点、证件要求', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '交通安排', itemName: '起终点交通、存包和接驳', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '装备', itemName: '号码布、芯片、跑鞋、补给', itemStatus: 'pending_verify', sortOrder: 4 },
-    { groupName: '风险提示', itemName: '天气变化和赛事变更公告', itemStatus: 'pending_verify', sortOrder: 5 },
+    {
+      groupName: '报名信息',
+      itemName: '报名截止与是否抽签',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '领物安排',
+      itemName: '领物时间、地点、证件要求',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '交通安排',
+      itemName: '起终点交通、存包和接驳',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '装备',
+      itemName: '号码布、芯片、跑鞋、补给',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
+    {
+      groupName: '风险提示',
+      itemName: '天气变化和赛事变更公告',
+      itemStatus: 'pending_verify',
+      sortOrder: 5,
+    },
   ],
   '5K': [
-    { groupName: '完赛目标', itemName: '确认起跑时间和关门时间', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '装备', itemName: '轻便跑鞋和基础补水', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '新手提醒', itemName: '赛前不临时更换新装备', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '交通安排', itemName: '提前确认短距离项目检录口', itemStatus: 'pending_verify', sortOrder: 4 },
+    {
+      groupName: '完赛目标',
+      itemName: '确认起跑时间和关门时间',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '装备',
+      itemName: '轻便跑鞋和基础补水',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '新手提醒',
+      itemName: '赛前不临时更换新装备',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '交通安排',
+      itemName: '提前确认短距离项目检录口',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
   ],
   '10K': [
-    { groupName: '配速计划', itemName: '确认目标配速和补给点位置', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '装备', itemName: '跑鞋、能量胶或随身补给', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '赛事规则', itemName: '确认分区、检录和关门时间', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '恢复安排', itemName: '赛后换衣、拉伸和返程路线', itemStatus: 'pending_verify', sortOrder: 4 },
+    {
+      groupName: '配速计划',
+      itemName: '确认目标配速和补给点位置',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '装备',
+      itemName: '跑鞋、能量胶或随身补给',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '赛事规则',
+      itemName: '确认分区、检录和关门时间',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '恢复安排',
+      itemName: '赛后换衣、拉伸和返程路线',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
   ],
   half: [
-    { groupName: '训练状态', itemName: '确认最近长距离训练和身体状态', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '补给策略', itemName: '确认能量胶、水站和盐丸安排', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '赛事规则', itemName: '确认半马关门时间和医疗点', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '装备', itemName: '比赛鞋、袜子、防磨和号码布固定', itemStatus: 'pending_verify', sortOrder: 4 },
+    {
+      groupName: '训练状态',
+      itemName: '确认最近长距离训练和身体状态',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '补给策略',
+      itemName: '确认能量胶、水站和盐丸安排',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '赛事规则',
+      itemName: '确认半马关门时间和医疗点',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '装备',
+      itemName: '比赛鞋、袜子、防磨和号码布固定',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
   ],
   full: [
-    { groupName: '身体状态', itemName: '确认无伤病、睡眠和赛前减量', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '补给策略', itemName: '确认全程补给节奏和备用方案', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '赛事规则', itemName: '确认分段关门时间、医疗点和退赛车', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '赛后安排', itemName: '确认完赛后保暖、换衣和返程', itemStatus: 'pending_verify', sortOrder: 4 },
+    {
+      groupName: '身体状态',
+      itemName: '确认无伤病、睡眠和赛前减量',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '补给策略',
+      itemName: '确认全程补给节奏和备用方案',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '赛事规则',
+      itemName: '确认分段关门时间、医疗点和退赛车',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '赛后安排',
+      itemName: '确认完赛后保暖、换衣和返程',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
   ],
 };
 
@@ -1764,13 +1902,18 @@ app.get(
   asyncHandler(async (req, res) => {
     const type = String(req.query.type || 'general');
     // 优先读 system_config checklist_templates（与后台内容配置页联动），fallback 到内置默认。
-    let items: Array<{ groupName: string; itemName: string; itemStatus: string; sortOrder: number }> =
-      defaultChecklistTemplates.general;
+    let items: Array<{
+      groupName: string;
+      itemName: string;
+      itemStatus: string;
+      sortOrder: number;
+    }> = defaultChecklistTemplates.general;
     try {
       const config = await prisma.systemConfig.findUnique({
         where: { configKey: 'checklist_templates' },
       });
-      const templates = (config?.configValue as Record<string, unknown>) || defaultChecklistTemplates;
+      const templates =
+        (config?.configValue as Record<string, unknown>) || defaultChecklistTemplates;
       const candidate = templates[type] || templates.general || defaultChecklistTemplates.general;
       if (Array.isArray(candidate)) {
         items = candidate as typeof items;
