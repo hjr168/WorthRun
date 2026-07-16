@@ -71,6 +71,17 @@ import {
   runFeedbackBulk,
 } from './feedbackWorkflow.js';
 import { chinaDay } from './feedbackMaintenance.js';
+import {
+  EventChangeConflictError,
+  EventChangeNotFoundError,
+  EventChangeResolutionError,
+  eventChangeFields,
+  eventChangeSignalFields,
+  getEventChangeAlertSummary,
+  listEventChangeAlerts,
+  previewEventChangeResolution,
+  resolveEventChangeAlert,
+} from './eventChangeWorkflow.js';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -421,6 +432,38 @@ const operationLogsQuerySchema = paginationQuerySchema.extend({
   targetId: queryStringSchema,
   action: queryStringSchema,
 });
+
+const eventChangeAlertQuerySchema = paginationQuerySchema
+  .extend({
+    pageSize: z.coerce.number().int().min(1).max(50).default(20),
+    status: z.enum(['open', 'applied', 'dismissed', 'archived_event', 'superseded']).optional(),
+    severity: z.enum(['normal', 'important', 'critical']).optional(),
+    changedField: z.enum([...eventChangeFields, ...eventChangeSignalFields]).optional(),
+    search: queryStringSchema,
+  });
+
+const eventChangeResolveSchema = z
+  .object({
+    dryRun: z.boolean().default(true),
+    action: z.enum(['apply_fields', 'dismiss', 'archive_event']),
+    fields: z.array(z.enum(eventChangeFields)).max(eventChangeFields.length).optional(),
+    note: z.string().trim().min(4, '处理备注至少 4 个字').max(500),
+    expected: z
+      .object({
+        alertUpdatedAt: z.string().datetime(),
+        eventUpdatedAt: z.string().datetime(),
+      })
+      .optional(),
+  })
+  .superRefine((input, context) => {
+    if (!input.dryRun && !input.expected) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expected'],
+        message: '应用处理必须携带预览快照',
+      });
+    }
+  });
 
 type PublicEventsQuery = {
   page: number;
@@ -1379,6 +1422,60 @@ app.patch(
     });
 
     res.json(updated);
+  }),
+);
+
+app.get(
+  '/api/admin/event-change-alerts/summary',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    res.json(await getEventChangeAlertSummary());
+  }),
+);
+
+app.get(
+  '/api/admin/event-change-alerts',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = eventChangeAlertQuerySchema.parse(req.query);
+    res.json(await listEventChangeAlerts(query));
+  }),
+);
+
+app.post(
+  '/api/admin/event-change-alerts/:id/resolve',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = eventChangeResolveSchema.parse(req.body);
+    if (
+      input.action !== 'dismiss' &&
+      admin.role !== 'super_admin' &&
+      admin.role !== 'event_operator'
+    ) {
+      throw new HttpError(403, '当前角色只能忽略变更告警');
+    }
+    try {
+      if (input.dryRun) {
+        res.json({
+          dryRun: true,
+          preview: await previewEventChangeResolution(req.params.id, input),
+        });
+        return;
+      }
+      res.json({
+        dryRun: false,
+        result: await resolveEventChangeAlert(req.params.id, {
+          ...input,
+          expected: input.expected!,
+          adminUserId: admin.id,
+        }),
+      });
+    } catch (error) {
+      if (error instanceof EventChangeNotFoundError) throw new HttpError(404, error.message);
+      if (error instanceof EventChangeConflictError) throw new HttpError(409, error.message);
+      if (error instanceof EventChangeResolutionError) throw new HttpError(400, error.message);
+      throw error;
+    }
   }),
 );
 
