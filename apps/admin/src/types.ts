@@ -25,6 +25,7 @@ export interface AdminEvent {
   tags: string[];
   fieldConfidence?: Record<string, InfoStatus>;
   updatedAt: string;
+  sourceCheckedAt?: string | null;
   checklistItems: Array<{
     id?: string;
     groupName: string;
@@ -34,6 +35,68 @@ export interface AdminEvent {
     sortOrder?: number;
   }>;
   eventTags: Array<{ id?: string; tagName: string; tagType: string }>;
+}
+
+export type EventChangeAlertStatus =
+  | 'open'
+  | 'applied'
+  | 'dismissed'
+  | 'archived_event'
+  | 'superseded';
+export type EventChangeSeverity = 'normal' | 'important' | 'critical';
+export type EventChangeField =
+  | 'eventDate'
+  | 'distanceItems'
+  | 'signupStatus'
+  | 'signupDeadline'
+  | 'officialUrl'
+  | 'cancellationSignal'
+  | 'postponementSignal';
+
+export interface EventChangeAlertItem {
+  id: string;
+  eventId: string;
+  sourceId: string;
+  status: EventChangeAlertStatus;
+  severity: EventChangeSeverity;
+  changedFields: EventChangeField[];
+  beforeValue: Record<string, unknown>;
+  afterValue: Record<string, unknown>;
+  evidence: Array<{ field?: string; sourceUrl?: string; quote?: string }>;
+  sourceUrl?: string | null;
+  reviewNote?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  event: AdminEvent;
+  source: Pick<EventSourceItem, 'id' | 'name' | 'sourceLevel' | 'sourceType'>;
+}
+
+export interface EventChangeAlertQuery {
+  page: number;
+  pageSize: number;
+  status?: EventChangeAlertStatus | '';
+  severity?: EventChangeSeverity | '';
+  changedField?: EventChangeField | '';
+  search?: string;
+}
+
+export interface EventChangeAlertSummary {
+  open: number;
+  critical: number;
+  important: number;
+  stalePublishedEvents: number;
+  checkedWithin7Days: number;
+  appliedWithin30Days: number;
+}
+
+export interface EventChangeResolutionPreview {
+  alertId: string;
+  action: 'apply_fields' | 'dismiss' | 'archive_event';
+  ready: boolean;
+  issues: string[];
+  changes: Record<string, { before: unknown; after: unknown }>;
+  expected: { alertUpdatedAt: string; eventUpdatedAt: string };
 }
 
 export interface OperationLog {
@@ -182,6 +245,8 @@ export interface EventSourceRunSummary {
   skippedExpired: number;
   skippedOutsideRegion: number;
   duplicateEvents: number;
+  changeAlertsCreated: number;
+  changeAlertsExisting: number;
   candidateIds: string[];
 }
 
@@ -203,6 +268,8 @@ export interface EventSourceRunItem {
   skippedExpired: number;
   skippedOutsideRegion: number;
   duplicateEvents: number;
+  changeAlertsCreated: number;
+  changeAlertsExisting: number;
   errorMessage?: string | null;
   source?: Pick<EventSourceItem, 'id' | 'name' | 'sourceType'>;
 }

@@ -9,6 +9,7 @@ import {
   SettingOutlined,
   ShareAltOutlined,
   ToolOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import {
@@ -34,6 +35,7 @@ import { ContentPage } from './pages/ContentPage';
 import { ShareStatsPage } from './pages/ShareStatsPage';
 import { LogsPage } from './pages/LogsPage';
 import { AdminProvider } from './context/AdminContext';
+import { EventChangesPage } from './pages/EventChangesPage';
 
 const { Content, Sider } = Layout;
 
@@ -79,7 +81,9 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
   const location = useLocation();
   const selectedKey = location.pathname.startsWith('/events')
     ? '/events'
-    : location.pathname.startsWith('/ai-sources')
+    : location.pathname.startsWith('/event-changes')
+      ? '/event-changes'
+      : location.pathname.startsWith('/ai-sources')
       ? '/ai-sources'
       : location.pathname.startsWith('/content')
         ? '/content'
@@ -116,6 +120,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               key: '/ai-sources',
               icon: <RobotOutlined />,
               label: <Link to="/ai-sources">AI 赛事源</Link>,
+            },
+            {
+              key: '/event-changes',
+              icon: <WarningOutlined />,
+              label: <Link to="/event-changes">变更复核</Link>,
             },
             {
               key: '/quality',
@@ -160,6 +169,7 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/events/edit" element={<EventEditPage />} />
             <Route path="/events/edit/:id" element={<EventEditPage />} />
             <Route path="/ai-sources" element={<AiSourcesPage />} />
+            <Route path="/event-changes" element={<EventChangesPage />} />
             <Route path="/quality" element={<QualityPage />} />
             <Route path="/share-stats" element={<ShareStatsPage />} />
             <Route path="/content" element={<ContentPage />} />

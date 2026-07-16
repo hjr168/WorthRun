@@ -16,6 +16,8 @@ export type AdminAction =
   | 'manage_settings' // 系统设置写、内容配置写、管理员管理
   | 'manage_ai_sources'
   | 'review_ai_candidates'
+  | 'review_event_changes'
+  | 'apply_event_changes'
   | 'view';
 
 const ROLE_MATRIX: Record<AdminAction, string[]> = {
@@ -27,6 +29,8 @@ const ROLE_MATRIX: Record<AdminAction, string[]> = {
   manage_settings: [],
   manage_ai_sources: ['event_operator'],
   review_ai_candidates: ['event_operator', 'content_reviewer'],
+  review_event_changes: ['event_operator', 'content_reviewer'],
+  apply_event_changes: ['event_operator'],
   view: ['event_operator', 'content_reviewer', 'readonly'],
 };
 
