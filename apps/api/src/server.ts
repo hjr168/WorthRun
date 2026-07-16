@@ -43,6 +43,12 @@ import {
 } from './feedbackAbuse.js';
 import { getMiniProgramCode } from './wxacode.js';
 import { buildPublicEventWhere, publishBoundaryError } from './dataPolicy.js';
+import {
+  DataCleanupConflictError,
+  dataCleanupActions,
+  getDataQualitySummary,
+  runDataCleanup,
+} from './dataGovernance.js';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -231,6 +237,12 @@ const candidateReviewSchema = z.object({
 
 const candidatePatchSchema = z.object({
   extractedData: aiEventCandidateSchema,
+});
+
+const dataCleanupSchema = z.object({
+  actions: z.array(z.enum(dataCleanupActions)).min(1, '请至少选择一项治理动作'),
+  dryRun: z.boolean().default(true),
+  expected: z.record(z.enum(dataCleanupActions), z.number().int().min(0)).optional(),
 });
 
 const adminUserCreateSchema = z.object({
@@ -665,6 +677,38 @@ app.get(
       ]);
 
     res.json({ totalEvents, publishedEvents, pendingVerifyEvents, pendingFeedback, recentLogs });
+  }),
+);
+
+app.get(
+  '/api/admin/data-quality/summary',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    res.json(await getDataQualitySummary());
+  }),
+);
+
+app.post(
+  '/api/admin/data-quality/cleanup',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, [
+      'super_admin',
+      'event_operator',
+      'content_reviewer',
+      'readonly',
+    ]);
+    const input = validateBody(dataCleanupSchema, req.body);
+    if (!input.dryRun && admin.role !== 'super_admin') {
+      throw new HttpError(403, '只有超级管理员可以应用数据治理');
+    }
+    try {
+      res.json(
+        await runDataCleanup({ ...input, dryRun: input.dryRun ?? true, adminUserId: admin.id }),
+      );
+    } catch (error) {
+      if (error instanceof DataCleanupConflictError) throw new HttpError(409, error.message);
+      throw error;
+    }
   }),
 );
 

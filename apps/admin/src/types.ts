@@ -190,3 +190,28 @@ export interface EventCandidateItem {
   updatedAt: string;
   source?: EventSourceItem | null;
 }
+
+export type DataCleanupAction =
+  | 'reject_expired_candidates'
+  | 'reject_outside_region_candidates'
+  | 'archive_expired_events'
+  | 'archive_outside_region_events'
+  | 'reject_invalid_feedback'
+  | 'reject_duplicate_feedback';
+
+export interface DataQualitySummary {
+  futureGreaterBayAreaPublished: number;
+  reject_expired_candidates: number;
+  reject_outside_region_candidates: number;
+  archive_expired_events: number;
+  archive_outside_region_events: number;
+  reject_invalid_feedback: number;
+  reject_duplicate_feedback: number;
+}
+
+export interface DataCleanupResult {
+  dryRun: boolean;
+  actions: DataCleanupAction[];
+  counts: Partial<Record<DataCleanupAction, number>>;
+  samples: Partial<Record<DataCleanupAction, string[]>>;
+}

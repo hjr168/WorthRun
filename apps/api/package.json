@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --max-old-space-size=256 dist/apps/api/src/server.js",
     "event-source:run-due": "node --max-old-space-size=160 dist/apps/api/src/eventSourceCron.js",
+    "data-quality:cleanup": "node --max-old-space-size=160 dist/apps/api/src/dataGovernanceCli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
