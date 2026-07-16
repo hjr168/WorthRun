@@ -3,6 +3,7 @@ import {
   EventDetail,
   getEventDetail,
   getFavorites,
+  recordInteraction,
   recordShare,
   removeFavorite,
 } from '../../utils/api';
@@ -58,6 +59,11 @@ Page({
         officialActionText: detail.officialActionText || officialActionText,
         loading: false,
       });
+      recordInteraction({
+        userKey: this.data.userKey,
+        eventId: detail.event.id,
+        action: 'event_detail_view',
+      }).catch(() => {});
     } catch (error) {
       this.setData({
         loading: false,
@@ -90,14 +96,20 @@ Page({
     }
     wx.setClipboardData({
       data: url,
-      success: () =>
+      success: () => {
+        recordInteraction({
+          userKey: this.data.userKey,
+          eventId: this.data.id,
+          action: 'official_link_copy',
+        }).catch(() => {});
         wx.showModal({
           title: '官方链接已复制',
           content:
             '小程序暂不直接跳转外部链接，已为你复制官方链接。请在浏览器或微信中打开后，以官方信息为准。',
           showCancel: false,
           confirmText: '知道了',
-        }),
+        });
+      },
       fail: () => wx.showToast({ title: '请前往官方渠道确认', icon: 'none' }),
     });
   },
@@ -119,9 +131,7 @@ Page({
       }).catch(() => {});
     }
     return {
-      title: event
-        ? `这场值得跑吗？${event.eventName}`
-        : '哪场值得跑｜大湾区跑步赛事决策工具',
+      title: event ? `这场值得跑吗？${event.eventName}` : '哪场值得跑｜大湾区跑步赛事决策工具',
       path: event ? `/pages/event-detail/index?id=${event.id}` : '/pages/home/index',
     };
   },

@@ -205,3 +205,15 @@ export function recordShare(data: {
 }) {
   return request<{ id: string }>('/api/share-records', { method: 'POST', data, silent: true });
 }
+
+export function recordInteraction(data: {
+  userKey: string;
+  eventId: string;
+  action: 'event_detail_view' | 'official_link_copy';
+}) {
+  return request<{ recorded: true }>('/api/interactions', {
+    method: 'POST',
+    data,
+    silent: true,
+  });
+}

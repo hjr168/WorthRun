@@ -116,3 +116,7 @@ function recordShare(data) {
     return request('/api/share-records', { method: 'POST', data: data, silent: true });
 }
 exports.recordShare = recordShare;
+function recordInteraction(data) {
+    return request('/api/interactions', { method: 'POST', data: data, silent: true });
+}
+exports.recordInteraction = recordInteraction;

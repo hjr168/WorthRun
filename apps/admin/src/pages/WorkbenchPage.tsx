@@ -1,9 +1,15 @@
-import { Alert, Button, Card, Modal, Space, Statistic, message } from 'antd';
+import { Alert, Button, Card, Modal, Segmented, Space, Statistic, Typography, message } from 'antd';
 import { PlusOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiSend } from '../api';
-import { DataCleanupAction, DataCleanupResult, DataQualitySummary, OperationLog } from '../types';
+import {
+  DataCleanupAction,
+  DataCleanupResult,
+  DataQualitySummary,
+  InteractionStats,
+  OperationLog,
+} from '../types';
 import { showError } from '../utils/helpers';
 import { OperationLogTable } from '../components/OperationLogTable';
 import { useAdmin } from '../context/AdminContext';
@@ -36,6 +42,8 @@ export function WorkbenchPage() {
     recentLogs: OperationLog[];
   }>();
   const [quality, setQuality] = useState<DataQualitySummary>();
+  const [metricDays, setMetricDays] = useState<7 | 30>(30);
+  const [metrics, setMetrics] = useState<InteractionStats>();
   const [cleaning, setCleaning] = useState(false);
 
   const load = () =>
@@ -45,6 +53,11 @@ export function WorkbenchPage() {
     ]).catch(showError);
 
   useEffect(() => void load(), []);
+  useEffect(() => {
+    apiGet<InteractionStats>(`/api/admin/interaction-stats?days=${metricDays}`)
+      .then(setMetrics)
+      .catch(showError);
+  }, [metricDays]);
 
   const previewCleanup = async () => {
     try {
@@ -166,6 +179,46 @@ export function WorkbenchPage() {
                   (quality?.reject_duplicate_feedback || 0)
                 }
               />
+            </Card>
+          </div>
+        </section>
+        <section className="form-section">
+          <div className="section-heading">
+            <h2>运营指标</h2>
+            <Segmented
+              value={metricDays}
+              options={[
+                { label: '近 7 天', value: 7 },
+                { label: '近 30 天', value: 30 },
+              ]}
+              onChange={(value) => setMetricDays(value as 7 | 30)}
+            />
+          </div>
+          <div className="stat-grid">
+            <Card>
+              <Statistic title="详情用户" value={metrics?.detailUsers ?? 0} />
+              <Typography.Text type="secondary">
+                详情访问 {metrics?.detailViews ?? 0} 次
+              </Typography.Text>
+            </Card>
+            <Card>
+              <Statistic title="官方入口复制" value={metrics?.officialClicks ?? 0} />
+              <Typography.Text type="secondary">
+                转化率 {metrics?.officialClickRate ?? 0}%
+              </Typography.Text>
+            </Card>
+            <Card>
+              <Statistic title="新增收藏" value={metrics?.favoriteAdds ?? 0} />
+              <Typography.Text type="secondary">
+                转化率 {metrics?.favoriteRate ?? 0}%
+              </Typography.Text>
+            </Card>
+            <Card>
+              <Statistic title="分享记录" value={metrics?.shares ?? 0} />
+              <Typography.Text type="secondary">转化率 {metrics?.shareRate ?? 0}%</Typography.Text>
+            </Card>
+            <Card>
+              <Statistic title="偏好用户" value={metrics?.preferenceUsers ?? 0} />
             </Card>
           </div>
         </section>

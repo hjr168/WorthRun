@@ -49,6 +49,11 @@ import {
   getDataQualitySummary,
   runDataCleanup,
 } from './dataGovernance.js';
+import {
+  getInteractionStats,
+  interactionActions,
+  recordEventInteraction,
+} from './interactionAnalytics.js';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -289,6 +294,12 @@ const shareRecordSchema = z.object({
   eventId: z.string().trim().min(1).optional(),
   shareType: z.enum(['page_share', 'image_generate']),
   scene: z.enum(['event_detail', 'after_favorite', 'home', 'events', 'share_card']),
+});
+
+const interactionSchema = z.object({
+  userKey: z.string().trim().min(1, 'userKey 不能为空').max(100),
+  eventId: z.string().trim().min(1, 'eventId 不能为空'),
+  action: z.enum(interactionActions),
 });
 
 const queryStringSchema = z.preprocess((value) => {
@@ -1583,6 +1594,15 @@ app.get(
 );
 
 app.get(
+  '/api/admin/interaction-stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const days = Number(req.query.days) === 7 ? 7 : 30;
+    res.json(await getInteractionStats(days));
+  }),
+);
+
+app.get(
   '/api/events',
   asyncHandler(async (req, res) => {
     const query = validateQuery(publicEventsQuerySchema, req.query) as PublicEventsQuery;
@@ -1782,6 +1802,20 @@ app.post(
       },
     });
     res.status(201).json({ id: record.id });
+  }),
+);
+
+app.post(
+  '/api/interactions',
+  asyncHandler(async (req, res) => {
+    const input = validateBody(interactionSchema, req.body);
+    const event = await prisma.event.findFirst({
+      where: { id: input.eventId, ...buildPublicEventWhere() },
+      select: { id: true },
+    });
+    if (!event) throw new HttpError(404, '赛事不存在或未发布');
+    await recordEventInteraction({ ...input, secret: feedbackAbuseSecret });
+    res.status(201).json({ recorded: true });
   }),
 );
 

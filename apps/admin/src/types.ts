@@ -215,3 +215,17 @@ export interface DataCleanupResult {
   counts: Partial<Record<DataCleanupAction, number>>;
   samples: Partial<Record<DataCleanupAction, string[]>>;
 }
+
+export interface InteractionStats {
+  days: 7 | 30;
+  detailViews: number;
+  detailUsers: number;
+  officialClicks: number;
+  officialUsers: number;
+  favoriteAdds: number;
+  shares: number;
+  preferenceUsers: number;
+  officialClickRate: number;
+  favoriteRate: number;
+  shareRate: number;
+}
