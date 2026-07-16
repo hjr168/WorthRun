@@ -8,6 +8,7 @@ import {
   DataCleanupResult,
   DataQualitySummary,
   InteractionStats,
+  EventChangeAlertSummary,
   OperationLog,
   WorkflowStats,
 } from '../types';
@@ -50,6 +51,7 @@ export function WorkbenchPage() {
   }>();
   const [quality, setQuality] = useState<DataQualitySummary>();
   const [workflow, setWorkflow] = useState<WorkflowStats>();
+  const [eventChanges, setEventChanges] = useState<EventChangeAlertSummary>();
   const [metricDays, setMetricDays] = useState<7 | 30>(30);
   const [metrics, setMetrics] = useState<InteractionStats>();
   const [cleaning, setCleaning] = useState(false);
@@ -59,6 +61,9 @@ export function WorkbenchPage() {
       apiGet<typeof data>('/api/admin/dashboard').then(setData),
       apiGet<DataQualitySummary>('/api/admin/data-quality/summary').then(setQuality),
       apiGet<WorkflowStats>('/api/admin/workflow-stats').then(setWorkflow),
+      apiGet<EventChangeAlertSummary>('/api/admin/event-change-alerts/summary').then(
+        setEventChanges,
+      ),
     ]).catch(showError);
 
   useEffect(() => void load(), []);
@@ -141,6 +146,25 @@ export function WorkbenchPage() {
             <Statistic title="待处理反馈数" value={data?.pendingFeedback ?? 0} />
           </Card>
         </div>
+        <section className="form-section">
+          <div className="section-heading">
+            <h2>信息新鲜度</h2>
+            <Link to="/event-changes">
+              <Button>进入变更复核</Button>
+            </Link>
+          </div>
+          <div className="stat-grid">
+            <Card>
+              <Statistic title="待复核变更" value={eventChanges?.open ?? 0} />
+            </Card>
+            <Card>
+              <Statistic
+                title="超过 14 天未检查"
+                value={eventChanges?.stalePublishedEvents ?? 0}
+              />
+            </Card>
+          </div>
+        </section>
         <section className="form-section">
           <div className="section-heading">
             <h2>发布工作流</h2>

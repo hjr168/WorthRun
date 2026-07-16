@@ -1186,9 +1186,9 @@ export function AiSourcesPage() {
             },
             {
               title: '结果',
-              width: 320,
+              width: 410,
               render: (_, record) =>
-                `读取 ${record.fetched}，新增 ${record.created}，更新 ${record.updated}，过期 ${record.skippedExpired}，区域外 ${record.skippedOutsideRegion}`,
+                `读取 ${record.fetched}，新增 ${record.created}，更新 ${record.updated}，新变更 ${record.changeAlertsCreated}，已存在变更 ${record.changeAlertsExisting}，过期 ${record.skippedExpired}，区域外 ${record.skippedOutsideRegion}`,
             },
             {
               title: '耗时',

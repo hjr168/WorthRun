@@ -192,7 +192,7 @@ export function EventsPage() {
           )}
         </Space>
       </div>
-      <div className="toolbar">
+      <div className="toolbar events-toolbar">
         <Input
           placeholder="搜索赛事名称"
           allowClear
@@ -227,6 +227,12 @@ export function EventsPage() {
           options={runJudgementOptions}
           onChange={(value) => setFilters({ ...filters, runJudgement: value })}
         />
+        <Select
+          placeholder="来源复核"
+          allowClear
+          options={[{ value: 'true', label: '有开放变更' }]}
+          onChange={(value) => setFilters({ ...filters, sourceReviewPending: value })}
+        />
       </div>
       <Table
         rowKey="id"
@@ -244,7 +250,7 @@ export function EventsPage() {
               }
             : undefined
         }
-        scroll={{ x: 1450 }}
+        scroll={{ x: 1580 }}
         columns={[
           { title: '赛事名称', dataIndex: 'eventName', fixed: 'left', width: 210 },
           { title: '城市', dataIndex: 'city', width: 90 },
@@ -287,6 +293,17 @@ export function EventsPage() {
             render: (value) => runJudgementLabels[value as keyof typeof runJudgementLabels],
           },
           { title: '来源等级', dataIndex: 'sourceLevel', width: 110 },
+          {
+            title: '来源检查',
+            dataIndex: 'sourceCheckedAt',
+            width: 165,
+            render: (value, record: AdminEvent) => (
+              <Space direction="vertical" size={2}>
+                <span>{value ? dayjs(value).format('MM-DD HH:mm') : '未检查'}</span>
+                {record.sourceReviewPending && <Tag color="orange">有开放变更</Tag>}
+              </Space>
+            ),
+          },
           {
             title: '更新时间',
             dataIndex: 'updatedAt',

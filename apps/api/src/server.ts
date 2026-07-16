@@ -396,6 +396,7 @@ const adminEventsQuerySchema = paginationQuerySchema.extend({
   publishStatus: z.enum(publishStatusValues).optional(),
   infoStatus: z.enum(infoStatusValues).optional(),
   runJudgement: z.enum(runJudgementValues).optional(),
+  sourceReviewPending: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
 });
 
 const adminFeedbackQuerySchema = paginationQuerySchema.extend({
@@ -484,6 +485,7 @@ type AdminEventsQuery = {
   publishStatus?: PublishStatus;
   infoStatus?: InfoStatus;
   runJudgement?: RunJudgement;
+  sourceReviewPending?: boolean;
 };
 
 type AdminFeedbackQuery = {
@@ -837,7 +839,7 @@ app.get(
   '/api/admin/events',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
-    const query = validateQuery(adminEventsQuerySchema, req.query) as AdminEventsQuery;
+    const query = adminEventsQuerySchema.parse(req.query) as AdminEventsQuery;
     const { page, pageSize } = query;
     const where: Prisma.EventWhereInput = {};
 
@@ -847,11 +849,20 @@ app.get(
     if (query.publishStatus) where.publishStatus = query.publishStatus;
     if (query.infoStatus) where.infoStatus = query.infoStatus;
     if (query.runJudgement) where.runJudgement = query.runJudgement;
+    if (query.sourceReviewPending !== undefined) {
+      where.changeAlerts = query.sourceReviewPending
+        ? { some: { status: 'open' } }
+        : { none: { status: 'open' } };
+    }
 
     const [items, total] = await Promise.all([
       prisma.event.findMany({
         where,
-        include: { checklistItems: { orderBy: { sortOrder: 'asc' } }, eventTags: true },
+        include: {
+          checklistItems: { orderBy: { sortOrder: 'asc' } },
+          eventTags: true,
+          changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
+        },
         orderBy: [{ updatedAt: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -859,7 +870,15 @@ app.get(
       prisma.event.count({ where }),
     ]);
 
-    res.json({ items, total, page, pageSize });
+    res.json({
+      items: items.map(({ changeAlerts, ...item }) => ({
+        ...item,
+        sourceReviewPending: changeAlerts.length > 0,
+      })),
+      total,
+      page,
+      pageSize,
+    });
   }),
 );
 
@@ -1550,7 +1569,7 @@ app.post(
         targetType: 'event_sources',
         targetId: req.params.id,
         afterValue: summary,
-        note: `手动抓取赛事源：新增 ${summary.created}，更新 ${summary.updated}，跳过已审核 ${summary.skippedReviewed}，过滤过期 ${summary.skippedExpired}，过滤区域外 ${summary.skippedOutsideRegion}`,
+        note: `手动抓取赛事源：新增 ${summary.created}，更新 ${summary.updated}，跳过已审核 ${summary.skippedReviewed}，新变更 ${summary.changeAlertsCreated}，已存在变更 ${summary.changeAlertsExisting}，过滤过期 ${summary.skippedExpired}，过滤区域外 ${summary.skippedOutsideRegion}`,
       });
       res.status(201).json(summary);
     } catch (error) {

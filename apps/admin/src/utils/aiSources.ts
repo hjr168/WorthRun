@@ -9,6 +9,8 @@ export function formatEventSourceRunSummary(summary: EventSourceRunSummary) {
     `过滤过期 ${summary.skippedExpired} 条`,
     `过滤区域外 ${summary.skippedOutsideRegion} 条`,
     `疑似重复 ${summary.duplicateEvents} 条`,
+    `新变更 ${summary.changeAlertsCreated} 条`,
+    `已存在变更 ${summary.changeAlertsExisting} 条`,
   ].join('，');
 }
 

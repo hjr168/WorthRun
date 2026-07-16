@@ -26,6 +26,7 @@ export interface AdminEvent {
   fieldConfidence?: Record<string, InfoStatus>;
   updatedAt: string;
   sourceCheckedAt?: string | null;
+  sourceReviewPending?: boolean;
   checklistItems: Array<{
     id?: string;
     groupName: string;

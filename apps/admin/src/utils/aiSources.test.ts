@@ -26,13 +26,13 @@ describe('formatEventSourceRunSummary', () => {
         skippedReviewed: 2,
         skippedExpired: 3,
         skippedOutsideRegion: 4,
-      duplicateEvents: 1,
-      changeAlertsCreated: 0,
-      changeAlertsExisting: 0,
-      candidateIds: [],
+        duplicateEvents: 1,
+        changeAlertsCreated: 2,
+        changeAlertsExisting: 1,
+        candidateIds: [],
       }),
     ).toBe(
-      '读取 20 条，新增 16 条，更新 2 条，跳过已审核 2 条，过滤过期 3 条，过滤区域外 4 条，疑似重复 1 条',
+      '读取 20 条，新增 16 条，更新 2 条，跳过已审核 2 条，过滤过期 3 条，过滤区域外 4 条，疑似重复 1 条，新变更 2 条，已存在变更 1 条',
     );
   });
 

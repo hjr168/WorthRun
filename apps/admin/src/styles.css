@@ -70,6 +70,10 @@ body {
   margin-bottom: 16px;
 }
 
+.events-toolbar {
+  grid-template-columns: 220px repeat(6, minmax(140px, 1fr));
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(280px, 1fr));
