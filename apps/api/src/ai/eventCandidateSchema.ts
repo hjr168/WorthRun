@@ -15,6 +15,17 @@ const nullableUrlSchema = z
   ])
   .transform((value): string | null => value ?? null);
 
+const nullableDatetimeSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed}T15:59:59.999Z`;
+    return trimmed;
+  },
+  z.string().datetime({ offset: true }).nullable(),
+);
+
 export const aiCandidateEvidenceSchema = z.object({
   field: z.string().trim().min(1),
   sourceUrl: z.string().trim().url(),
@@ -27,7 +38,7 @@ export const aiEventCandidateSchema = z.object({
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   distanceItems: z.array(z.string().trim().min(1)).default([]),
   signupStatus: z.enum(signupStatusValues).default('unknown'),
-  signupDeadline: z.string().datetime().nullable(),
+  signupDeadline: nullableDatetimeSchema,
   officialUrl: nullableUrlSchema,
   sourceName: z.string().trim().min(1),
   sourceUrl: nullableUrlSchema,
