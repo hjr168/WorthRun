@@ -1951,6 +1951,8 @@ app.get(
           judgementReasons: true,
           tags: true,
           updatedAt: true,
+          sourceCheckedAt: true,
+          changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
         },
         orderBy: [{ eventDate: 'asc' }],
         skip: (page - 1) * pageSize,
@@ -1958,7 +1960,17 @@ app.get(
       }),
       prisma.event.count({ where }),
     ]);
-    res.json({ items, total, page, pageSize, complianceNotice, officialActionText });
+    res.json({
+      items: items.map(({ changeAlerts, ...event }) => ({
+        ...event,
+        sourceReviewPending: changeAlerts.length > 0,
+      })),
+      total,
+      page,
+      pageSize,
+      complianceNotice,
+      officialActionText,
+    });
   }),
 );
 
@@ -1967,10 +1979,19 @@ app.get(
   asyncHandler(async (req, res) => {
     const event = await prisma.event.findFirst({
       where: { id: req.params.id, ...buildPublicEventWhere() },
-      include: { checklistItems: { orderBy: { sortOrder: 'asc' } }, eventTags: true },
+      include: {
+        checklistItems: { orderBy: { sortOrder: 'asc' } },
+        eventTags: true,
+        changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
+      },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
-    res.json({ event, complianceNotice, officialActionText });
+    const { changeAlerts, ...publicEvent } = event;
+    res.json({
+      event: { ...publicEvent, sourceReviewPending: changeAlerts.length > 0 },
+      complianceNotice,
+      officialActionText,
+    });
   }),
 );
 
@@ -2033,10 +2054,24 @@ app.get(
     if (!userKey) throw new HttpError(400, 'userKey 不能为空');
     const items = await prisma.userFavorite.findMany({
       where: { userKey, event: buildPublicEventWhere() },
-      include: { event: true },
+      include: {
+        event: {
+          include: {
+            changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
-    res.json({ items });
+    res.json({
+      items: items.map(({ event, ...favorite }) => {
+        const { changeAlerts, ...publicEvent } = event;
+        return {
+          ...favorite,
+          event: { ...publicEvent, sourceReviewPending: changeAlerts.length > 0 },
+        };
+      }),
+    });
   }),
 );
 

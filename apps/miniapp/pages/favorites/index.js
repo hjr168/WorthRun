@@ -19,7 +19,7 @@ Page({
             const res = await (0, api_1.getFavorites)(userKey);
             this.setData({
                 loading: false,
-                events: res.items.map((item) => (Object.assign(Object.assign({}, item.event), { isFavorite: true }))),
+                events: res.items.map((item) => (Object.assign(Object.assign({}, item.event), { sourceReviewPending: Boolean(item.event.sourceReviewPending), isFavorite: true }))),
             });
         }
         catch (error) {

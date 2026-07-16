@@ -10,14 +10,14 @@
     <button class="secondary-button" bindtap="reload">重新加载</button>
   </block>
   <block wx:else>
-    <event-card
-      wx:for="{{events}}"
-      wx:key="id"
-      class="card-gap"
-      event="{{item}}"
-      bind:open="openEvent"
-      bind:favorite="toggleFavorite"
-    />
+    <view wx:for="{{events}}" wx:key="id" class="card-gap">
+      <view wx:if="{{item.sourceReviewPending}}" class="source-review-tag">信息复核中</view>
+      <event-card
+        event="{{item}}"
+        bind:open="openEvent"
+        bind:favorite="toggleFavorite"
+      />
+    </view>
     <view wx:if="{{!events.length}}" bindtap="openEvents">
       <empty-state title="还没有收藏赛事" description="去找一场值得跑的比赛" />
     </view>

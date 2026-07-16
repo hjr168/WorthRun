@@ -29,7 +29,7 @@ Page({
     dateText: '',
     distanceText: '',
     signupText: '',
-    updatedAtText: '待确认',
+    sourceCheckedAtText: '等待复核',
     complianceNotice,
     officialActionText,
   },
@@ -54,7 +54,9 @@ Page({
         dateText: formatDate(detail.event.eventDate),
         distanceText: formatDistance(detail.event.distanceItems),
         signupText: labelOf(signupStatusLabels, detail.event.signupStatus),
-        updatedAtText: formatDateTime(detail.event.updatedAt),
+        sourceCheckedAtText: detail.event.sourceCheckedAt
+          ? formatDateTime(detail.event.sourceCheckedAt)
+          : '等待复核',
         complianceNotice: detail.complianceNotice || complianceNotice,
         officialActionText: detail.officialActionText || officialActionText,
         loading: false,

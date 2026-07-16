@@ -28,6 +28,21 @@
 }
 
 .card-gap {
+  position: relative;
   display: block;
   margin-bottom: 16rpx;
+}
+
+.source-review-tag {
+  position: absolute;
+  z-index: 2;
+  top: 18rpx;
+  right: 18rpx;
+  border-radius: 999rpx;
+  background: #fff0d6;
+  color: #8c5a00;
+  padding: 6rpx 14rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1.3;
 }

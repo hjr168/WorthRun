@@ -87,6 +87,16 @@
   word-break: break-all;
 }
 
+.source-review-notice {
+  margin-top: 14rpx;
+  border-radius: 12rpx;
+  background: #fff7e8;
+  color: #8c5a00;
+  padding: 16rpx 18rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
 .line,
 .notice {
   color: #64748b;

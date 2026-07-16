@@ -25,7 +25,8 @@
       <view class="info-row"><text class="info-label">起点</text><text class="info-value">{{event.startPoint || '待确认'}}</text></view>
       <view class="info-row"><text class="info-label">终点</text><text class="info-value">{{event.endPoint || '待确认'}}</text></view>
       <view class="info-row"><text class="info-label">来源</text><text class="info-value">{{event.sourceName}}</text></view>
-      <view class="info-row"><text class="info-label">最近更新</text><text class="info-value">{{updatedAtText}}</text></view>
+      <view class="info-row"><text class="info-label">来源最近检查</text><text class="info-value">{{sourceCheckedAtText}}</text></view>
+      <view wx:if="{{event.sourceReviewPending}}" class="source-review-notice">官方信息近期有更新，正在复核，请前往官方确认。</view>
     </view>
 
     <button class="feedback-link" bindtap="openFeedback">信息有误？反馈纠错</button>

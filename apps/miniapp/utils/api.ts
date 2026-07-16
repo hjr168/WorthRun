@@ -18,6 +18,8 @@ export interface EventSummary {
   judgementReasons: string[];
   tags: string[];
   updatedAt?: string;
+  sourceCheckedAt?: string | null;
+  sourceReviewPending: boolean;
   isFavorite?: boolean;
 }
 
