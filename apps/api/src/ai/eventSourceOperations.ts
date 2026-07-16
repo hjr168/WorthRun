@@ -11,6 +11,10 @@ export const candidateReviewIssues = [
 
 export type CandidateReviewIssue = (typeof candidateReviewIssues)[number];
 
+export function canMonitorPublishedEventChanges(sourceLevel: string) {
+  return sourceLevel === 'official' || sourceLevel === 'trusted';
+}
+
 interface CandidateForClassification {
   eventDate?: string | null;
   officialUrl?: string | null;

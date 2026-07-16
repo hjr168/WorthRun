@@ -94,7 +94,7 @@ export async function runEventSource(
     });
     runId = run.id;
 
-    const result = await runConfiguredSource(source, startedAt, dependencies);
+    const result = await runConfiguredSource(source, startedAt, runId, dependencies);
     const finishedAt = dependencies.clock();
     const summary: EventSourceRunSummary = {
       runId,
@@ -119,6 +119,8 @@ export async function runEventSource(
         skippedExpired: summary.skippedExpired,
         skippedOutsideRegion: summary.skippedOutsideRegion,
         duplicateEvents: summary.duplicateEvents,
+        changeAlertsCreated: summary.changeAlertsCreated,
+        changeAlertsExisting: summary.changeAlertsExisting,
       },
     });
     await dependencies.store.eventSource.update({
@@ -174,25 +176,27 @@ export async function runEventSource(
 async function runConfiguredSource(
   source: EventSource,
   now: Date,
+  sourceRunId: string,
   dependencies: RunEventSourceDependencies,
 ) {
   if (source.sourceType === 'chinaath_api') {
-    return runChinaAthPages(source, now, dependencies);
+    return runChinaAthPages(source, now, sourceRunId, dependencies);
   }
   if (source.sourceType === 'world_athletics') {
     const batch = await dependencies.fetchWorldAthletics({ now, pageSize: source.pageSize });
-    return persistSingleBatch(source, batch, now, dependencies);
+    return persistSingleBatch(source, batch, now, sourceRunId, dependencies);
   }
   if (source.sourceType === 'chinamarathon_sitemap') {
     const batch = await dependencies.fetchChinaMarathon({ pageSize: source.pageSize });
-    return persistSingleBatch(source, batch, now, dependencies);
+    return persistSingleBatch(source, batch, now, sourceRunId, dependencies);
   }
-  return runSinglePageSource(source, now, dependencies);
+  return runSinglePageSource(source, now, sourceRunId, dependencies);
 }
 
 async function runChinaAthPages(
   source: EventSource,
   now: Date,
+  sourceRunId: string,
   dependencies: RunEventSourceDependencies,
 ) {
   const startPage = Math.max(1, source.nextPage);
@@ -215,7 +219,9 @@ async function runChinaAthPages(
     endPage = batch.pageNo ?? currentPage;
     remotePageCount = batch.pageCount;
     totalAvailable = batch.totalAvailable;
-    const persisted = await dependencies.persistCandidates(source.id, batch.candidates, now);
+    const persisted = await dependencies.persistCandidates(source.id, batch.candidates, now, {
+      sourceRunId,
+    });
     mergePersistSummary(totals, persisted);
 
     if (remotePageCount !== null && (remotePageCount === 0 || endPage >= remotePageCount)) break;
@@ -235,10 +241,13 @@ async function runChinaAthPages(
 async function runSinglePageSource(
   source: EventSource,
   now: Date,
+  sourceRunId: string,
   dependencies: RunEventSourceDependencies,
 ) {
   const batch = await dependencies.fetchPageCandidate(source);
-  const persisted = await dependencies.persistCandidates(source.id, batch.candidates, now);
+  const persisted = await dependencies.persistCandidates(source.id, batch.candidates, now, {
+    sourceRunId,
+  });
   return {
     ...persisted,
     totalAvailable: batch.totalAvailable,
@@ -253,9 +262,12 @@ async function persistSingleBatch(
   source: EventSource,
   batch: SourceCandidateBatch,
   now: Date,
+  sourceRunId: string,
   dependencies: RunEventSourceDependencies,
 ) {
-  const persisted = await dependencies.persistCandidates(source.id, batch.candidates, now);
+  const persisted = await dependencies.persistCandidates(source.id, batch.candidates, now, {
+    sourceRunId,
+  });
   return {
     ...persisted,
     totalAvailable: batch.totalAvailable,
@@ -275,6 +287,8 @@ function emptyPersistSummary(): PersistSummary {
     skippedExpired: 0,
     skippedOutsideRegion: 0,
     duplicateEvents: 0,
+    changeAlertsCreated: 0,
+    changeAlertsExisting: 0,
     candidateIds: [],
   };
 }
@@ -287,6 +301,8 @@ function mergePersistSummary(target: PersistSummary, value: PersistSummary) {
   target.skippedExpired += value.skippedExpired;
   target.skippedOutsideRegion += value.skippedOutsideRegion;
   target.duplicateEvents += value.duplicateEvents;
+  target.changeAlertsCreated += value.changeAlertsCreated;
+  target.changeAlertsExisting += value.changeAlertsExisting;
   target.candidateIds.push(...value.candidateIds);
 }
 
@@ -372,6 +388,8 @@ export function formatRunStatus(summary: Pick<PersistSummary, keyof PersistSumma
     `expired=${summary.skippedExpired}`,
     `outside=${summary.skippedOutsideRegion}`,
     `duplicates=${summary.duplicateEvents}`,
+    `alerts_new=${summary.changeAlertsCreated}`,
+    `alerts_existing=${summary.changeAlertsExisting}`,
   ].join(',');
 }
 

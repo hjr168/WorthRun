@@ -26,9 +26,13 @@ describe('formatRunStatus', () => {
         skippedExpired: 4,
         skippedOutsideRegion: 3,
         duplicateEvents: 2,
+        changeAlertsCreated: 1,
+        changeAlertsExisting: 3,
         candidateIds: [],
       }),
-    ).toBe('success:fetched=20,created=12,updated=3,skipped=5,expired=4,outside=3,duplicates=2');
+    ).toBe(
+      'success:fetched=20,created=12,updated=3,skipped=5,expired=4,outside=3,duplicates=2,alerts_new=1,alerts_existing=3',
+    );
   });
 });
 
@@ -104,6 +108,8 @@ describe('runEventSource', () => {
         skippedExpired: 0,
         skippedOutsideRegion: 0,
         duplicateEvents: 0,
+        changeAlertsCreated: 1,
+        changeAlertsExisting: 0,
         candidateIds: ['candidate-1'],
       })
       .mockResolvedValueOnce({
@@ -114,6 +120,8 @@ describe('runEventSource', () => {
         skippedExpired: 1,
         skippedOutsideRegion: 0,
         duplicateEvents: 1,
+        changeAlertsCreated: 0,
+        changeAlertsExisting: 2,
         candidateIds: ['candidate-2'],
       });
 
@@ -143,6 +151,8 @@ describe('runEventSource', () => {
       duplicateEvents: 1,
       skippedExpired: 1,
       skippedOutsideRegion: 0,
+      changeAlertsCreated: 1,
+      changeAlertsExisting: 2,
     });
     expect(fetchChinaAth).toHaveBeenNthCalledWith(1, {
       pageNo: 1,
@@ -154,9 +164,21 @@ describe('runEventSource', () => {
       pageSize: 20,
       cityHints: [],
     });
+    expect(persistCandidates).toHaveBeenNthCalledWith(
+      1,
+      'source-1',
+      [{}],
+      new Date('2026-07-14T00:00:00.000Z'),
+      { sourceRunId: 'run-1' },
+    );
     expect(eventSourceRunUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'succeeded', skippedExpired: 1 }),
+        data: expect.objectContaining({
+          status: 'succeeded',
+          skippedExpired: 1,
+          changeAlertsCreated: 1,
+          changeAlertsExisting: 2,
+        }),
       }),
     );
     expect(eventSourceUpdate).toHaveBeenCalledWith(

@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canMonitorPublishedEventChanges,
   classifyCandidate,
   failureBackoffMs,
   nextPageAfterRun,
 } from './eventSourceOperations.js';
 
 const now = new Date('2026-07-14T08:00:00.000Z');
+
+describe('canMonitorPublishedEventChanges', () => {
+  it('allows only official and trusted sources', () => {
+    expect(canMonitorPublishedEventChanges('official')).toBe(true);
+    expect(canMonitorPublishedEventChanges('trusted')).toBe(true);
+    expect(canMonitorPublishedEventChanges('community')).toBe(false);
+    expect(canMonitorPublishedEventChanges('secondary')).toBe(false);
+    expect(canMonitorPublishedEventChanges('unknown')).toBe(false);
+  });
+});
 
 function candidate(overrides: Record<string, unknown> = {}) {
   return {

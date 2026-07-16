@@ -1,7 +1,8 @@
 import { EventCandidateStatus, Prisma, prisma } from '@worth-running/database';
 import { isFutureChinaDate, isGreaterBayAreaCity } from '@worth-running/shared';
-import { classifyCandidate } from './eventSourceOperations.js';
+import { canMonitorPublishedEventChanges, classifyCandidate } from './eventSourceOperations.js';
 import type { SourceCandidate } from './sources/sourceCandidate.js';
+import { detectEventChanges } from '../eventChangeDetection.js';
 
 type ExistingCandidate = { status: string } | null;
 
@@ -35,7 +36,14 @@ export interface PersistSummary {
   skippedExpired: number;
   skippedOutsideRegion: number;
   duplicateEvents: number;
+  changeAlertsCreated: number;
+  changeAlertsExisting: number;
   candidateIds: string[];
+}
+
+interface PersistOptions {
+  sourceRunId?: string | null;
+  store?: typeof prisma;
 }
 
 export function resolveCandidateOfficialUrl(
@@ -50,8 +58,10 @@ export async function persistEventCandidates(
   sourceId: string,
   items: SourceCandidate[],
   now: Date = new Date(),
+  options: PersistOptions = {},
 ): Promise<PersistSummary> {
-  const source = await prisma.eventSource.findUnique({
+  const store = options.store ?? prisma;
+  const source = await store.eventSource.findUnique({
     where: { id: sourceId },
     select: { sourceLevel: true },
   });
@@ -64,6 +74,8 @@ export async function persistEventCandidates(
     skippedExpired: 0,
     skippedOutsideRegion: 0,
     duplicateEvents: 0,
+    changeAlertsCreated: 0,
+    changeAlertsExisting: 0,
     candidateIds: [],
   };
 
@@ -77,6 +89,134 @@ export async function persistEventCandidates(
         item.candidate.sourceUrl,
       ),
     };
+    const eventDate = candidate.eventDate ? new Date(`${candidate.eventDate}T00:00:00.000Z`) : null;
+
+    let existing = item.sourceExternalId
+      ? await store.eventCandidate.findUnique({
+          where: {
+            sourceId_sourceExternalId: {
+              sourceId,
+              sourceExternalId: item.sourceExternalId,
+            },
+          },
+          select: reviewedCandidateSelect,
+        })
+      : await store.eventCandidate.findFirst({
+          where: {
+            sourceId,
+            eventName: candidate.eventName,
+            city: candidate.city,
+            eventDate,
+          },
+          orderBy: { createdAt: 'desc' },
+          select: reviewedCandidateSelect,
+        });
+
+    if (!existing && !item.sourceExternalId) {
+      existing = await store.eventCandidate.findFirst({
+        where: {
+          sourceId,
+          eventName: candidate.eventName,
+          city: candidate.city,
+          status: { in: reviewedCandidateStatuses },
+        },
+        orderBy: { reviewedAt: 'desc' },
+        select: reviewedCandidateSelect,
+      });
+    }
+
+    const decision = decideCandidateWrite(existing);
+    if (decision === 'skip_reviewed') {
+      summary.skippedReviewed += 1;
+      const reviewedCandidate = existing;
+      if (reviewedCandidate && canMonitorPublishedEventChanges(source.sourceLevel)) {
+        const eventId =
+          reviewedCandidate.acceptedEventId ?? reviewedCandidate.mergedInto?.acceptedEventId;
+        if (eventId) {
+          const event = await store.event.findUnique({
+            where: { id: eventId },
+            select: {
+              id: true,
+              publishStatus: true,
+              eventDate: true,
+              distanceItems: true,
+              signupStatus: true,
+              signupDeadline: true,
+              officialUrl: true,
+            },
+          });
+          if (event?.publishStatus === 'published') {
+            await store.$executeRaw(
+              Prisma.sql`UPDATE "events" SET "source_checked_at" = ${now} WHERE "id" = ${event.id}`,
+            );
+            const sourceText = candidate.evidence.map((entry) => entry.quote).join('\n');
+            const diff = detectEventChanges(sourceId, event, candidate, sourceText);
+            if (diff) {
+              const uniqueWhere = {
+                eventId_sourceId_fingerprint: {
+                  eventId: event.id,
+                  sourceId,
+                  fingerprint: diff.fingerprint,
+                },
+              };
+              const existingAlert = await store.eventChangeAlert.findUnique({
+                where: uniqueWhere,
+                select: { id: true, status: true },
+              });
+              const evidence = candidate.evidence.slice(0, 10) as Prisma.InputJsonArray;
+              if (!existingAlert) {
+                await store.eventChangeAlert.upsert({
+                  where: uniqueWhere,
+                  create: {
+                    eventId: event.id,
+                    sourceId,
+                    sourceRunId: options.sourceRunId ?? null,
+                    sourceCandidateId: reviewedCandidate.id,
+                    severity: diff.severity,
+                    changedFields: diff.changedFields,
+                    beforeValue: diff.beforeValue as Prisma.InputJsonObject,
+                    afterValue: diff.afterValue as Prisma.InputJsonObject,
+                    evidence,
+                    sourceUrl: candidate.sourceUrl,
+                    fingerprint: diff.fingerprint,
+                  },
+                  update: {},
+                });
+                summary.changeAlertsCreated += 1;
+              } else {
+                if (existingAlert.status === 'open') {
+                  await store.eventChangeAlert.upsert({
+                    where: uniqueWhere,
+                    create: {
+                      eventId: event.id,
+                      sourceId,
+                      sourceRunId: options.sourceRunId ?? null,
+                      sourceCandidateId: reviewedCandidate.id,
+                      severity: diff.severity,
+                      changedFields: diff.changedFields,
+                      beforeValue: diff.beforeValue as Prisma.InputJsonObject,
+                      afterValue: diff.afterValue as Prisma.InputJsonObject,
+                      evidence,
+                      sourceUrl: candidate.sourceUrl,
+                      fingerprint: diff.fingerprint,
+                    },
+                    update: {
+                      sourceRunId: options.sourceRunId ?? null,
+                      sourceCandidateId: reviewedCandidate.id,
+                      evidence,
+                      sourceUrl: candidate.sourceUrl,
+                    },
+                  });
+                }
+                summary.changeAlertsExisting += 1;
+              }
+            }
+          }
+        }
+      }
+      continue;
+    }
+
     const exclusionReason = candidateExclusionReason(candidate, now);
     if (exclusionReason === 'expired') {
       summary.skippedExpired += 1;
@@ -87,38 +227,12 @@ export async function persistEventCandidates(
       continue;
     }
 
-    const eventDate = candidate.eventDate ? new Date(`${candidate.eventDate}T00:00:00.000Z`) : null;
     const duplicate = eventDate
-      ? await prisma.event.findFirst({
+      ? await store.event.findFirst({
           where: { eventName: candidate.eventName, city: candidate.city, eventDate },
           select: { id: true },
         })
       : null;
-
-    const existing = item.sourceExternalId
-      ? await prisma.eventCandidate.findUnique({
-          where: {
-            sourceId_sourceExternalId: {
-              sourceId,
-              sourceExternalId: item.sourceExternalId,
-            },
-          },
-        })
-      : await prisma.eventCandidate.findFirst({
-          where: {
-            sourceId,
-            eventName: candidate.eventName,
-            city: candidate.city,
-            eventDate,
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-
-    const decision = decideCandidateWrite(existing);
-    if (decision === 'skip_reviewed') {
-      summary.skippedReviewed += 1;
-      continue;
-    }
 
     if (duplicate) summary.duplicateEvents += 1;
     const classification = classifyCandidate(candidate, now, duplicate?.id);
@@ -152,8 +266,8 @@ export async function persistEventCandidates(
     };
 
     const saved = existing
-      ? await prisma.eventCandidate.update({ where: { id: existing.id }, data })
-      : await prisma.eventCandidate.create({ data });
+      ? await store.eventCandidate.update({ where: { id: existing.id }, data })
+      : await store.eventCandidate.create({ data });
 
     if (existing) summary.updated += 1;
     else summary.created += 1;
@@ -162,3 +276,16 @@ export async function persistEventCandidates(
 
   return summary;
 }
+
+const reviewedCandidateStatuses = [
+  EventCandidateStatus.accepted,
+  EventCandidateStatus.rejected,
+  EventCandidateStatus.merged,
+];
+
+const reviewedCandidateSelect = {
+  id: true,
+  status: true,
+  acceptedEventId: true,
+  mergedInto: { select: { acceptedEventId: true } },
+} satisfies Prisma.EventCandidateSelect;
