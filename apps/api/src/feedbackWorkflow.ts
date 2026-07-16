@@ -4,6 +4,7 @@ import {
   classifyFeedbackRisk,
   isLowInformationFeedback,
   normalizeFeedbackContent,
+  publicFeedbackTypes,
 } from './feedbackAbuse.js';
 
 export interface FeedbackWorkflowItem {
@@ -34,6 +35,9 @@ export function feedbackDuplicateKey(item: FeedbackWorkflowItem) {
 }
 
 export function feedbackDisposition(item: FeedbackWorkflowItem, now: Date = new Date()) {
+  const invalidType = !publicFeedbackTypes.includes(
+    item.feedbackType as (typeof publicFeedbackTypes)[number],
+  );
   const risk = classifyFeedbackRisk(item.content);
   const lowInformation = isLowInformationFeedback(item.feedbackType, item.content);
   const today = new Date(`${chinaDateOnly(now)}T00:00:00.000Z`);
@@ -44,6 +48,7 @@ export function feedbackDisposition(item: FeedbackWorkflowItem, now: Date = new 
       ? 'public'
       : 'unpublished';
   return {
+    invalidType,
     riskReason: risk.suspicious ? risk.reason : null,
     lowInformation,
     eventScope: eventScope as 'public' | 'unpublished',

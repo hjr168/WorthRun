@@ -280,11 +280,17 @@ export function QualityPage() {
           },
         }}
         columns={[
-          { title: '反馈类型', dataIndex: 'feedbackType', width: 140 },
+          {
+            title: '反馈类型',
+            dataIndex: 'feedbackType',
+            width: 140,
+            render: (value, record) => (record.invalidType ? '异常类型已隐藏' : value),
+          },
           {
             title: '质量标记',
             width: 150,
             render: (_, record) => {
+              if (record.invalidType) return <Tag color="red">非法反馈类型</Tag>;
               if (record.riskReason) return <Tag color="red">{riskLabels[record.riskReason]}</Tag>;
               if (record.lowInformation) return <Tag color="orange">缺少具体说明</Tag>;
               if (record.eventScope === 'unpublished') return <Tag>赛事当前不公开</Tag>;

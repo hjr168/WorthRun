@@ -65,6 +65,7 @@ export interface FeedbackItem {
   handledAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  invalidType?: boolean;
   riskReason?: string | null;
   lowInformation?: boolean;
   eventScope?: 'public' | 'unpublished';
@@ -97,6 +98,7 @@ export interface FeedbackBulkPreviewItem {
   updatedAt: string | null;
   feedbackType?: string;
   eventName?: string;
+  invalidType?: boolean;
   riskReason?: string | null;
   lowInformation?: boolean;
   eventScope?: 'public' | 'unpublished';

