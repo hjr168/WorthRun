@@ -11,7 +11,9 @@ import { fetchRobotsAllowedPage, normalizeAllowedDomains } from './pageFetcher.j
 import { persistEventCandidates } from './persistEventCandidates.js';
 import type { PersistSummary } from './persistEventCandidates.js';
 import { fetchChinaAthOfficialCandidates } from './sources/chinaAthOfficial.js';
+import { fetchChinaMarathonSitemapCandidates } from './sources/chinaMarathonSitemap.js';
 import type { SourceCandidate, SourceCandidateBatch } from './sources/sourceCandidate.js';
+import { fetchWorldAthleticsCandidates } from './sources/worldAthletics.js';
 
 export class AiIngestError extends Error {
   constructor(
@@ -57,6 +59,8 @@ interface RunEventSourceDependencies {
   acquireLease: typeof acquireEventSourceLease;
   releaseLease: typeof releaseEventSourceLease;
   fetchChinaAth: typeof fetchChinaAthOfficialCandidates;
+  fetchChinaMarathon: typeof fetchChinaMarathonSitemapCandidates;
+  fetchWorldAthletics: typeof fetchWorldAthleticsCandidates;
   persistCandidates: typeof persistEventCandidates;
   fetchPageCandidate: (source: EventSource) => Promise<SourceCandidateBatch>;
   clock: () => Date;
@@ -90,10 +94,7 @@ export async function runEventSource(
     });
     runId = run.id;
 
-    const result =
-      source.sourceType === 'chinaath_api'
-        ? await runChinaAthPages(source, startedAt, dependencies)
-        : await runSinglePageSource(source, startedAt, dependencies);
+    const result = await runConfiguredSource(source, startedAt, dependencies);
     const finishedAt = dependencies.clock();
     const summary: EventSourceRunSummary = {
       runId,
@@ -170,6 +171,25 @@ export async function runEventSource(
   }
 }
 
+async function runConfiguredSource(
+  source: EventSource,
+  now: Date,
+  dependencies: RunEventSourceDependencies,
+) {
+  if (source.sourceType === 'chinaath_api') {
+    return runChinaAthPages(source, now, dependencies);
+  }
+  if (source.sourceType === 'world_athletics') {
+    const batch = await dependencies.fetchWorldAthletics({ now, pageSize: source.pageSize });
+    return persistSingleBatch(source, batch, now, dependencies);
+  }
+  if (source.sourceType === 'chinamarathon_sitemap') {
+    const batch = await dependencies.fetchChinaMarathon({ pageSize: source.pageSize });
+    return persistSingleBatch(source, batch, now, dependencies);
+  }
+  return runSinglePageSource(source, now, dependencies);
+}
+
 async function runChinaAthPages(
   source: EventSource,
   now: Date,
@@ -229,6 +249,23 @@ async function runSinglePageSource(
   };
 }
 
+async function persistSingleBatch(
+  source: EventSource,
+  batch: SourceCandidateBatch,
+  now: Date,
+  dependencies: RunEventSourceDependencies,
+) {
+  const persisted = await dependencies.persistCandidates(source.id, batch.candidates, now);
+  return {
+    ...persisted,
+    totalAvailable: batch.totalAvailable,
+    startPage: null,
+    endPage: null,
+    pageCount: 1,
+    nextPage: 1,
+  };
+}
+
 function emptyPersistSummary(): PersistSummary {
   return {
     fetched: 0,
@@ -271,9 +308,14 @@ async function fetchPageCandidate(source: EventSource): Promise<SourceCandidateB
     text: page.text,
     cityHints: source.cityHints,
   });
+  const dateConflict = hasSourceDateConflict(extracted.eventName, page.title, extracted.eventDate);
   const candidate: SourceCandidate = {
     candidate: {
       ...extracted,
+      eventDate: dateConflict ? null : extracted.eventDate,
+      judgementSummary: dateConflict
+        ? '来源标题年份与抽取日期冲突，已清空日期等待人工核验。'
+        : extracted.judgementSummary,
       sourceName: extracted.sourceName || source.name,
       sourceUrl: extracted.sourceUrl || page.url,
     },
@@ -282,6 +324,7 @@ async function fetchPageCandidate(source: EventSource): Promise<SourceCandidateB
     extractorVersion: AI_EVENT_PROMPT_VERSION,
     aiModel: getAiIngestModel(),
     aiPromptVersion: AI_EVENT_PROMPT_VERSION,
+    reviewIssues: dateConflict ? ['source_date_conflict'] : [],
   };
 
   return {
@@ -299,11 +342,25 @@ function resolveDependencies(overrides: Partial<RunEventSourceDependencies> = {}
     acquireLease: acquireEventSourceLease,
     releaseLease: releaseEventSourceLease,
     fetchChinaAth: fetchChinaAthOfficialCandidates,
+    fetchChinaMarathon: fetchChinaMarathonSitemapCandidates,
+    fetchWorldAthletics: fetchWorldAthleticsCandidates,
     persistCandidates: persistEventCandidates,
     fetchPageCandidate,
     clock: () => new Date(),
     ...overrides,
   };
+}
+
+export function hasSourceDateConflict(
+  eventName: string,
+  pageTitle: string,
+  eventDate: string | null,
+) {
+  if (!eventDate) return false;
+  const expectedYear =
+    eventName.match(/(?:^|\D)(20\d{2})(?:\D|$)/)?.[1] ??
+    pageTitle.match(/(?:^|\D)(20\d{2})(?:\D|$)/)?.[1];
+  return Boolean(expectedYear && !eventDate.startsWith(expectedYear));
 }
 
 export function formatRunStatus(summary: Pick<PersistSummary, keyof PersistSummary>) {

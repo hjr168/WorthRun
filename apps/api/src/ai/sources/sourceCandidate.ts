@@ -1,4 +1,5 @@
 import type { AiEventCandidate } from '../eventCandidateSchema.js';
+import type { CandidateReviewIssue } from '../eventSourceOperations.js';
 
 export interface SourceCandidate {
   candidate: AiEventCandidate;
@@ -7,6 +8,7 @@ export interface SourceCandidate {
   extractorVersion: string;
   aiModel: string | null;
   aiPromptVersion: string | null;
+  reviewIssues?: CandidateReviewIssue[];
 }
 
 export interface SourceCandidateBatch {

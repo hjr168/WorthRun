@@ -3,6 +3,7 @@ import {
   AiIngestError,
   buildCandidateFingerprint,
   formatRunStatus,
+  hasSourceDateConflict,
   runEventSource,
 } from './runEventSource.js';
 
@@ -28,6 +29,14 @@ describe('formatRunStatus', () => {
         candidateIds: [],
       }),
     ).toBe('success:fetched=20,created=12,updated=3,skipped=5,expired=4,outside=3,duplicates=2');
+  });
+});
+
+describe('hasSourceDateConflict', () => {
+  it('detects conflicting explicit years and ignores missing dates', () => {
+    expect(hasSourceDateConflict('2026澳门国际马拉松', '', '2025-12-07')).toBe(true);
+    expect(hasSourceDateConflict('澳门国际马拉松', '2026赛事资料', '2026-12-06')).toBe(false);
+    expect(hasSourceDateConflict('2026澳门国际马拉松', '', null)).toBe(false);
   });
 });
 

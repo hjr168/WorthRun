@@ -13,10 +13,10 @@ describe('fetchChinaAthOfficialCandidates', () => {
             results: [
               {
                 raceId: 1000419209,
-                raceName: '2026天津团泊湖半程马拉松',
+                raceName: '2026广州测试半程马拉松',
                 raceGrade: 'A',
                 raceTime: '2026-09-27',
-                raceAddress: '天津市/天津市/静海区',
+                raceAddress: '广东省/广州市/天河区',
                 raceItem: '["半程"]',
                 raceScale: null,
               },
@@ -31,18 +31,28 @@ describe('fetchChinaAthOfficialCandidates', () => {
       ),
     );
 
-    const result = await fetchChinaAthOfficialCandidates({ fetchImpl, pageNo: 7, pageSize: 50 });
+    const result = await fetchChinaAthOfficialCandidates({
+      fetchImpl,
+      pageNo: 7,
+      pageSize: 50,
+      cityHints: ['广州'],
+    });
 
     expect(result.totalAvailable).toBe(2830);
     expect(result).toMatchObject({ pageNo: 1, pageSize: 20, pageCount: 142 });
-    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toMatchObject({ pageNo: 7, pageSize: 20 });
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toMatchObject({
+      provinceId: '440000',
+      cityId: '440100',
+      pageNo: 7,
+      pageSize: 20,
+    });
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
       sourceExternalId: '1000419209',
       extractorVersion: 'chinaath-api-v1',
       candidate: {
-        eventName: '2026天津团泊湖半程马拉松',
-        city: '天津市',
+        eventName: '2026广州测试半程马拉松',
+        city: '广州市',
         eventDate: '2026-09-27',
         distanceItems: ['半程'],
         officialUrl: null,
@@ -60,10 +70,10 @@ describe('fetchChinaAthOfficialCandidates', () => {
             results: [
               {
                 raceId: 1,
-                raceName: '天津测试半程马拉松',
+                raceName: '深圳测试半程马拉松',
                 raceGrade: 'A',
                 raceTime: '2026-09-27',
-                raceAddress: '天津市/天津市/静海区',
+                raceAddress: '广东省/深圳市/南山区',
                 raceItem: '["半程"]',
               },
               {
@@ -82,9 +92,10 @@ describe('fetchChinaAthOfficialCandidates', () => {
       ),
     );
 
-    const result = await fetchChinaAthOfficialCandidates({ fetchImpl, cityHints: ['长春市'] });
+    const result = await fetchChinaAthOfficialCandidates({ fetchImpl, cityHints: ['深圳市'] });
 
-    expect(result.candidates.map((item) => item.sourceExternalId)).toEqual(['2']);
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toMatchObject({ cityId: '440300' });
+    expect(result.candidates.map((item) => item.sourceExternalId)).toEqual(['1']);
   });
 
   it('rejects malformed or unsuccessful responses', async () => {
@@ -95,9 +106,9 @@ describe('fetchChinaAthOfficialCandidates', () => {
       }),
     );
 
-    await expect(fetchChinaAthOfficialCandidates({ fetchImpl })).rejects.toThrow(
-      '中国田协赛事接口返回失败',
-    );
+    await expect(
+      fetchChinaAthOfficialCandidates({ fetchImpl, cityHints: ['广州'] }),
+    ).rejects.toThrow('中国田协赛事接口返回失败');
   });
 
   it('returns an empty batch when the requested page is past the remote page count', async () => {
@@ -111,7 +122,11 @@ describe('fetchChinaAthOfficialCandidates', () => {
       ),
     );
 
-    const result = await fetchChinaAthOfficialCandidates({ fetchImpl, pageNo: 4 });
+    const result = await fetchChinaAthOfficialCandidates({
+      fetchImpl,
+      pageNo: 4,
+      cityHints: ['广州'],
+    });
 
     expect(result).toMatchObject({
       totalAvailable: 3,
@@ -120,5 +135,15 @@ describe('fetchChinaAthOfficialCandidates', () => {
       pageCount: 1,
       candidates: [],
     });
+  });
+
+  it('rejects missing, multiple, Hong Kong, or Macao city hints', async () => {
+    await expect(fetchChinaAthOfficialCandidates()).rejects.toThrow('一个大湾区内地城市');
+    await expect(fetchChinaAthOfficialCandidates({ cityHints: ['广州', '深圳'] })).rejects.toThrow(
+      '一个大湾区内地城市',
+    );
+    await expect(fetchChinaAthOfficialCandidates({ cityHints: ['香港'] })).rejects.toThrow(
+      '一个大湾区内地城市',
+    );
   });
 });

@@ -1,4 +1,8 @@
-import { isGreaterBayAreaCity, normalizeGreaterBayAreaCity } from '@worth-running/shared';
+import {
+  greaterBayAreaCities,
+  isGreaterBayAreaCity,
+  normalizeGreaterBayAreaCity,
+} from '@worth-running/shared';
 import { z } from 'zod';
 
 export const CHINAATH_PUBLIC_LIST_URL = 'https://www.runchina.org.cn/#/race/v/list';
@@ -7,6 +11,12 @@ export const CHINAATH_ALLOWED_DOMAINS = [
   'runchina.org.cn',
   'api-changzheng.chinaath.com',
 ];
+export const WORLD_ATHLETICS_CALENDAR_URL =
+  'https://worldathletics.org/competition/calendar-results';
+export const CHINAMARATHON_SITEMAP_URL = 'https://chinamarathon.com/sitemap.xml';
+export const CHINAATH_MAINLAND_CITIES = greaterBayAreaCities.filter(
+  (city) => city !== '香港' && city !== '澳门',
+);
 
 const optionalUrlSchema = z
   .union([
@@ -23,7 +33,16 @@ const optionalUrlSchema = z
 
 const baseEventSourceSchema = z.object({
   name: z.string().trim().min(1, '赛事源名称不能为空'),
-  sourceType: z.enum(['page_url', 'chinaath_api', 'search_query', 'rss']).default('page_url'),
+  sourceType: z
+    .enum([
+      'page_url',
+      'chinaath_api',
+      'world_athletics',
+      'chinamarathon_sitemap',
+      'search_query',
+      'rss',
+    ])
+    .default('page_url'),
   entryUrl: optionalUrlSchema,
   searchQuery: z.string().trim().optional().nullable().default(null),
   allowedDomains: z.array(z.string().trim().min(1)).default([]),
@@ -54,6 +73,21 @@ export const eventSourceSchema = baseEventSourceSchema
         });
       }
     });
+    if (input.sourceType === 'chinaath_api') {
+      const normalizedCities = input.cityHints.map(normalizeGreaterBayAreaCity).filter(Boolean);
+      if (
+        normalizedCities.length !== 1 ||
+        !CHINAATH_MAINLAND_CITIES.includes(
+          normalizedCities[0] as (typeof CHINAATH_MAINLAND_CITIES)[number],
+        )
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['cityHints'],
+          message: '中国田协来源必须且只能选择一个大湾区内地城市',
+        });
+      }
+    }
   })
   .transform((input) => {
     const normalized = {
@@ -62,6 +96,27 @@ export const eventSourceSchema = baseEventSourceSchema
     };
     if (normalized.sourceType === 'page_url') {
       return { ...normalized, pageSize: 1, maxPagesPerRun: 1 };
+    }
+    if (normalized.sourceType === 'world_athletics') {
+      return {
+        ...normalized,
+        entryUrl: WORLD_ATHLETICS_CALENDAR_URL,
+        searchQuery: null,
+        allowedDomains: ['worldathletics.org'],
+        cityHints: ['香港'],
+        maxPagesPerRun: 1,
+      };
+    }
+    if (normalized.sourceType === 'chinamarathon_sitemap') {
+      return {
+        ...normalized,
+        entryUrl: CHINAMARATHON_SITEMAP_URL,
+        searchQuery: null,
+        allowedDomains: ['chinamarathon.com', 'heilianapp.com'],
+        cityHints: [...greaterBayAreaCities],
+        pageSize: Math.min(normalized.pageSize, 10),
+        maxPagesPerRun: 1,
+      };
     }
     if (normalized.sourceType !== 'chinaath_api') return normalized;
 

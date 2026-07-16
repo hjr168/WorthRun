@@ -10,6 +10,8 @@
     "start": "node --max-old-space-size=256 dist/apps/api/src/server.js",
     "event-source:run-due": "node --max-old-space-size=160 dist/apps/api/src/eventSourceCron.js",
     "data-quality:cleanup": "node --max-old-space-size=160 dist/apps/api/src/dataGovernanceCli.js",
+    "data:import-chinaath-plan": "node --max-old-space-size=160 dist/apps/api/src/chinaAthPlanImportCli.js",
+    "event-source:bootstrap-v0.4.2": "node --max-old-space-size=160 dist/apps/api/src/eventSourceBootstrapCli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

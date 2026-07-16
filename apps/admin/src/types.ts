@@ -93,7 +93,13 @@ export interface SystemConfigItem {
 export interface EventSourceItem {
   id: string;
   name: string;
-  sourceType: 'page_url' | 'chinaath_api' | 'search_query' | 'rss';
+  sourceType:
+    | 'page_url'
+    | 'chinaath_api'
+    | 'world_athletics'
+    | 'chinamarathon_sitemap'
+    | 'search_query'
+    | 'rss';
   entryUrl?: string | null;
   searchQuery?: string | null;
   allowedDomains: string[];
@@ -157,7 +163,11 @@ export interface EventSourceRunItem {
 }
 
 export type CandidateReviewIssue =
-  'missing_event_date' | 'missing_official_url' | 'missing_source_url' | 'duplicate_event';
+  | 'missing_event_date'
+  | 'missing_official_url'
+  | 'missing_source_url'
+  | 'duplicate_event'
+  | 'source_date_conflict';
 
 export interface EventCandidateStats {
   pending: number;

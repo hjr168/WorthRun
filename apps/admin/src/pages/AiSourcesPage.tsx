@@ -49,11 +49,15 @@ import { showError } from '../utils/helpers';
 const sourceTypeOptions = [
   { value: 'page_url', label: '网页 AI 抽取' },
   { value: 'chinaath_api', label: '中国田协官方赛事目录' },
+  { value: 'world_athletics', label: '世界田联香港路跑' },
+  { value: 'chinamarathon_sitemap', label: '中国马拉松社区发现' },
 ];
 
 const sourceTypeLabels: Record<EventSourceItem['sourceType'], string> = {
   page_url: '网页 AI 抽取',
   chinaath_api: '中国田协目录',
+  world_athletics: '世界田联香港路跑',
+  chinamarathon_sitemap: '中国马拉松社区发现',
   search_query: '搜索关键词',
   rss: 'RSS',
 };
@@ -70,6 +74,25 @@ const candidateStatusLabels: Record<EventCandidateItem['status'], string> = {
   rejected: '已驳回',
   merged: '已合并',
 };
+
+function fixedSourceHelp(sourceType: EventSourceItem['sourceType']) {
+  if (sourceType === 'world_athletics') {
+    return {
+      message: '固定读取世界田联香港路跑日历',
+      description: '只生成未来一年的香港路跑候选；报名入口仍需人工补充。',
+    };
+  }
+  if (sourceType === 'chinamarathon_sitemap') {
+    return {
+      message: '固定读取中国马拉松社区发现源',
+      description: '每次最多顺序核对 10 个详情页；聚合信息只能进入人工审核。',
+    };
+  }
+  return {
+    message: '固定读取中国田协公开赛事目录',
+    description: '每个来源只查询一个大湾区内地城市；官方报名入口仍需人工补充。',
+  };
+}
 
 interface SourceFormValues {
   name: string;
@@ -782,13 +805,13 @@ export function AiSourcesPage() {
           >
             <Select options={sourceTypeOptions} />
           </Form.Item>
-          {selectedSourceType === 'chinaath_api' ? (
+          {selectedSourceType !== 'page_url' ? (
             <Alert
               showIcon
               type="info"
               style={{ marginBottom: 16 }}
-              message="固定读取中国田协公开赛事目录"
-              description="每次最多读取 20 条候选；官方报名入口和报名状态仍需人工补充。"
+              message={fixedSourceHelp(selectedSourceType).message}
+              description={fixedSourceHelp(selectedSourceType).description}
             />
           ) : (
             <>
@@ -811,9 +834,19 @@ export function AiSourcesPage() {
           <Form.Item
             label="目标城市"
             name="cityHints"
-            extra="仅可填写大湾区城市；留空时仍执行全局大湾区过滤"
+            extra={
+              selectedSourceType === 'chinaath_api'
+                ? '必须且只能填写一个大湾区内地城市'
+                : '仅可填写大湾区城市；固定来源会由服务端设置目标城市'
+            }
           >
-            <Input placeholder="广州, 深圳, 佛山" />
+            <Input
+              placeholder={selectedSourceType === 'chinaath_api' ? '广州' : '广州, 深圳, 佛山'}
+              disabled={
+                selectedSourceType === 'world_athletics' ||
+                selectedSourceType === 'chinamarathon_sitemap'
+              }
+            />
           </Form.Item>
           <div className="form-grid compact-form-grid">
             <Form.Item label="状态" name="status">
@@ -839,7 +872,7 @@ export function AiSourcesPage() {
                 style={{ width: '100%' }}
               />
             </Form.Item>
-            {selectedSourceType === 'chinaath_api' && (
+            {selectedSourceType !== 'page_url' && (
               <>
                 <Form.Item label="每页条数" name="pageSize">
                   <InputNumber min={1} max={20} style={{ width: '100%' }} />

@@ -101,12 +101,16 @@ export async function persistEventCandidates(
 
     if (duplicate) summary.duplicateEvents += 1;
     const classification = classifyCandidate(candidate, now, duplicate?.id);
+    const reviewIssues = [
+      ...new Set([...classification.reviewIssues, ...(item.reviewIssues ?? [])]),
+    ];
+    const requiresReview = Boolean(duplicate || reviewIssues.includes('source_date_conflict'));
     const data = {
       sourceId,
       sourceExternalId: item.sourceExternalId,
       status: existing
         ? EventCandidateStatus.needs_review
-        : duplicate
+        : requiresReview
           ? EventCandidateStatus.needs_review
           : EventCandidateStatus.new,
       eventName: candidate.eventName,
@@ -121,7 +125,7 @@ export async function persistEventCandidates(
       extractorVersion: item.extractorVersion,
       duplicateEventId: duplicate?.id ?? null,
       priorityScore: classification.priorityScore,
-      reviewIssues: classification.reviewIssues,
+      reviewIssues,
       aiModel: item.aiModel,
       aiPromptVersion: item.aiPromptVersion,
     };

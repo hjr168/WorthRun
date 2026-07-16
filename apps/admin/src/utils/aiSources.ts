@@ -17,6 +17,7 @@ const issueLabels: Record<CandidateReviewIssue, string> = {
   missing_official_url: '缺少官方入口',
   missing_source_url: '缺少来源链接',
   duplicate_event: '疑似重复赛事',
+  source_date_conflict: '来源年份与日期冲突',
 };
 
 export function candidateIssueLabel(issue: CandidateReviewIssue) {

@@ -6,6 +6,7 @@ export const candidateReviewIssues = [
   'missing_official_url',
   'missing_source_url',
   'duplicate_event',
+  'source_date_conflict',
 ] as const;
 
 export type CandidateReviewIssue = (typeof candidateReviewIssues)[number];
@@ -33,10 +34,7 @@ export function classifyCandidate(
   };
 }
 
-export function nextPageAfterRun(input: {
-  endPage: number;
-  remotePageCount: number | null;
-}) {
+export function nextPageAfterRun(input: { endPage: number; remotePageCount: number | null }) {
   if (input.remotePageCount !== null && input.endPage >= input.remotePageCount) return 1;
   return Math.max(1, input.endPage + 1);
 }

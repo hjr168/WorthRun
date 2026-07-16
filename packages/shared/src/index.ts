@@ -11,7 +11,7 @@ export type AdminRole = 'super_admin' | 'event_operator' | 'content_reviewer' | 
 
 export type FeedbackStatus = 'pending' | 'handling' | 'resolved' | 'rejected';
 
-export type SourceLevel = 'official' | 'trusted' | 'secondary' | 'unknown';
+export type SourceLevel = 'official' | 'trusted' | 'community' | 'secondary' | 'unknown';
 
 export const publishStatusLabels: Record<PublishStatus, string> = {
   draft: '草稿',
@@ -46,6 +46,7 @@ export const signupStatusLabels: Record<SignupStatus, string> = {
 export const sourceLevelLabels: Record<SourceLevel, string> = {
   official: '官方来源',
   trusted: '可信来源',
+  community: '社区来源',
   secondary: '二级来源',
   unknown: '待核实',
 };
@@ -122,7 +123,13 @@ export const signupStatusValues = [
   'unknown',
 ] as const;
 
-export const sourceLevelValues = ['official', 'trusted', 'secondary', 'unknown'] as const;
+export const sourceLevelValues = [
+  'official',
+  'trusted',
+  'community',
+  'secondary',
+  'unknown',
+] as const;
 
 export const feedbackStatusValues = ['pending', 'handling', 'resolved', 'rejected'] as const;
 
@@ -176,6 +183,16 @@ export function normalizeGreaterBayAreaCity(value: string | null | undefined) {
 
 export function isGreaterBayAreaCity(value: string | null | undefined) {
   return normalizeGreaterBayAreaCity(value) !== null;
+}
+
+export function detectGreaterBayAreaCity(value: string | null | undefined) {
+  if (!value) return null;
+  const normalized = value.replace(/\s+/g, '');
+  for (const city of greaterBayAreaCities) {
+    const aliases = [...greaterBayAreaCityAliases[city]].sort((a, b) => b.length - a.length);
+    if (aliases.some((alias) => normalized.includes(alias))) return city;
+  }
+  return null;
 }
 
 const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;

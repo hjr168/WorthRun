@@ -6,6 +6,18 @@ const CHINAATH_LIST_ENDPOINT =
   'https://api-changzheng.chinaath.com/changzheng-content-center-api/api/homePage/official/searchCompetitionMls';
 const DEFAULT_BATCH_SIZE = 20;
 
+export const CHINAATH_CITY_IDS: Record<string, string> = {
+  广州: '440100',
+  深圳: '440300',
+  珠海: '440400',
+  佛山: '440600',
+  江门: '440700',
+  肇庆: '441200',
+  惠州: '441300',
+  东莞: '441900',
+  中山: '442000',
+};
+
 const raceSchema = z.object({
   raceId: z.union([z.number(), z.string()]),
   raceName: z.string().trim().min(1),
@@ -40,6 +52,11 @@ export async function fetchChinaAthOfficialCandidates(
   const fetchImpl = options.fetchImpl ?? fetch;
   const pageNo = options.pageNo ?? 1;
   const pageSize = Math.min(Math.max(options.pageSize ?? DEFAULT_BATCH_SIZE, 1), 20);
+  const hints = (options.cityHints ?? []).map(normalizeCityHint).filter(Boolean);
+  if (hints.length !== 1 || !CHINAATH_CITY_IDS[hints[0]]) {
+    throw new Error('中国田协来源必须配置一个大湾区内地城市');
+  }
+  const cityId = CHINAATH_CITY_IDS[hints[0]];
   const response = await fetchImpl(CHINAATH_LIST_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -48,8 +65,8 @@ export async function fetchChinaAthOfficialCandidates(
       'user-agent': process.env.AI_INGEST_USER_AGENT || 'WorthRunBot/0.1',
     },
     body: JSON.stringify({
-      provinceId: '',
-      cityId: '',
+      provinceId: '440000',
+      cityId,
       districtId: '',
       raceName: '',
       raceGrade: '',
@@ -69,14 +86,11 @@ export async function fetchChinaAthOfficialCandidates(
     throw new Error('中国田协赛事接口返回失败或结构不符合预期');
   }
 
-  const hints = (options.cityHints ?? []).map(normalizeCityHint).filter(Boolean);
   const data = parsed.data.data;
-  const records = hints.length
-    ? data.results.filter((race) => {
-        const haystack = `${race.raceName} ${race.raceAddress || ''}`;
-        return hints.some((hint) => haystack.includes(hint));
-      })
-    : data.results;
+  const records = data.results.filter((race) => {
+    const haystack = `${race.raceName} ${race.raceAddress || ''}`;
+    return haystack.includes(hints[0]);
+  });
   const remotePageSize = data.pageSize ?? pageSize;
 
   return {
@@ -143,9 +157,7 @@ function parseRaceItems(value?: string | null) {
   try {
     const parsed: unknown = JSON.parse(value);
     return Array.isArray(parsed)
-      ? parsed.filter(
-          (item): item is string => typeof item === 'string' && item.trim().length > 0,
-        )
+      ? parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
       : [];
   } catch {
     return value
