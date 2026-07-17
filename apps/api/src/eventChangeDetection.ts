@@ -57,7 +57,16 @@ function normalizeOfficialUrl(value: string | null | undefined) {
   try {
     const url = new URL(input);
     for (const key of [...url.searchParams.keys()]) {
-      if (key.toLowerCase().startsWith('utm_') || key.toLowerCase() === 'from') {
+      const normalizedKey = key.toLowerCase();
+      const isWorldAthleticsCalendarWindow =
+        /(^|\.)worldathletics\.org$/i.test(url.hostname) &&
+        url.pathname.replace(/\/+$/, '') === '/competition/calendar-results' &&
+        (normalizedKey === 'startdate' || normalizedKey === 'enddate');
+      if (
+        normalizedKey.startsWith('utm_') ||
+        normalizedKey === 'from' ||
+        isWorldAthleticsCalendarWindow
+      ) {
         url.searchParams.delete(key);
       }
     }

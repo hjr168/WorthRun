@@ -55,6 +55,28 @@ describe('detectEventChanges', () => {
     expect(diff?.severity).toBe('important');
   });
 
+  it('ignores the rolling date window in World Athletics calendar URLs', () => {
+    const worldAthleticsCurrent = {
+      ...current,
+      officialUrl:
+        'https://worldathletics.org/competition/calendar-results?disciplineId=2&regionType=country&regionId=13188432&startDate=2026-07-17&endDate=2027-07-17',
+    };
+
+    expect(
+      detectEventChanges('source-1', worldAthleticsCurrent, {
+        officialUrl:
+          'https://worldathletics.org/competition/calendar-results?disciplineId=2&regionType=country&regionId=13188432&startDate=2026-07-18&endDate=2027-07-18',
+      }),
+    ).toBeNull();
+
+    expect(
+      detectEventChanges('source-1', worldAthleticsCurrent, {
+        officialUrl:
+          'https://worldathletics.org/competition/calendar-results?disciplineId=2&regionType=country&regionId=999&startDate=2026-07-18&endDate=2027-07-18',
+      })?.changedFields,
+    ).toEqual(['officialUrl']);
+  });
+
   it('compares signup status and deadline while ignoring empty source values', () => {
     const diff = detectEventChanges('source-1', current, {
       signupStatus: 'closed',
