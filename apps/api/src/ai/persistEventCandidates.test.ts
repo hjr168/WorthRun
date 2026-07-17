@@ -111,6 +111,16 @@ describe('resolveCandidateOfficialUrl', () => {
       resolveCandidateOfficialUrl('community', null, 'https://community.example/event'),
     ).toBeNull();
   });
+
+  it('never promotes an aggregate World Athletics calendar query to an event official URL', () => {
+    expect(
+      resolveCandidateOfficialUrl(
+        'official',
+        null,
+        'https://worldathletics.org/competition/calendar-results?disciplineId=2&regionId=13188432&startDate=2026-07-18&endDate=2027-07-18',
+      ),
+    ).toBeNull();
+  });
 });
 
 describe('candidateExclusionReason', () => {

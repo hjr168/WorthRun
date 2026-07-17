@@ -51,7 +51,20 @@ export function resolveCandidateOfficialUrl(
   officialUrl: string | null | undefined,
   sourceUrl: string | null | undefined,
 ) {
-  return officialUrl || (sourceLevel === 'official' ? sourceUrl || null : null);
+  if (officialUrl) return officialUrl;
+  if (sourceLevel !== 'official' || !sourceUrl) return null;
+  try {
+    const url = new URL(sourceUrl);
+    if (
+      /(^|\.)worldathletics\.org$/i.test(url.hostname) &&
+      url.pathname.replace(/\/+$/, '') === '/competition/calendar-results'
+    ) {
+      return null;
+    }
+  } catch {
+    return sourceUrl;
+  }
+  return sourceUrl;
 }
 
 export async function persistEventCandidates(
