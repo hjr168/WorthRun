@@ -16,8 +16,10 @@ V0.1 使用 PostgreSQL + Prisma。
 - `event_sources`：AI 辅助入库的数据源配置，只由后台管理员维护；当前可执行 `page_url`、`chinaath_api`、`world_athletics` 和 `chinamarathon_sitemap`。
 - `event_candidates`：来源生成的候选赛事草稿，必须人工审核后才能写入 `events`。`source_external_id` 用于同一来源稳定去重，`raw_payload` 保留结构化来源记录，`extractor_version` 标记映射或提示词版本；`priority_score` 和 `review_issues` 用于后台审核排序。
 - `event_source_runs`：记录每次手动或自动来源运行的状态、分页范围、处理数量和错误摘要，不保存 API key、网页正文或大段原始响应。
-- `event_interactions`：按匿名用户 hash、赛事、动作和北京时间日期去重的轻量行为记录，仅保存详情访问与官方入口复制。
+- `event_interactions`：按匿名用户 hash、赛事、动作和北京时间日期去重的轻量行为记录，保存详情访问、官方入口复制和来源摘要相关行为。
 - `event_change_alerts`：官方或可信来源再次命中已采纳候选时生成的赛事变更告警，保存可比较字段快照、有限证据、来源和人工处理状态，不自动修改公开赛事。
+- `user_event_choices`：匿名用户对单场赛事的“想跑 / 观望 / 已报名”互斥选择；公开端只聚合数量，不返回参与者列表。
+- `event_source_summaries`：来源摘要的草稿、已发布和已取代版本，只保存摘要、来源元数据和内容哈希，不保存完整网页正文或截图。
 
 发布状态、信息状态、跑前判断、报名状态、来源等级等枚举同时定义在 Prisma schema 和 `packages/shared`。
 
@@ -45,7 +47,7 @@ V0.4 赛事源运营自动化变更：
 V0.4.1 数据运营闭环变更：
 
 - `event_source_runs` 新增 `skipped_expired` 和 `skipped_outside_region`，记录抓取过滤结果。
-- `EventInteractionAction` 仅包含 `event_detail_view`、`official_link_copy`。
+- V0.4.1 初始行为枚举包含 `event_detail_view`、`official_link_copy`；V0.5.0 在此基础上增加来源摘要相关行为。
 - `event_interactions` 不保存 IP 或明文匿名标识；唯一索引避免同一天重复计数。
 - 公开赛事、候选采纳和赛事发布统一执行北京时间未来日期及大湾区 9+2 城市校验。
 
@@ -68,3 +70,10 @@ V0.4.5 赛事变更监测变更：
 - `event_source_runs` 新增 `change_alerts_created` 和 `change_alerts_existing`，区分本次新建与已存在的去重告警。
 - `event_change_alerts` 使用 `(event_id, source_id, fingerprint)` 唯一约束，同一规范化差异不会重复创建；状态包含开放、已应用、已忽略、赛事已归档和已被后续处理取代。
 - 告警快照只保存关键可比较字段和最多 10 条证据。只有管理员显式确认后才能应用日期、距离、报名状态、截止时间或官方入口变更。
+
+V0.5.0 匿名选择与来源摘要变更：
+
+- `user_event_choices` 使用 `(user_key, event_id)` 唯一约束，切换选择通过 upsert 完成，公开数量按 `(event_id, choice)` 索引实时聚合。
+- `EventInteractionAction` 增加来源摘要打开、成功查看和原始来源链接复制，不保存明文匿名标识。
+- `event_source_summaries` 使用 `(event_id, content_hash, prompt_version)` 去重；AI 只生成草稿，人工发布新版本时旧版本改为 `superseded`。
+- 官方来源产生新的开放变更告警时，当前已发布摘要标记为 stale，但不会被自动覆盖。

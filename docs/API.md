@@ -177,7 +177,10 @@ dry-run 返回 `preview.expected.alertUpdatedAt` 和 `preview.expected.eventUpda
 - `GET /api/admin/data-quality/summary`
 - `POST /api/admin/data-quality/cleanup`
 - `GET /api/admin/interaction-stats?days=7|30`
+- `GET /api/admin/event-choice-stats?page=1&pageSize=20&search=广州&publishStatus=published&eventDateFrom=2026-01-01&eventDateTo=2026-12-31&sort=total_desc`
 - `GET /api/admin/workflow-stats`
+
+选择数据接口返回筛选范围内的匿名用户去重数、当前选择记录数、三种选择数量、涉及赛事数，以及逐场赛事汇总。`sort` 支持 `total_desc`、`recent_choice_desc`、`event_date_asc`、`event_date_desc`。接口不返回 `userKey`、匿名标识或参与者列表；“已报名”为用户自报，不代表官方报名人数。
 
 数据治理接口默认使用 `dryRun=true` 返回各动作的数量和少量样例。应用时必须由 `super_admin` 提交 `dryRun=false`，并原样带回预览的 `expected` 数量；数量发生变化时返回 HTTP 409。治理只归档或驳回并写入操作日志，不物理删除记录。
 
@@ -190,6 +193,11 @@ dry-run 返回 `preview.expected.alertUpdatedAt` 和 `preview.expected.eventUpda
 - `POST /api/favorites`
 - `DELETE /api/favorites/:eventId?userKey=<userKey>`
 - `GET /api/favorites?userKey=<userKey>`
+- `PUT /api/event-choices`
+- `GET /api/event-choices?userKey=<userKey>&choice=<optional>`
+- `GET /api/event-choices/:eventId?userKey=<userKey>`
+- `DELETE /api/event-choices/:eventId?userKey=<userKey>`
+- `GET /api/events/:id/source-summary`
 - `POST /api/feedback`
 - `POST /api/interactions`
 - `GET /api/checklist/templates`
@@ -198,6 +206,24 @@ dry-run 返回 `preview.expected.alertUpdatedAt` 和 `preview.expected.eventUpda
 
 `GET /api/events`、`GET /api/events/:id` 和收藏列表额外返回 `sourceCheckedAt` 与布尔值 `sourceReviewPending`。公开接口不返回告警差异、证据原文、管理员备注、内部严重度或处理状态。
 
-`POST /api/interactions` 只接受 `event_detail_view` 和 `official_link_copy`。服务端使用 HMAC 保存匿名用户标识，并按用户、赛事、动作和北京时间日期去重。
+赛事详情返回 `choiceCounts`，从首票开始展示“想跑 / 观望 / 已报名”的准确数据库聚合数量；不返回 `userKey` 或参与者列表。“已报名”是用户自报，不代表官方报名数据。赛事列表不执行逐场计数查询。
+
+`GET /api/events/:id/source-summary` 只返回当前公开赛事已经人工发布的摘要、关键点、限制说明、来源元数据和 stale 状态。无发布版本返回 HTTP 404；不返回网页正文、模型密钥、候选原始数据或管理员备注。
+
+`POST /api/interactions` 接受详情查看、官方入口复制、来源摘要打开、来源摘要成功查看和原始来源链接复制。服务端使用 HMAC 保存匿名用户标识，并按用户、赛事、动作和北京时间日期去重。
+
+## 来源摘要运营
+
+- `POST /api/admin/events/:id/source-summaries/generate`：从赛事已核验来源生成草稿，不接受请求体任意 URL。
+- `GET /api/admin/events/:id/source-summaries`：查看版本历史和生成元数据，不返回网页正文。
+- `PUT /api/admin/source-summaries/:id`：携带 `expectedUpdatedAt` 编辑草稿。
+- `POST /api/admin/source-summaries/:id/publish`：携带快照和 4-500 字备注人工发布。
+
+批量补草稿命令默认 dry-run，生产环境按顺序逐条执行，最大 Node heap 为 160MB：
+
+```bash
+pnpm source-summary:backfill
+pnpm source-summary:backfill -- --apply --expected <预览数量>
+```
 
 `POST /api/feedback` 需要 `eventId`、`userKey`、`requestId`、白名单内的 `feedbackType` 和 `content`。同一 `requestId` 或 24 小时内相同赛事、类型、内容的反馈会返回 HTTP 200 与 `{ duplicate: true }`，不会新增记录；提交频率超限会返回 HTTP 429 和 `Retry-After`。
