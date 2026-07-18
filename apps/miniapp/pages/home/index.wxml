@@ -1,9 +1,5 @@
 <view class="page home-page">
-  <view class="hero">
-    <view class="hero-kicker">WorthRun</view>
-    <view class="hero-title">哪场值得跑</view>
-    <view class="hero-sub">大湾区未来赛事，先判断，再去官方确认。</view>
-  </view>
+  <page-header kicker="WorthRun" title="哪场值得跑" subtitle="大湾区未来赛事，先判断，再去官方确认。" compact="{{false}}" />
 
   <loading-state wx:if="{{loading}}" text="正在加载赛事" />
   <block wx:elif="{{error}}">

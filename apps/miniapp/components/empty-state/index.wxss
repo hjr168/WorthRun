@@ -1,15 +1,15 @@
 .empty {
   border: 1rpx dashed #cbd5e1;
-  border-radius: 12rpx;
+  border-radius: 18rpx;
   background: #ffffff;
-  padding: 48rpx 28rpx;
+  padding: 42rpx 28rpx;
   text-align: center;
 }
 
 .title {
   color: #111827;
   font-size: 30rpx;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .description {

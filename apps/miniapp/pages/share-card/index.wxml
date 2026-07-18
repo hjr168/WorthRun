@@ -12,6 +12,6 @@
       <button class="primary-button" bindtap="saveImage" loading="{{saving}}">保存到相册</button>
       <button class="secondary-button" open-type="share">分享给好友</button>
     </view>
-    <view class="notice">AI 整理，仅供参考｜报名以官方为准</view>
+    <view class="notice">AI 整理，仅供参考，报名以官方为准。</view>
   </block>
 </view>

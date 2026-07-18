@@ -1,0 +1,1 @@
+<text class="event-status-tag tone-{{tone}}" aria-label="报名状态：{{text}}">{{text}}</text>

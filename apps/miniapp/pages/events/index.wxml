@@ -1,8 +1,5 @@
 <view class="page events-page">
-  <view class="list-head">
-    <view class="list-title">赛事列表</view>
-    <view class="list-subtitle">按城市、距离和报名状态快速筛选。</view>
-  </view>
+  <page-header title="赛事列表" subtitle="按城市、距离和报名状态快速筛选。" />
 
   <view class="filters">
     <view class="search-row">

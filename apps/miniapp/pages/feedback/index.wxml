@@ -1,8 +1,5 @@
 <view class="page feedback-page">
-  <view class="feedback-head">
-    <view class="feedback-title">反馈纠错</view>
-    <view class="feedback-subtitle">请提供具体变化，运营人员会按官方信息人工核对。</view>
-  </view>
+  <page-header title="反馈纠错" subtitle="请提供具体变化，运营人员会按官方信息人工核对。" />
 
   <view wx:if="{{!hasEvent}}" class="select-event-card">
     <view class="select-event-title">先选择要反馈的赛事</view>
@@ -42,6 +39,7 @@
           wx:for="{{feedbackTypes}}"
           wx:key="*this"
           class="type-option {{typeIndex === index ? 'selected' : ''}}"
+          aria-label="{{item}}{{typeIndex === index ? '，已选择' : '，未选择'}}"
           data-index="{{index}}"
           bindtap="onTypeSelect"
         >{{item}}</button>
@@ -63,6 +61,6 @@
       <view class="field-help">至少填写 6 个字，请不要提交账号、电话等个人信息。</view>
     </view>
 
-    <button class="primary-button submit" loading="{{submitting}}" disabled="{{submitting || !canSubmit}}" bindtap="submit">提交反馈</button>
+    <button class="primary-button submit {{submitting || !canSubmit ? 'is-disabled' : ''}}" loading="{{submitting}}" disabled="{{submitting || !canSubmit}}" bindtap="submit">提交反馈</button>
   </block>
 </view>

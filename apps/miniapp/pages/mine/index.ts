@@ -1,4 +1,11 @@
-import { EventDetail, getFavorites, getPreference, Preference } from '../../utils/api';
+import {
+  EventDetail,
+  EventSummary,
+  getEventChoices,
+  getFavorites,
+  getPreference,
+  Preference,
+} from '../../utils/api';
 import { config } from '../../config/index';
 import { complianceNotice, formatDate, formatDateTime } from '../../utils/format';
 import { clearUserKey, getUserKey } from '../../utils/user';
@@ -14,6 +21,7 @@ Page({
     preferenceText: '尚未设置偏好',
     nextEvent: null as EventDetail | null,
     nextEventDate: '',
+    choiceCounts: { interested: 0, considering: 0, registered: 0 },
     complianceNotice,
     isDev: config.env === 'dev',
     feedbackReceipts: [] as Array<{
@@ -30,11 +38,28 @@ Page({
     const userKey = getUserKey();
     this.setData({ loading: true, error: '', userKey });
     try {
-      const [preference, favorites] = await Promise.all([
+      const [preference, favorites, choices] = await Promise.all([
         getPreference(userKey).catch(() => null),
         getFavorites(userKey),
+        getEventChoices(userKey).catch(() => ({ items: [] })),
       ]);
-      const nextEvent = favorites.items[0]?.event || null;
+      const availableChoices = choices.items.filter(
+        (item): item is typeof item & { event: EventSummary } => Boolean(item.event),
+      );
+      const nextChoice = [...availableChoices]
+        .filter((item) => item.choice === 'registered' || item.choice === 'interested')
+        .sort((left, right) => {
+          const priority = { registered: 0, interested: 1, considering: 2 };
+          const choiceDiff = priority[left.choice] - priority[right.choice];
+          return choiceDiff || left.event!.eventDate.localeCompare(right.event!.eventDate);
+        })[0];
+      const nextEvent = (nextChoice?.event ||
+        favorites.items[0]?.event ||
+        null) as EventDetail | null;
+      const choiceCounts = choices.items.reduce(
+        (counts, item) => ({ ...counts, [item.choice]: counts[item.choice] + 1 }),
+        { interested: 0, considering: 0, registered: 0 },
+      );
       const preferenceText = preference
         ? `${preference.cities.join('、') || '城市不限'} · ${preference.distances.join('、') || '距离不限'}`
         : '尚未设置偏好';
@@ -50,6 +75,7 @@ Page({
         preferenceText,
         nextEvent,
         nextEventDate: nextEvent ? formatDate(nextEvent.eventDate) : '',
+        choiceCounts,
         complianceNotice,
         feedbackReceipts,
       });
@@ -69,6 +95,9 @@ Page({
   },
   openFavorites() {
     wx.navigateTo({ url: '/pages/favorites/index' });
+  },
+  openChoices() {
+    wx.navigateTo({ url: '/pages/choices/index' });
   },
   openFeedback() {
     wx.switchTab({

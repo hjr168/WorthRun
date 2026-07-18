@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "工具"
+  "navigationBarTitleText": "工具",
+  "usingComponents": {
+    "page-header": "../../components/page-header/index"
+  }
 }

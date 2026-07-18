@@ -1,8 +1,5 @@
 <view class="page pace-page">
-  <view class="pace-head">
-    <view class="pace-head-title">配速计算器</view>
-    <view class="pace-head-subtitle">输入距离和目标时间，快速估算平均配速。</view>
-  </view>
+  <page-header title="配速计算器" subtitle="输入距离和目标时间，快速估算平均配速。" />
 
   <view class="card input-card">
     <view class="field">

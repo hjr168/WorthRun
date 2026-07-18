@@ -9,7 +9,7 @@
       <view class="profile-main">
         <view class="profile-kicker">我的跑赛档案</view>
         <view class="profile-title">匿名跑者</view>
-        <view class="profile-desc">收藏、偏好和反馈会保存在本地匿名身份下。</view>
+        <view class="profile-desc">收藏、选择、偏好和反馈都使用匿名身份，不公开个人资料。</view>
       </view>
       <view class="identity-chip">{{shortUserKey}}</view>
     </view>
@@ -33,28 +33,35 @@
     </view>
 
     <view class="menu">
-      <button class="menu-button" bindtap="openFavorites">
-        <text class="menu-mark">藏</text>
-        <text>我的收藏</text>
-      </button>
-      <button class="menu-button" bindtap="openFeedback">
-        <text class="menu-mark">改</text>
-        <text>赛事纠错</text>
-      </button>
-      <button class="menu-button" bindtap="openPreferences">
-        <text class="menu-mark">偏</text>
-        <text>偏好设置</text>
-      </button>
-      <button class="menu-button" bindtap="openTools">
-        <text class="menu-mark">算</text>
-        <text>工具</text>
-      </button>
+      <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openChoices" aria-label="打开我的选择">
+        <view class="menu-copy">
+          <text class="menu-title">我的选择</text>
+          <text class="menu-summary">想跑 {{choiceCounts.interested}} · 观望 {{choiceCounts.considering}} · 已报名 {{choiceCounts.registered}}</text>
+        </view>
+        <text class="menu-action">查看</text>
+      </view>
+      <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openFavorites" aria-label="打开我的收藏">
+        <view class="menu-copy"><text class="menu-title">我的收藏</text><text class="menu-summary">集中查看已收藏赛事</text></view>
+        <text class="menu-action">查看</text>
+      </view>
+      <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openFeedback" aria-label="打开赛事纠错">
+        <view class="menu-copy"><text class="menu-title">赛事纠错</text><text class="menu-summary">提交赛事信息变化</text></view>
+        <text class="menu-action">打开</text>
+      </view>
+      <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openPreferences" aria-label="打开偏好设置">
+        <view class="menu-copy"><text class="menu-title">偏好设置</text><text class="menu-summary">调整城市、距离和关注点</text></view>
+        <text class="menu-action">调整</text>
+      </view>
+      <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openTools" aria-label="打开跑前工具">
+        <view class="menu-copy"><text class="menu-title">跑前工具</text><text class="menu-summary">配速估算与赛前清单</text></view>
+        <text class="menu-action">打开</text>
+      </view>
     </view>
 
     <view wx:if="{{feedbackReceipts.length}}" class="receipt-section">
       <view class="section-title">本机最近反馈</view>
       <view class="receipt-note">仅记录提交回执，不代表管理员处理进度。</view>
-      <view wx:for="{{feedbackReceipts}}" wx:key="requestId" class="receipt-row">
+      <view wx:for="{{feedbackReceipts}}" wx:key="requestId" class="receipt-row {{index === 0 ? 'receipt-row-first' : ''}} {{index === feedbackReceipts.length - 1 ? 'receipt-row-last' : ''}}">
         <view class="receipt-main">
           <view class="receipt-event">{{item.eventName}}</view>
           <view class="receipt-meta">{{item.feedbackType}} · {{item.createdAtText}}</view>

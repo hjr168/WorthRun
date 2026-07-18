@@ -17,7 +17,6 @@ Component({
             this.setData({
                 dateText: (0, format_1.formatDate)(value === null || value === void 0 ? void 0 : value.eventDate),
                 distanceText: (0, format_1.formatDistance)(value === null || value === void 0 ? void 0 : value.distanceItems),
-                signupText: (0, format_1.labelOf)(format_1.signupStatusLabels, value === null || value === void 0 ? void 0 : value.signupStatus),
                 judgementText: (0, format_1.labelOf)(format_1.runJudgementLabels, value === null || value === void 0 ? void 0 : value.runJudgement),
                 reasons: ((value === null || value === void 0 ? void 0 : value.judgementReasons) || []).slice(0, 2),
                 tags: ((value === null || value === void 0 ? void 0 : value.tags) || []).slice(0, 3),
@@ -27,7 +26,6 @@ Component({
     data: {
         dateText: '',
         distanceText: '',
-        signupText: '',
         judgementText: '',
         reasons: [],
         tags: [],

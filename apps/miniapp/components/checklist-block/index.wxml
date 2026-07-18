@@ -1,6 +1,6 @@
 <view class="checklist">
   <view wx:for="{{rows}}" wx:key="itemName" class="check-row">
-    <view>
+    <view class="item-copy">
       <view class="item-name">{{item.itemName}}</view>
       <view class="group-name">{{item.groupName}}</view>
     </view>

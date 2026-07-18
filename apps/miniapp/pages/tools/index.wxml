@@ -1,17 +1,18 @@
 <view class="page tools-page">
-  <view class="tools-head">
-    <view class="tools-title">跑前工具</view>
-    <view class="tools-subtitle">把报名确认、配速估算和赛前检查放在一处。</view>
-  </view>
+  <page-header title="跑前工具" subtitle="把配速估算和赛前检查放在一处。" />
 
-  <view class="tool-card" bindtap="openPace">
-    <view class="tool-mark">速</view>
-    <view class="tool-title">配速计算器</view>
-    <view class="muted">根据距离和目标完赛时间估算平均配速。</view>
-  </view>
-  <view class="tool-card" bindtap="openChecklist">
-    <view class="tool-mark">清</view>
-    <view class="tool-title">赛前清单</view>
-    <view class="muted">查看报名、领物、装备和风险确认项。</view>
-  </view>
+  <button class="tool-card" bindtap="openPace" aria-label="打开配速计算器">
+    <view class="tool-copy">
+      <view class="tool-title">配速计算器</view>
+      <view class="muted">根据距离和目标完赛时间估算平均配速。</view>
+    </view>
+    <view class="tool-action">打开</view>
+  </button>
+  <button class="tool-card" bindtap="openChecklist" aria-label="打开赛前清单">
+    <view class="tool-copy">
+      <view class="tool-title">赛前清单</view>
+      <view class="muted">查看报名、领物、装备和风险确认项。</view>
+    </view>
+    <view class="tool-action">打开</view>
+  </button>
 </view>

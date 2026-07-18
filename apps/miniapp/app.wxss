@@ -3,6 +3,8 @@ page {
   background: #f8fafc;
   color: #111827;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 28rpx;
+  line-height: 1.5;
 }
 
 view,
@@ -14,9 +16,17 @@ picker {
   box-sizing: border-box;
 }
 
+image,
+scroll-view,
+swiper,
+swiper-item {
+  box-sizing: border-box;
+}
+
 button {
   margin: 0;
-  border-radius: 8rpx;
+  min-width: 0;
+  border-radius: 14rpx;
   font-size: 28rpx;
 }
 
@@ -26,25 +36,29 @@ button::after {
 
 .page {
   min-height: 100vh;
-  padding: 28rpx 28rpx 48rpx;
+  padding: 24rpx 28rpx calc(48rpx + constant(safe-area-inset-bottom));
+  padding: 24rpx 28rpx calc(48rpx + env(safe-area-inset-bottom));
+  overflow-x: hidden;
 }
 
 .section {
-  margin-top: 28rpx;
+  margin-top: 24rpx;
 }
 
 .section-title {
-  margin-bottom: 16rpx;
+  margin-bottom: 14rpx;
   color: #111827;
-  font-size: 32rpx;
-  font-weight: 700;
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .card {
-  border: 1rpx solid #e2e8f0;
-  border-radius: 12rpx;
+  border: 1rpx solid #e5edf0;
+  border-radius: 18rpx;
   background: #ffffff;
   padding: 24rpx;
+  box-shadow: 0 8rpx 22rpx rgba(15, 23, 42, 0.045);
 }
 
 .muted {
@@ -52,19 +66,43 @@ button::after {
 }
 
 .primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88rpx;
+  padding: 18rpx 24rpx;
+  border-radius: 14rpx;
   background: #2a9d8f;
   color: #ffffff;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .secondary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88rpx;
+  padding: 18rpx 24rpx;
   border: 1rpx solid #e2e8f0;
+  border-radius: 14rpx;
   background: #ffffff;
   color: #1e293b;
+  font-weight: 600;
+  line-height: 1.25;
 }
 
 .plain-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88rpx;
+  padding: 18rpx 24rpx;
+  border-radius: 14rpx;
   background: transparent;
   color: #2a9d8f;
+  font-weight: 600;
+  line-height: 1.25;
 }
 
 .tag-row {
@@ -79,24 +117,47 @@ button::after {
   color: #2a9d8f;
   padding: 6rpx 14rpx;
   font-size: 24rpx;
+  line-height: 1.35;
 }
 
 .field-label {
   margin-bottom: 12rpx;
-  color: #64748b;
+  color: #475569;
   font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .input,
 .textarea {
   width: 100%;
   border: 1rpx solid #e2e8f0;
-  border-radius: 8rpx;
+  border-radius: 14rpx;
   background: #ffffff;
   padding: 18rpx;
   font-size: 28rpx;
 }
 
+.input {
+  min-height: 88rpx;
+}
+
 .textarea {
   min-height: 180rpx;
+}
+
+.card-gap {
+  display: block;
+  margin-top: 16rpx;
+}
+
+.page-copy {
+  color: #64748b;
+  font-size: 26rpx;
+  line-height: 1.65;
+}
+
+.natural-wrap {
+  overflow-wrap: break-word;
+  word-break: normal;
 }

@@ -21,6 +21,17 @@ export interface EventSummary {
   sourceCheckedAt?: string | null;
   sourceReviewPending: boolean;
   isFavorite?: boolean;
+  hasSourceSummary?: boolean;
+  sourceSummaryStale?: boolean;
+}
+
+export type EventChoice = 'interested' | 'considering' | 'registered';
+
+export interface EventChoiceCounts {
+  interested: number;
+  considering: number;
+  registered: number;
+  total: number;
 }
 
 export interface ChecklistItem {
@@ -44,6 +55,34 @@ export interface EventDetail extends EventSummary {
   notSuitableFor: string[];
   checklistItems: ChecklistItem[];
   eventTags: Array<{ tagName: string; tagType: string }>;
+  choiceCounts: EventChoiceCounts;
+}
+
+export interface EventChoiceItem {
+  id: string;
+  eventId: string;
+  choice: EventChoice;
+  createdAt: string;
+  updatedAt: string;
+  event: EventSummary | null;
+  eventAvailable: boolean;
+}
+
+export interface PublicSourceSummary {
+  event: Pick<EventSummary, 'id' | 'eventName' | 'city' | 'eventDate'>;
+  sourceName: string;
+  sourceUrl: string;
+  sourceTitle?: string | null;
+  summary: string;
+  keyPoints: string[];
+  limitations?: string | null;
+  basis: 'page_text' | 'stored_source_record';
+  fetchedAt: string;
+  generatedAt: string;
+  publishedAt?: string | null;
+  stale: boolean;
+  staleAt?: string | null;
+  complianceNotice: string;
 }
 
 export interface Preference {
@@ -54,7 +93,7 @@ export interface Preference {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   data?: object;
   loadingText?: string;
   silent?: boolean;
@@ -177,6 +216,39 @@ export function removeFavorite(userKey: string, eventId: string) {
   });
 }
 
+export function getEventChoice(userKey: string, eventId: string) {
+  return request<{ choice: EventChoice | null }>(`/api/event-choices/${eventId}`, {
+    data: { userKey },
+    silent: true,
+  });
+}
+
+export function getEventChoices(userKey: string, choice?: EventChoice) {
+  return request<{ items: EventChoiceItem[] }>('/api/event-choices', {
+    data: { userKey, choice },
+    silent: true,
+  });
+}
+
+export function setEventChoice(userKey: string, eventId: string, choice: EventChoice) {
+  return request<{ choice: EventChoice; choiceCounts: EventChoiceCounts }>('/api/event-choices', {
+    method: 'PUT',
+    data: { userKey, eventId, choice },
+    silent: true,
+  });
+}
+
+export function removeEventChoice(userKey: string, eventId: string) {
+  return request<{ removed: true; choiceCounts: EventChoiceCounts }>(
+    `/api/event-choices/${eventId}?userKey=${encodeURIComponent(userKey)}`,
+    { method: 'DELETE', silent: true },
+  );
+}
+
+export function getSourceSummary(eventId: string) {
+  return request<PublicSourceSummary>(`/api/events/${eventId}/source-summary`, { silent: true });
+}
+
 export function submitFeedback(data: {
   eventId: string;
   userKey: string;
@@ -211,7 +283,12 @@ export function recordShare(data: {
 export function recordInteraction(data: {
   userKey: string;
   eventId: string;
-  action: 'event_detail_view' | 'official_link_copy';
+  action:
+    | 'event_detail_view'
+    | 'official_link_copy'
+    | 'source_summary_open'
+    | 'source_summary_view'
+    | 'source_original_link_copy';
 }) {
   return request<{ recorded: true }>('/api/interactions', {
     method: 'POST',

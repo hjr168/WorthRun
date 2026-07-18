@@ -21,9 +21,9 @@ const signupOptions = [
     { label: '全部', value: '' },
     { label: '报名中', value: 'signup_open' },
     { label: '即将截止', value: 'closing_soon' },
-    { label: '未开始', value: 'not_started' },
-    { label: '已截止', value: 'closed' },
-    { label: '待核实', value: 'unknown' },
+    { label: '即将开放', value: 'not_started' },
+    { label: '报名已截止', value: 'closed' },
+    { label: '待确认', value: 'unknown' },
 ];
 const judgementOptions = [
     { label: '全部', value: '' },
