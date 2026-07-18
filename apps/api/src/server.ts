@@ -2775,7 +2775,7 @@ async function shutdown(signal: string, exitCode: number) {
       new Promise<void>((resolve) => {
         server.close(() => resolve());
       }),
-    disconnectDatabase: () => prisma.$disconnect(),
+    disconnectDatabase: () => prisma.$disconnect().catch(() => undefined),
   });
   if (result.timedOut) server.closeAllConnections();
   console.log(JSON.stringify({ event: 'api_shutdown_completed', signal, timedOut: result.timedOut }));

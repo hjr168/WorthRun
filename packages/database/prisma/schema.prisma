@@ -292,23 +292,23 @@ model EventSourceSummary {
 }
 
 model Feedback {
-  id           String         @id @default(cuid())
-  eventId      String?        @map("event_id")
-  userKey      String?        @map("user_key")
-  scope        FeedbackScope  @default(event_correction)
-  feedbackType String         @map("feedback_type")
-  content      String
-  contextPage  String?        @map("context_page")
-  appVersion   String?        @map("app_version")
-  relatedRequestId String?    @map("related_request_id")
-  requestId    String?        @unique @map("request_id")
-  fingerprint  String?        @map("fingerprint")
-  status       FeedbackStatus @default(pending)
-  adminNote    String?        @map("admin_note")
-  handledBy    String?        @map("handled_by")
-  handledAt    DateTime?      @map("handled_at")
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
+  id               String         @id @default(cuid())
+  eventId          String?        @map("event_id")
+  userKey          String?        @map("user_key")
+  scope            FeedbackScope  @default(event_correction)
+  feedbackType     String         @map("feedback_type")
+  content          String
+  contextPage      String?        @map("context_page")
+  appVersion       String?        @map("app_version")
+  relatedRequestId String?        @map("related_request_id")
+  requestId        String?        @unique @map("request_id")
+  fingerprint      String?        @map("fingerprint")
+  status           FeedbackStatus @default(pending)
+  adminNote        String?        @map("admin_note")
+  handledBy        String?        @map("handled_by")
+  handledAt        DateTime?      @map("handled_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
 
   event             Event?               @relation(fields: [eventId], references: [id], onDelete: SetNull)
   fingerprintRecord FeedbackFingerprint?
