@@ -183,8 +183,12 @@ export interface FeedbackItem {
   id: string;
   eventId?: string | null;
   userKey?: string | null;
+  scope: 'event_correction' | 'product_feedback';
   feedbackType: string;
   content: string;
+  contextPage?: string | null;
+  appVersion?: string | null;
+  relatedRequestId?: string | null;
   status: 'pending' | 'handling' | 'resolved' | 'rejected';
   adminNote?: string | null;
   handledBy?: string | null;
@@ -194,7 +198,8 @@ export interface FeedbackItem {
   invalidType?: boolean;
   riskReason?: string | null;
   lowInformation?: boolean;
-  eventScope?: 'public' | 'unpublished';
+  eventScope?: 'public' | 'unpublished' | 'not_applicable';
+  feedbackScope?: 'event_correction' | 'product_feedback';
   event?: {
     id: string;
     eventName: string;
@@ -206,7 +211,10 @@ export interface FeedbackItem {
 
 export interface FeedbackSummary {
   pending: number;
+  eventCorrections: number;
+  productFeedback: number;
   actionable: number;
+  actionableByScope: Record<'event_correction' | 'product_feedback', number>;
   suspicious: number;
   lowInformation: number;
   unpublishedEvent: number;
@@ -215,6 +223,8 @@ export interface FeedbackSummary {
   blocked30d: number;
   truncated: boolean;
   topEvents: Array<{ eventId: string | null; eventName: string; count: number }>;
+  submissions7d: Partial<Record<'event_correction' | 'product_feedback', number>>;
+  submissions30d: Partial<Record<'event_correction' | 'product_feedback', number>>;
 }
 
 export interface FeedbackBulkPreviewItem {
@@ -227,7 +237,27 @@ export interface FeedbackBulkPreviewItem {
   invalidType?: boolean;
   riskReason?: string | null;
   lowInformation?: boolean;
-  eventScope?: 'public' | 'unpublished';
+  eventScope?: 'public' | 'unpublished' | 'not_applicable';
+}
+
+export interface SystemHealth {
+  release: string;
+  uptimeSeconds: number;
+  rssMb: number;
+  database: 'ok' | 'error';
+  databaseLatencyMs: number;
+  errors: {
+    last24h: { total: number; byCategory: Record<string, number>; byRoute: Record<string, number> };
+    last7d: { total: number; byCategory: Record<string, number>; byRoute: Record<string, number> };
+  };
+  lastSourceRun?: {
+    status: string;
+    startedAt: string;
+    finishedAt?: string | null;
+    source: { id: string; name: string };
+  } | null;
+  pendingFeedback: Partial<Record<'event_correction' | 'product_feedback', number>>;
+  checkedAt: string;
 }
 
 export interface FeedbackBulkResult {

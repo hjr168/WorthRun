@@ -10,6 +10,7 @@ import {
   InteractionStats,
   EventChangeAlertSummary,
   OperationLog,
+  SystemHealth,
   WorkflowStats,
 } from '../types';
 import { showError } from '../utils/helpers';
@@ -54,6 +55,7 @@ export function WorkbenchPage() {
   const [quality, setQuality] = useState<DataQualitySummary>();
   const [workflow, setWorkflow] = useState<WorkflowStats>();
   const [eventChanges, setEventChanges] = useState<EventChangeAlertSummary>();
+  const [systemHealth, setSystemHealth] = useState<SystemHealth>();
   const [metricDays, setMetricDays] = useState<7 | 30>(30);
   const [metrics, setMetrics] = useState<InteractionStats>();
   const [cleaning, setCleaning] = useState(false);
@@ -66,6 +68,7 @@ export function WorkbenchPage() {
       apiGet<EventChangeAlertSummary>('/api/admin/event-change-alerts/summary').then(
         setEventChanges,
       ),
+      apiGet<SystemHealth>('/api/admin/system-health').then(setSystemHealth),
     ]).catch(showError);
 
   useEffect(() => void load(), []);
@@ -133,6 +136,20 @@ export function WorkbenchPage() {
           type="warning"
           showIcon
           message="AI 整理，仅供参考，报名以官方为准。官方入口统一使用“前往官方确认”。"
+        />
+        <Alert
+          type={systemHealth?.database === 'ok' && (systemHealth?.errors.last24h.total || 0) === 0 ? 'success' : 'warning'}
+          showIcon
+          message={
+            systemHealth
+              ? `API ${systemHealth.database === 'ok' ? '正常' : '异常'} · RSS ${systemHealth.rssMb}MB · 近24小时 5xx ${systemHealth.errors.last24h.total} 次`
+              : '正在读取线上运行状态'
+          }
+          description={
+            systemHealth
+              ? `版本 ${systemHealth.release} · 数据库 ${systemHealth.databaseLatencyMs}ms · 最近来源任务 ${systemHealth.lastSourceRun?.status || '暂无'}`
+              : undefined
+          }
         />
         <div className="stat-grid">
           <Card>

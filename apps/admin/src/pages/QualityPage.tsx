@@ -1,4 +1,4 @@
-import { Button, Input, Modal, Select, Space, Statistic, Table, Tag, message } from 'antd';
+import { Button, Input, Modal, Segmented, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import type { Key } from 'react';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
@@ -10,7 +10,7 @@ import { showError } from '../utils/helpers';
 import { useAdmin } from '../context/AdminContext';
 import { boundedSelection, buildFeedbackQuery } from '../utils/feedback';
 
-const feedbackTypeOptions = [
+const eventFeedbackTypeOptions = [
   '日期有误',
   '报名状态有误',
   '官方链接失效',
@@ -18,6 +18,20 @@ const feedbackTypeOptions = [
   '信息重复',
   '其他',
 ].map((value) => ({ value, label: value }));
+
+const productFeedbackTypeOptions = ['功能建议', '使用问题', '页面异常', '内容体验', '其他'].map(
+  (value) => ({ value, label: value }),
+);
+
+const contextPageLabels: Record<string, string> = {
+  home: '首页',
+  events: '赛事列表',
+  event_detail: '赛事详情',
+  source_summary: '来源摘要',
+  favorites: '我的收藏',
+  choices: '我的选择',
+  mine: '我的',
+};
 
 const riskLabels: Record<string, string> = {
   sql_probe: '疑似自动探测',
@@ -35,13 +49,18 @@ export function QualityPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [scope, setScope] = useState<'event_correction' | 'product_feedback'>('event_correction');
   const [status, setStatus] = useState<string>();
   const [feedbackType, setFeedbackType] = useState<string>();
   const [eventScope, setEventScope] = useState<string>();
+  const [contextPage, setContextPage] = useState<string>();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const scopePending =
+    scope === 'event_correction' ? summary?.eventCorrections : summary?.productFeedback;
+  const scopeActionable = summary?.actionableByScope?.[scope] ?? 0;
 
   const load = async () => {
     try {
@@ -50,7 +69,9 @@ export function QualityPage() {
         page,
         pageSize,
         status,
+        scope,
         feedbackType,
+        contextPage,
         eventScope,
         search,
       });
@@ -68,8 +89,8 @@ export function QualityPage() {
     }
   };
 
-  useEffect(() => void load(), [page, pageSize, status, feedbackType, eventScope, search]);
-  useEffect(() => setSelectedRowKeys([]), [page, pageSize, status, feedbackType, eventScope, search]);
+  useEffect(() => void load(), [page, pageSize, scope, status, feedbackType, eventScope, contextPage, search]);
+  useEffect(() => setSelectedRowKeys([]), [page, pageSize, scope, status, feedbackType, eventScope, contextPage, search]);
 
   const changeFilter = (setter: (value: string | undefined) => void, value?: string) => {
     setter(value);
@@ -196,15 +217,32 @@ export function QualityPage() {
       </div>
 
       <div className="quality-stats">
-        <Statistic title="待处理" value={summary?.pending ?? 0} />
-        <Statistic title="可人工处理" value={summary?.actionable ?? 0} />
+        <Statistic title={scope === 'event_correction' ? '待处理赛事纠错' : '待处理产品反馈'} value={scopePending ?? 0} />
+        <Statistic title="可人工处理" value={scopeActionable} />
         <Statistic title="异常探测" value={summary?.suspicious ?? 0} />
         <Statistic title="低信息" value={summary?.lowInformation ?? 0} />
-        <Statistic title="非公开赛事" value={summary?.unpublishedEvent ?? 0} />
-        <Statistic title="近 7 天拦截" value={summary?.blocked7d ?? 0} />
+        <Statistic
+          title="近 7 天提交"
+          value={summary?.submissions7d?.[scope] ?? 0}
+        />
+        <Statistic title="近 30 天提交" value={summary?.submissions30d?.[scope] ?? 0} />
       </div>
 
       <div className="quality-filters">
+        <Segmented
+          value={scope}
+          options={[
+            { value: 'event_correction', label: '赛事纠错' },
+            { value: 'product_feedback', label: '产品反馈' },
+          ]}
+          onChange={(value) => {
+            setScope(value as typeof scope);
+            setFeedbackType(undefined);
+            setEventScope(undefined);
+            setContextPage(undefined);
+            setPage(1);
+          }}
+        />
         <Input.Search
           allowClear
           value={searchInput}
@@ -228,21 +266,32 @@ export function QualityPage() {
           allowClear
           placeholder="反馈类型"
           style={{ width: 170 }}
-          options={feedbackTypeOptions}
+          options={scope === 'event_correction' ? eventFeedbackTypeOptions : productFeedbackTypeOptions}
           value={feedbackType}
           onChange={(value) => changeFilter(setFeedbackType, value)}
         />
-        <Select
-          allowClear
-          placeholder="赛事范围"
-          style={{ width: 170 }}
-          options={[
-            { value: 'public', label: '当前公开赛事' },
-            { value: 'unpublished', label: '当前非公开赛事' },
-          ]}
-          value={eventScope}
-          onChange={(value) => changeFilter(setEventScope, value)}
-        />
+        {scope === 'event_correction' ? (
+          <Select
+            allowClear
+            placeholder="赛事范围"
+            style={{ width: 170 }}
+            options={[
+              { value: 'public', label: '当前公开赛事' },
+              { value: 'unpublished', label: '当前非公开赛事' },
+            ]}
+            value={eventScope}
+            onChange={(value) => changeFilter(setEventScope, value)}
+          />
+        ) : (
+          <Select
+            allowClear
+            placeholder="反馈页面"
+            style={{ width: 170 }}
+            options={Object.entries(contextPageLabels).map(([value, label]) => ({ value, label }))}
+            value={contextPage}
+            onChange={(value) => changeFilter(setContextPage, value)}
+          />
+        )}
       </div>
 
       <Table
@@ -305,16 +354,23 @@ export function QualityPage() {
               feedbackStatusOptions.find((item) => item.value === value)?.label || value,
           },
           {
-            title: '关联赛事',
-            dataIndex: 'event',
-            width: 220,
-            render: (event) =>
-              event ? (
-                <Button type="link" onClick={() => navigate(`/events/edit/${event.id}`)}>
-                  {event.eventName}
-                </Button>
+            title: scope === 'event_correction' ? '关联赛事' : '反馈上下文',
+            width: 240,
+            render: (_, record) =>
+              scope === 'event_correction' ? (
+                record.event ? (
+                  <Button type="link" onClick={() => navigate(`/events/edit/${record.event!.id}`)}>
+                    {record.event.eventName}
+                  </Button>
+                ) : (
+                  '-'
+                )
               ) : (
-                '-'
+                <Space direction="vertical" size={0}>
+                  <span>{contextPageLabels[record.contextPage || ''] || '未标记页面'}</span>
+                  <span>{record.appVersion ? `版本 ${record.appVersion}` : '版本未知'}</span>
+                  {record.relatedRequestId && <Typography.Text copyable>{record.relatedRequestId}</Typography.Text>}
+                </Space>
               ),
           },
           {

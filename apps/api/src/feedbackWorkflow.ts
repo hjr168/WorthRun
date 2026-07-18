@@ -92,9 +92,14 @@ export function buildFeedbackSummary(
   }
 
   const buckets = new Map<string, number>();
+  const actionableKeysByScope = {
+    event_correction: new Set<string>(),
+    product_feedback: new Set<string>(),
+  };
   for (const item of actionable) {
     const key = feedbackDuplicateKey(item);
     buckets.set(key, (buckets.get(key) || 0) + 1);
+    actionableKeysByScope[item.scope || 'event_correction'].add(key);
   }
   const exactDuplicates = Array.from(buckets.values()).reduce(
     (total, count) => total + Math.max(0, count - 1),
@@ -106,6 +111,10 @@ export function buildFeedbackSummary(
     eventCorrections,
     productFeedback,
     actionable: Math.max(0, actionable.length - exactDuplicates),
+    actionableByScope: {
+      event_correction: actionableKeysByScope.event_correction.size,
+      product_feedback: actionableKeysByScope.product_feedback.size,
+    },
     suspicious,
     lowInformation,
     unpublishedEvent,

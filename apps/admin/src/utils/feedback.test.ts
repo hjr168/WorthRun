@@ -8,12 +8,13 @@ describe('feedback admin helpers', () => {
         page: 2,
         pageSize: 20,
         status: 'pending',
+        scope: 'event_correction',
         feedbackType: '日期有误',
         eventScope: 'public',
         search: ' 广州 半马 ',
       }),
     ).toBe(
-      'page=2&pageSize=20&status=pending&feedbackType=%E6%97%A5%E6%9C%9F%E6%9C%89%E8%AF%AF&eventScope=public&search=%E5%B9%BF%E5%B7%9E+%E5%8D%8A%E9%A9%AC',
+      'page=2&pageSize=20&status=pending&scope=event_correction&feedbackType=%E6%97%A5%E6%9C%9F%E6%9C%89%E8%AF%AF&eventScope=public&search=%E5%B9%BF%E5%B7%9E+%E5%8D%8A%E9%A9%AC',
     );
   });
 
