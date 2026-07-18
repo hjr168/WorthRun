@@ -1,5 +1,6 @@
 import {
   addFavorite,
+  ApiError,
   EventDetail,
   EventChoice,
   getEventDetail,
@@ -29,6 +30,7 @@ import {
   hasChoiceCounts,
   updateChoiceCounts,
 } from '../../utils/event-detail';
+import { openProductFeedback } from '../../utils/product-feedback';
 
 Page({
   data: {
@@ -36,6 +38,7 @@ Page({
     userKey: '',
     loading: true,
     error: '',
+    errorRequestId: '',
     event: null as EventDetail | null,
     isFavorite: false,
     viewerChoice: null as EventChoice | null,
@@ -73,7 +76,7 @@ Page({
       this.setData({ loading: false, error: '赛事不存在或未发布' });
       return;
     }
-    this.setData({ loading: true, error: '' });
+    this.setData({ loading: true, error: '', errorRequestId: '' });
     try {
       const [detail, favorites, viewerChoice] = await Promise.all([
         getEventDetail(this.data.id),
@@ -117,11 +120,15 @@ Page({
         loading: false,
         event: null,
         error: (error as Error).message || '赛事不存在或未发布',
+        errorRequestId: error instanceof ApiError ? error.requestId || '' : '',
       });
     }
   },
   reload() {
     this.load();
+  },
+  reportProblem() {
+    openProductFeedback('event_detail', this.data.errorRequestId || undefined);
   },
   async toggleFavorite() {
     if (!this.data.event) return;

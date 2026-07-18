@@ -147,6 +147,15 @@ describe('buildDataCleanupPlan', () => {
             eventCity: '深圳',
             eventDate: new Date('2026-07-20'),
           },
+          {
+            id: 'product',
+            eventId: null,
+            userKey: 'u5',
+            scope: 'product_feedback',
+            feedbackType: '功能建议',
+            content: '希望增加更清晰的页面提示',
+            createdAt: new Date('2026-07-01'),
+          },
         ],
       },
       now,
@@ -155,6 +164,7 @@ describe('buildDataCleanupPlan', () => {
     expect(plan.ids.reject_suspicious_feedback).toEqual(['probe']);
     expect(plan.ids.reject_low_information_feedback).toEqual(['low-info']);
     expect(plan.ids.reject_unpublished_event_feedback).toEqual(['unpublished']);
+    expect(Object.values(plan.ids).flat()).not.toContain('product');
     expect(plan.ids.reject_duplicate_feedback).toEqual([]);
     expect(Object.values(plan.ids).flat().filter((id) => id === 'probe')).toHaveLength(1);
     expect(plan.samples.reject_suspicious_feedback[0]).not.toContain('example.test');

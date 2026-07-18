@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("../../utils/api");
 const user_1 = require("../../utils/user");
+const product_feedback_1 = require("../../utils/product-feedback");
 const cities = [
     '全部',
     '广州',
@@ -35,6 +36,7 @@ Page({
     data: {
         loading: true,
         error: '',
+        errorRequestId: '',
         userKey: '',
         search: '',
         cityIndex: 0,
@@ -68,7 +70,7 @@ Page({
         if (!reset && (this.data.loadingMore || !this.data.hasMore))
             return;
         const page = reset ? 1 : this.data.page + 1;
-        this.setData(Object.assign({ loading: reset, loadingMore: !reset, error: '', userKey,
+        this.setData(Object.assign({ loading: reset, loadingMore: !reset, error: '', errorRequestId: '', userKey,
             page }, (reset ? { events: [], hasMore: true, total: 0 } : {})));
         try {
             const params = {
@@ -111,12 +113,16 @@ Page({
                 loadingMore: false,
                 didInitialLoad: true,
                 error: reset ? error.message || '网络异常' : this.data.error,
+                errorRequestId: reset && error instanceof api_1.ApiError ? error.requestId || '' : this.data.errorRequestId,
             });
             wx.showToast({ title: reset ? '网络异常' : '加载失败', icon: 'none' });
         }
     },
     reload() {
         this.load(true);
+    },
+    reportProblem() {
+        (0, product_feedback_1.openProductFeedback)('events', this.data.errorRequestId || undefined);
     },
     onReachBottom() {
         if (!this.data.hasMore) {

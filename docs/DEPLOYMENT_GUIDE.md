@@ -9,6 +9,7 @@
 - `.env` 至少需要配置：
   - `DATABASE_URL`：PostgreSQL 连接串。
   - `API_PORT`：API 监听端口，例如 `4000`。
+  - `APP_RELEASE`：当前部署版本或短提交号，用于健康检查和错误定位。
   - `NODE_ENV=production`：线上 API 必须使用生产环境。
   - `ADMIN_TOKEN_SECRET`：后台登录 token 签名密钥，正式环境必须使用高强度随机值。
   - `FEEDBACK_ABUSE_SECRET`：反馈防刷与 IP 摘要使用的独立 HMAC 密钥，正式环境必须配置高强度随机值，不能写入代码或日志。
@@ -26,8 +27,9 @@
 - 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。
 - API 对外访问需要 HTTPS 域名，体验版和提审不能使用 `localhost`、局域网 IP 或 HTTP。
 - API 保持 `HOST=127.0.0.1`，仅由单层 Nginx 反向代理公开；Nginx 必须传递 `X-Forwarded-For` 与 `X-Forwarded-Proto`，不要把 API 端口直接暴露到公网。
-- 每日执行一次 `pnpm feedback:maintenance`，清理过期反馈指纹、48 小时以前的限流摘要和 90 天以前的拦截聚合计数。该任务不会删除反馈正文或操作日志，Node heap 上限为 96MB。
+- 每日执行一次 `pnpm feedback:maintenance`，清理过期反馈指纹、48 小时以前的限流摘要、90 天以前的拦截聚合和 30 天以前的 5xx 聚合。该任务不会删除反馈正文或操作日志，Node heap 上限为 96MB。
 - Nginx 使用仓库 `ops/nginx/worth-running.conf`；仅 `/api/feedback` 使用 16KB 请求体上限和每 IP 每分钟 6 次、burst 3 的限流，其他公开和后台接口不受影响。
+- 将 `ops/logrotate/worth-running` 安装到 `/etc/logrotate.d/worth-running`，统一轮转 API、赛事源和反馈维护日志；不要安装 PM2 常驻日志模块。
 - 生产 `DATABASE_URL` 建议追加 `connection_limit=2&pool_timeout=10`，降低 API 与短时赛事源任务并存时的数据库连接内存。
 
 常用命令：
@@ -98,3 +100,4 @@ VITE_API_BASE_URL=https://run-api.huangjiarong.top pnpm --filter @worth-running/
 8. 线上 API 未设置 `ALLOW_DEV_ADMIN=true`。
 9. 默认 `admin/admin` 不再用于测试或正式环境。
 10. 线上已配置 `FEEDBACK_ABUSE_SECRET`，并验证 `POST /api/feedback` 在重复提交时返回已有结果、频繁提交时返回 HTTP 429。
+11. `/api/admin/system-health` 可查看 RSS、数据库延迟和 5xx 聚合，日志轮转 dry-run 无错误。

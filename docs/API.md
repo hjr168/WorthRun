@@ -31,6 +31,8 @@ Authorization: Bearer <token>
 - `PATCH /api/admin/feedback/:id/handle`
 - `GET /api/admin/feedback/duplicates?hours=24`：查看待处理/处理中重复组。
 - `POST /api/admin/feedback/duplicates/reject`：批量驳回重复组中的待处理记录。
+- `GET /api/admin/feedback/summary`：分别返回赛事纠错、产品反馈和近 7/30 天提交量。
+- `GET /api/admin/system-health`：返回 API RSS、数据库延迟、近 24 小时/7 天 5xx 聚合和最近来源运行状态。
 
 ## 操作日志
 
@@ -226,4 +228,6 @@ pnpm source-summary:backfill
 pnpm source-summary:backfill -- --apply --expected <预览数量>
 ```
 
-`POST /api/feedback` 需要 `eventId`、`userKey`、`requestId`、白名单内的 `feedbackType` 和 `content`。同一 `requestId` 或 24 小时内相同赛事、类型、内容的反馈会返回 HTTP 200 与 `{ duplicate: true }`，不会新增记录；提交频率超限会返回 HTTP 429 和 `Retry-After`。
+`POST /api/feedback` 支持 `event_correction` 与 `product_feedback`。旧请求未传 `scope` 时仍按赛事纠错处理并要求公开赛事；产品反馈不接受 `eventId`，可携带固定页面标识、小程序版本和关联 API 问题编号。两类反馈均要求 6-500 字正文并执行异常探测、24 小时重复保护和频率限制。
+
+所有 API 错误响应返回 `{ message, requestId }`，响应头同时提供 `X-Request-Id`。`GET /health` 保留原字段并增加 `release` 与 `databaseLatencyMs`。

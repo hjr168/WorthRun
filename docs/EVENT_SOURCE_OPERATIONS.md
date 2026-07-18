@@ -120,15 +120,17 @@ curl -fsS http://127.0.0.1:4000/health
 17 4 * * * /usr/bin/flock -n /tmp/worth-running-feedback-maintenance.lock /bin/bash -lc 'cd /opt/worth-running && set -a && source .env && set +a && exec /absolute/path/to/node --max-old-space-size=96 apps/api/dist/apps/api/src/feedbackMaintenanceCli.js' >> /var/log/worth-running-feedback-maintenance.log 2>&1
 ```
 
-反馈维护任务只清理辅助指纹、限流摘要和过期聚合指标，不删除反馈正文。首次部署先手动执行 `pnpm feedback:maintenance`，确认输出只有删除数量且峰值 RSS 不超过 120MB。
+反馈维护任务只清理辅助指纹、限流摘要、拦截聚合和 30 天前的 5xx 聚合，不删除反馈正文。首次部署先手动执行 `pnpm feedback:maintenance`，确认输出只有删除数量且峰值 RSS 不超过 120MB。
 
-建议配置 `/etc/logrotate.d/worth-running-event-source`：
+将仓库 `ops/logrotate/worth-running` 安装为 `/etc/logrotate.d/worth-running`，统一轮转 API、赛事源和反馈维护日志；不要安装 PM2 常驻日志模块。仓库配置如下：
 
 ```text
-/var/log/worth-running-event-source.log {
+/root/.pm2/logs/worth-running-api-*.log /var/log/worth-running-event-source.log /var/log/worth-running-feedback-maintenance.log {
   weekly
+  su root root
   rotate 4
   compress
+  delaycompress
   missingok
   notifempty
   copytruncate

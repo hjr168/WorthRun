@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.feedbackReceiptStorageKey = void 0;
 exports.mergeFeedbackReceipt = mergeFeedbackReceipt;
 exports.getFeedbackReceipts = getFeedbackReceipts;
+exports.createFeedbackRequestId = createFeedbackRequestId;
 exports.saveFeedbackReceipt = saveFeedbackReceipt;
 exports.feedbackReceiptStorageKey = 'worthrun_feedback_receipts';
 function mergeFeedbackReceipt(receipts, receipt, limit = 5) {
@@ -16,6 +17,10 @@ function getFeedbackReceipts() {
     catch (_a) {
         return [];
     }
+}
+function createFeedbackRequestId() {
+    const random = Math.random().toString(36).slice(2, 12);
+    return `feedback_${Date.now().toString(36)}_${random}`;
 }
 function saveFeedbackReceipt(receipt) {
     const receipts = mergeFeedbackReceipt(getFeedbackReceipts(), receipt);

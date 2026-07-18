@@ -9,7 +9,8 @@ V0.1 使用 PostgreSQL + Prisma。
 - `event_tags`：赛事标签。
 - `user_preferences`：匿名用户或 openid 偏好预留。
 - `user_favorites`：收藏赛事。
-- `feedback`：纠错反馈。
+- `feedback`：赛事纠错和产品反馈，使用范围字段区分，只保存必要页面上下文。
+- `api_error_metrics`：小时级 5xx 聚合，只保存路由组、错误类别和数量。
 - `admin_users`：后台管理员，V0.1 保留角色字段。
 - `admin_operation_logs`：后台关键操作日志。
 - `system_configs`：基础配置。
@@ -77,3 +78,9 @@ V0.5.0 匿名选择与来源摘要变更：
 - `EventInteractionAction` 增加来源摘要打开、成功查看和原始来源链接复制，不保存明文匿名标识。
 - `event_source_summaries` 使用 `(event_id, content_hash, prompt_version)` 去重；AI 只生成草稿，人工发布新版本时旧版本改为 `superseded`。
 - 官方来源产生新的开放变更告警时，当前已发布摘要标记为 stale，但不会被自动覆盖。
+
+V0.5.1 产品反馈与稳定性变更：
+
+- `FeedbackScope` 区分 `event_correction` 与 `product_feedback`；旧记录默认回填为赛事纠错，不改变状态。
+- 产品反馈可保存固定 `context_page`、最长 32 字符的 `app_version` 和关联服务端请求编号，不保存截图、设备信息或联系方式。
+- `api_error_metrics` 按小时、固定路由组和错误类别聚合 5xx，30 天后由现有反馈维护任务清理。

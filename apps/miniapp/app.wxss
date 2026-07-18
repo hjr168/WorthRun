@@ -105,6 +105,13 @@ button::after {
   line-height: 1.25;
 }
 
+.feedback-problem-link {
+  min-height: 64rpx;
+  margin-top: 12rpx;
+  color: #64748b;
+  font-size: 24rpx;
+}
+
 .tag-row {
   display: flex;
   flex-wrap: wrap;

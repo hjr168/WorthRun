@@ -1,0 +1,48 @@
+<view class="page product-feedback-page">
+  <page-header title="产品反馈" subtitle="告诉我们哪里不好用，或你希望增加什么。" />
+
+  <view wx:if="{{submitted}}" class="success-panel">
+    <view class="success-mark">已提交</view>
+    <view class="success-title">{{successMessage}}</view>
+    <view class="success-desc">本机已保存提交回执，该回执不代表处理进度。</view>
+    <button class="primary-button" bindtap="goBack">返回上一页</button>
+  </view>
+
+  <block wx:else>
+    <view class="context-band">
+      <text>反馈页面：{{contextLabel}}</text>
+      <text wx:if="{{appVersion}}">版本：{{appVersion}}</text>
+      <text wx:if="{{relatedRequestId}}" class="request-id">问题编号：{{relatedRequestId}}</text>
+    </view>
+
+    <view class="form-section">
+      <view class="field-label">反馈类型</view>
+      <view class="type-grid">
+        <button
+          wx:for="{{feedbackTypes}}"
+          wx:key="*this"
+          class="type-option {{typeIndex === index ? 'selected' : ''}}"
+          data-index="{{index}}"
+          bindtap="onTypeSelect"
+        >{{item}}</button>
+      </view>
+    </view>
+
+    <view class="form-section">
+      <view class="field-row">
+        <view class="field-label">补充说明</view>
+        <view class="character-count {{contentLength > 0 && contentLength < 6 ? 'invalid' : ''}}">{{contentLength}} / 500</view>
+      </view>
+      <textarea
+        class="textarea feedback-textarea"
+        value="{{content}}"
+        maxlength="500"
+        placeholder="{{feedbackHints[typeIndex]}}"
+        bindinput="onContentInput"
+      />
+      <view class="field-help">至少填写 6 个字，请不要提交账号、电话等个人信息。</view>
+    </view>
+
+    <button class="primary-button submit {{submitting || !canSubmit ? 'is-disabled' : ''}}" loading="{{submitting}}" disabled="{{submitting || !canSubmit}}" bindtap="submit">提交反馈</button>
+  </block>
+</view>

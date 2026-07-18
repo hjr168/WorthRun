@@ -2,15 +2,16 @@ import { Prisma, prisma } from '@worth-running/database';
 import { chinaDateOnly, isGreaterBayAreaCity } from '@worth-running/shared';
 import {
   classifyFeedbackRisk,
+  isValidFeedbackType,
   isLowInformationFeedback,
   normalizeFeedbackContent,
-  publicFeedbackTypes,
 } from './feedbackAbuse.js';
 
 export interface FeedbackWorkflowItem {
   id: string;
   eventId: string | null;
   userKey: string | null;
+  scope?: 'event_correction' | 'product_feedback';
   feedbackType: string;
   content: string;
   status: string;
@@ -28,6 +29,7 @@ export interface FeedbackWorkflowItem {
 export function feedbackDuplicateKey(item: FeedbackWorkflowItem) {
   return [
     item.eventId || '',
+    item.scope || 'event_correction',
     item.userKey || '',
     item.feedbackType,
     normalizeFeedbackContent(item.content),
@@ -35,13 +37,14 @@ export function feedbackDuplicateKey(item: FeedbackWorkflowItem) {
 }
 
 export function feedbackDisposition(item: FeedbackWorkflowItem, now: Date = new Date()) {
-  const invalidType = !publicFeedbackTypes.includes(
-    item.feedbackType as (typeof publicFeedbackTypes)[number],
-  );
+  const feedbackScope = item.scope || 'event_correction';
+  const invalidType = !isValidFeedbackType(feedbackScope, item.feedbackType);
   const risk = classifyFeedbackRisk(item.content);
   const lowInformation = isLowInformationFeedback(item.feedbackType, item.content);
   const today = new Date(`${chinaDateOnly(now)}T00:00:00.000Z`);
-  const eventScope =
+  const eventScope = feedbackScope === 'product_feedback'
+    ? 'not_applicable'
+    :
     item.event?.publishStatus === 'published' &&
     item.event.eventDate > today &&
     isGreaterBayAreaCity(item.event.city)
@@ -49,9 +52,10 @@ export function feedbackDisposition(item: FeedbackWorkflowItem, now: Date = new 
       : 'unpublished';
   return {
     invalidType,
+    feedbackScope,
     riskReason: risk.suspicious ? risk.reason : null,
     lowInformation,
-    eventScope: eventScope as 'public' | 'unpublished',
+    eventScope: eventScope as 'public' | 'unpublished' | 'not_applicable',
   };
 }
 
@@ -64,11 +68,15 @@ export function buildFeedbackSummary(
   let suspicious = 0;
   let lowInformation = 0;
   let unpublishedEvent = 0;
+  let eventCorrections = 0;
+  let productFeedback = 0;
   const actionable: FeedbackWorkflowItem[] = [];
   const eventCounts = new Map<string, { eventId: string | null; eventName: string; count: number }>();
 
   for (const item of items) {
     const disposition = feedbackDisposition(item, now);
+    if (disposition.feedbackScope === 'product_feedback') productFeedback += 1;
+    else eventCorrections += 1;
     if (disposition.riskReason) suspicious += 1;
     else if (disposition.lowInformation) lowInformation += 1;
     else if (disposition.eventScope === 'unpublished') unpublishedEvent += 1;
@@ -84,9 +92,14 @@ export function buildFeedbackSummary(
   }
 
   const buckets = new Map<string, number>();
+  const actionableKeysByScope = {
+    event_correction: new Set<string>(),
+    product_feedback: new Set<string>(),
+  };
   for (const item of actionable) {
     const key = feedbackDuplicateKey(item);
     buckets.set(key, (buckets.get(key) || 0) + 1);
+    actionableKeysByScope[item.scope || 'event_correction'].add(key);
   }
   const exactDuplicates = Array.from(buckets.values()).reduce(
     (total, count) => total + Math.max(0, count - 1),
@@ -95,7 +108,13 @@ export function buildFeedbackSummary(
 
   return {
     pending: items.length,
+    eventCorrections,
+    productFeedback,
     actionable: Math.max(0, actionable.length - exactDuplicates),
+    actionableByScope: {
+      event_correction: actionableKeysByScope.event_correction.size,
+      product_feedback: actionableKeysByScope.product_feedback.size,
+    },
     suspicious,
     lowInformation,
     unpublishedEvent,

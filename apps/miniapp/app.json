@@ -9,6 +9,7 @@
     "pages/favorites/index",
     "pages/choices/index",
     "pages/feedback/index",
+    "pages/product-feedback/index",
     "pages/tools/index",
     "pages/pace/index",
     "pages/checklist/index",

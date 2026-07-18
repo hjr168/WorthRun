@@ -1,6 +1,7 @@
-import { getSourceSummary, PublicSourceSummary, recordInteraction } from '../../utils/api';
+import { ApiError, getSourceSummary, PublicSourceSummary, recordInteraction } from '../../utils/api';
 import { complianceNotice, formatDate, formatDateTime } from '../../utils/format';
 import { getUserKey } from '../../utils/user';
+import { openProductFeedback } from '../../utils/product-feedback';
 
 Page({
   data: {
@@ -8,6 +9,7 @@ Page({
     userKey: '',
     loading: true,
     error: '',
+    errorRequestId: '',
     item: null as PublicSourceSummary | null,
     eventDateText: '',
     fetchedAtText: '',
@@ -23,7 +25,7 @@ Page({
       this.setData({ loading: false, error: '缺少赛事信息' });
       return;
     }
-    this.setData({ loading: true, error: '' });
+    this.setData({ loading: true, error: '', errorRequestId: '' });
     try {
       const item = await getSourceSummary(this.data.eventId);
       this.setData({
@@ -44,11 +46,15 @@ Page({
         loading: false,
         item: null,
         error: (error as Error).message || '来源摘要加载失败',
+        errorRequestId: error instanceof ApiError ? error.requestId || '' : '',
       });
     }
   },
   reload() {
     this.load();
+  },
+  reportProblem() {
+    openProductFeedback('source_summary', this.data.errorRequestId || undefined);
   },
   copySourceUrl() {
     if (!this.data.item?.sourceUrl) return;

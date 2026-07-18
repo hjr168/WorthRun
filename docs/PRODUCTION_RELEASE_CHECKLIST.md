@@ -127,6 +127,17 @@
 - [ ] `pnpm source-summary:backfill` 已先 dry-run，apply 数量与预览一致。
 - [ ] API PM2 仍为单进程，RSS 小于 220MB；单次摘要生成峰值小于 180MB，cron 数量不变。
 
+## 12. V0.5.1 产品反馈与稳定性
+
+- [ ] 旧版赛事纠错请求不传 `scope` 仍可提交，历史反馈数量和状态未变化。
+- [ ] 产品反馈不关联赛事，只保存文字、固定页面标识、版本和关联问题编号。
+- [ ] “我的”页及关键错误状态可以进入产品反馈，网络失败时保留正文和请求编号。
+- [ ] 后台可分别筛选、预览和处理赛事纠错与产品反馈。
+- [ ] API 错误响应和 `X-Request-Id` 使用同一服务端 UUID，日志不包含正文、IP 或 `userKey`。
+- [ ] `/health` 返回发布版本与数据库延迟，`/api/admin/system-health` 返回 RSS 和 5xx 聚合。
+- [ ] `ops/logrotate/worth-running` 已安装并通过 `logrotate -d`，未安装 PM2 常驻模块。
+- [ ] API RSS 小于 220MB，反馈维护任务峰值小于 120MB，cron 数量没有增加。
+
 ## 注意事项
 
 - `urlCheck=false` 只允许开发调试，不能用于体验版上传、提审或正式发布。

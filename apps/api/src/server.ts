@@ -1,4 +1,4 @@
-import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import cors from 'cors';
 import type { CorsOptions } from 'cors';
 import express, { NextFunction, Request, Response } from 'express';
@@ -39,10 +39,13 @@ import {
   getRetryAfterSeconds,
   getWindowStart,
   hmacDigest,
-  isLowInformationFeedback,
   normalizeFeedbackContent,
-  publicFeedbackTypes,
+  eventCorrectionTypes,
+  feedbackScopes,
+  productFeedbackContextPages,
+  productFeedbackTypes,
 } from './feedbackAbuse.js';
+import { publicFeedbackSchema, type PublicFeedbackInput } from './feedbackSubmission.js';
 import { recordBlockedFeedback } from './feedbackMaintenance.js';
 import { getMiniProgramCode } from './wxacode.js';
 import { buildPublicEventWhere } from './dataPolicy.js';
@@ -67,6 +70,12 @@ import { previewBulkAccept, runBulkAccept } from './candidateAcceptWorkflow.js';
 import { eventPublishIssues, previewBulkPublish, runBulkPublish } from './eventPublishWorkflow.js';
 import { buildFeedbackSummary, feedbackDisposition, runFeedbackBulk } from './feedbackWorkflow.js';
 import { chinaDay } from './feedbackMaintenance.js';
+import {
+  apiRouteGroup,
+  buildApiErrorSummary,
+  recordApiErrorMetric,
+} from './apiStability.js';
+import { runGracefulShutdown } from './gracefulShutdown.js';
 import {
   EventChangeConflictError,
   EventChangeNotFoundError,
@@ -108,6 +117,7 @@ const port = Number(process.env.API_PORT ?? 4000);
 const host = process.env.HOST ?? '127.0.0.1';
 const isProduction = process.env.NODE_ENV === 'production';
 const allowDevAdmin = process.env.ALLOW_DEV_ADMIN === 'true';
+const release = process.env.APP_RELEASE?.trim() || (isProduction ? 'unknown' : 'dev');
 
 if (isProduction && !process.env.ADMIN_TOKEN_SECRET) {
   throw new Error('生产环境必须配置 ADMIN_TOKEN_SECRET');
@@ -179,6 +189,13 @@ const corsOptions: CorsOptions = {
 
 // API 仅监听本机，由单层 Nginx 反向代理暴露；因此只信任最近一层代理提供的客户端地址。
 app.set('trust proxy', 1);
+app.use((req, res, next) => {
+  const requestId = randomUUID();
+  res.locals.requestId = requestId;
+  res.locals.requestStartedAt = Date.now();
+  res.setHeader('X-Request-Id', requestId);
+  next();
+});
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 
@@ -385,33 +402,6 @@ const sourceSummaryPublishSchema = z.object({
   note: z.string().trim().min(4, '发布备注至少 4 字').max(500),
 });
 
-const publicFeedbackSchema = z
-  .object({
-    eventId: z.string().trim().min(1, 'eventId 不能为空'),
-    userKey: z.string().trim().min(1, 'userKey 不能为空').max(100, 'userKey 无效'),
-    requestId: z
-      .string()
-      .trim()
-      .min(16, 'requestId 无效')
-      .max(128, 'requestId 无效')
-      .regex(/^[A-Za-z0-9_-]+$/, 'requestId 无效'),
-    feedbackType: z.enum(publicFeedbackTypes, { required_error: '反馈类型无效' }),
-    content: z
-      .string()
-      .trim()
-      .min(6, '补充说明至少需要 6 个字')
-      .max(500, '反馈内容不能超过 500 个字'),
-  })
-  .superRefine((input, context) => {
-    if (isLowInformationFeedback(input.feedbackType, input.content)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['content'],
-        message: '请补充具体变化或信息出处',
-      });
-    }
-  });
-
 const shareRecordSchema = z.object({
   userKey: z.string().trim().min(1, 'userKey 不能为空').max(100),
   eventId: z.string().trim().min(1).optional(),
@@ -480,7 +470,9 @@ const eventChoiceStatsQuerySchema = paginationQuerySchema
 
 const adminFeedbackQuerySchema = paginationQuerySchema.extend({
   status: z.enum(feedbackStatusValues).optional(),
-  feedbackType: z.enum(publicFeedbackTypes).optional(),
+  scope: z.enum(feedbackScopes).optional(),
+  feedbackType: z.enum([...eventCorrectionTypes, ...productFeedbackTypes]).optional(),
+  contextPage: z.enum(productFeedbackContextPages).optional(),
   eventScope: z.enum(['public', 'unpublished']).optional(),
   search: queryStringSchema,
 });
@@ -570,7 +562,9 @@ type AdminFeedbackQuery = {
   page: number;
   pageSize: number;
   status?: FeedbackStatus;
-  feedbackType?: (typeof publicFeedbackTypes)[number];
+  scope?: (typeof feedbackScopes)[number];
+  feedbackType?: (typeof eventCorrectionTypes)[number] | (typeof productFeedbackTypes)[number];
+  contextPage?: (typeof productFeedbackContextPages)[number];
   eventScope?: 'public' | 'unpublished';
   search?: string;
 };
@@ -587,6 +581,24 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
   return (req: Request, res: Response, next: NextFunction) => {
     fn(req, res, next).catch(next);
   };
+}
+
+async function checkDatabase(timeoutMs = 2000) {
+  const startedAt = Date.now();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('database health timeout')), timeoutMs);
+      }),
+    ]);
+    return { ok: true as const, latencyMs: Date.now() - startedAt };
+  } catch {
+    return { ok: false as const, latencyMs: Date.now() - startedAt };
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 function validateBody<T>(schema: z.Schema<T>, value: unknown) {
@@ -766,11 +778,13 @@ async function findExistingFeedback(requestId: string, fingerprint: string) {
 function feedbackDuplicateKey(item: {
   eventId: string | null;
   userKey: string | null;
+  scope?: string;
   feedbackType: string;
   content: string;
 }) {
   return [
     item.eventId || '',
+    item.scope || 'event_correction',
     item.userKey || '',
     item.feedbackType,
     normalizeFeedbackContent(item.content),
@@ -779,12 +793,28 @@ function feedbackDuplicateKey(item: {
 
 app.get(
   '/health',
-  asyncHandler(async (_req, res) => {
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      res.json({ ok: true, database: 'ok', timestamp: new Date().toISOString() });
-    } catch {
-      res.status(503).json({ ok: false, database: 'error', timestamp: new Date().toISOString() });
+  asyncHandler(async (req, res) => {
+    const health = await checkDatabase();
+    if (health.ok) {
+      res.json({
+        ok: true,
+        database: 'ok',
+        databaseLatencyMs: health.latencyMs,
+        release,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      void recordApiErrorMetric({ path: req.path, category: 'health_database_error' }).catch(
+        () => undefined,
+      );
+      res.status(503).json({
+        ok: false,
+        database: 'error',
+        databaseLatencyMs: health.latencyMs,
+        release,
+        timestamp: new Date().toISOString(),
+        requestId: res.locals.requestId,
+      });
     }
   }),
 );
@@ -868,6 +898,50 @@ app.get(
       recentLogs,
       missingSourceSummaries,
       staleSourceSummaries,
+    });
+  }),
+);
+
+app.get(
+  '/api/admin/system-health',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const [database, errorRows, lastSourceRun, pendingByScope] = await Promise.all([
+      checkDatabase(),
+      prisma.apiErrorMetric.findMany({
+        where: { bucketStart: { gte: sevenDaysAgo } },
+        select: { bucketStart: true, routeGroup: true, category: true, count: true },
+        orderBy: { bucketStart: 'asc' },
+      }),
+      prisma.eventSourceRun.findFirst({
+        orderBy: { startedAt: 'desc' },
+        select: {
+          status: true,
+          startedAt: true,
+          finishedAt: true,
+          source: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.feedback.groupBy({
+        by: ['scope'],
+        where: { status: { in: ['pending', 'handling'] } },
+        _count: { _all: true },
+      }),
+    ]);
+    res.json({
+      release,
+      uptimeSeconds: Math.floor(process.uptime()),
+      rssMb: Math.round((process.memoryUsage().rss / 1024 / 1024) * 10) / 10,
+      database: database.ok ? 'ok' : 'error',
+      databaseLatencyMs: database.latencyMs,
+      errors: buildApiErrorSummary(errorRows, now),
+      lastSourceRun,
+      pendingFeedback: Object.fromEntries(
+        pendingByScope.map((item) => [item.scope, item._count._all]),
+      ),
+      checkedAt: now.toISOString(),
     });
   }),
 );
@@ -1227,11 +1301,15 @@ app.get(
     const { page, pageSize, status } = query;
     const where: Prisma.FeedbackWhereInput = {};
     if (status) where.status = status;
+    if (query.scope) where.scope = query.scope;
     if (query.feedbackType) where.feedbackType = query.feedbackType;
+    if (query.contextPage) where.contextPage = query.contextPage;
     const clauses: Prisma.FeedbackWhereInput[] = [];
     if (query.eventScope === 'public') {
+      clauses.push({ scope: 'event_correction' });
       clauses.push({ event: { is: buildPublicEventWhere() } });
     } else if (query.eventScope === 'unpublished') {
+      clauses.push({ scope: 'event_correction' });
       clauses.push({
         OR: [{ eventId: null }, { event: { isNot: buildPublicEventWhere() } }],
       });
@@ -1283,7 +1361,7 @@ app.get(
     const day = chinaDay(now);
     const sevenDaysAgo = new Date(day.getTime() - 6 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(day.getTime() - 29 * 24 * 60 * 60 * 1000);
-    const [records, blocked7d, blocked30d] = await Promise.all([
+    const [records, blocked7d, blocked30d, submissions7d, submissions30d] = await Promise.all([
       prisma.feedback.findMany({
         where: { status: { in: ['pending', 'handling'] } },
         include: {
@@ -1308,11 +1386,27 @@ app.get(
         where: { day: { gte: thirtyDaysAgo } },
         _sum: { count: true },
       }),
+      prisma.feedback.groupBy({
+        by: ['scope'],
+        where: { createdAt: { gte: sevenDaysAgo } },
+        _count: { _all: true },
+      }),
+      prisma.feedback.groupBy({
+        by: ['scope'],
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        _count: { _all: true },
+      }),
     ]);
     const truncated = records.length > 2000;
     const items = records.slice(0, 2000);
     res.json({
       ...buildFeedbackSummary(items, blocked7d._sum.count || 0, blocked30d._sum.count || 0, now),
+      submissions7d: Object.fromEntries(
+        submissions7d.map((item) => [item.scope, item._count._all]),
+      ),
+      submissions30d: Object.fromEntries(
+        submissions30d.map((item) => [item.scope, item._count._all]),
+      ),
       truncated,
     });
   }),
@@ -2316,7 +2410,7 @@ app.get(
 app.post(
   '/api/feedback',
   asyncHandler(async (req, res) => {
-    const input = validateBody(publicFeedbackSchema, req.body);
+    const input = validateBody(publicFeedbackSchema, req.body) as PublicFeedbackInput;
     const content = normalizeFeedbackContent(input.content);
     const risk = classifyFeedbackRisk(content);
     if (risk.suspicious) {
@@ -2327,11 +2421,14 @@ app.post(
       }
       throw new HttpError(400, '反馈内容格式异常，请修改后重试');
     }
-    const event = await prisma.event.findFirst({
-      where: { id: input.eventId, ...buildPublicEventWhere() },
-    });
-    if (!event) throw new HttpError(404, '赛事不存在或未发布');
+    if (input.scope === 'event_correction') {
+      const event = await prisma.event.findFirst({
+        where: { id: input.eventId, ...buildPublicEventWhere() },
+      });
+      if (!event) throw new HttpError(404, '赛事不存在或未发布');
+    }
     const fingerprint = createFeedbackFingerprint(feedbackAbuseSecret, {
+      scope: input.scope,
       eventId: input.eventId,
       feedbackType: input.feedbackType,
       content,
@@ -2354,10 +2451,14 @@ app.post(
           data: {
             eventId: input.eventId,
             userKey: input.userKey,
+            scope: input.scope,
             requestId: input.requestId,
             fingerprint,
             feedbackType: input.feedbackType,
             content,
+            contextPage: input.contextPage,
+            appVersion: input.appVersion,
+            relatedRequestId: input.relatedRequestId,
           },
         });
         await tx.feedbackFingerprint.create({
@@ -2367,12 +2468,16 @@ app.post(
             expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
           },
         });
-        await consumeFeedbackRateLimit(
-          tx,
-          feedbackRateLimits.userEvent,
-          `${input.userKey}\n${input.eventId}`,
-          now,
-        );
+        if (input.scope === 'event_correction') {
+          await consumeFeedbackRateLimit(
+            tx,
+            feedbackRateLimits.userEvent,
+            `${input.userKey}\n${input.eventId}`,
+            now,
+          );
+        } else {
+          await consumeFeedbackRateLimit(tx, feedbackRateLimits.userProduct, input.userKey, now);
+        }
         await consumeFeedbackRateLimit(tx, feedbackRateLimits.ipShort, sourceIp, now);
         await consumeFeedbackRateLimit(tx, feedbackRateLimits.ipDaily, sourceIp, now);
         return created;
@@ -2615,27 +2720,69 @@ app.get(
   }),
 );
 
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ message: '接口不存在', requestId: res.locals.requestId });
+});
+
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const requestId = String(res.locals.requestId || randomUUID());
   if (err instanceof ZodError) {
-    res.status(400).json({ message: err.issues.map((issue) => issue.message).join('；') });
+    res.status(400).json({
+      message: err.issues.map((issue) => issue.message).join('；'),
+      requestId,
+    });
     return;
   }
   if (err instanceof HttpError) {
     if (err instanceof RateLimitError) {
       res.setHeader('Retry-After', String(err.retryAfterSeconds));
     }
-    res.status(err.status).json({ message: err.message });
+    res.status(err.status).json({ message: err.message, requestId });
     return;
   }
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    console.error(err);
-    res.status(400).json({ message: '数据操作失败，请检查提交内容' });
+    res.status(400).json({ message: '数据操作失败，请检查提交内容', requestId });
     return;
   }
-  console.error(err);
-  res.status(500).json({ message: '服务器内部错误' });
+  const category = err.name.startsWith('PrismaClient') ? 'database_error' : 'internal_error';
+  void recordApiErrorMetric({ path: req.path, category }).catch(() => undefined);
+  console.error(
+    JSON.stringify({
+      event: 'api_request_failed',
+      requestId,
+      routeGroup: apiRouteGroup(req.path),
+      method: req.method,
+      status: 500,
+      category,
+      durationMs: Math.max(0, Date.now() - Number(res.locals.requestStartedAt || Date.now())),
+      release,
+    }),
+  );
+  res.status(500).json({ message: '服务器内部错误', requestId });
 });
 
-app.listen(port, host, () => {
+const server = app.listen(port, host, () => {
   console.log(`worth-running api listening on http://${host}:${port}`);
 });
+
+let shutdownStarted = false;
+async function shutdown(signal: string, exitCode: number) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  console.log(JSON.stringify({ event: 'api_shutdown_started', signal, release }));
+  const result = await runGracefulShutdown({
+    closeServer: () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      }),
+    disconnectDatabase: () => prisma.$disconnect().catch(() => undefined),
+  });
+  if (result.timedOut) server.closeAllConnections();
+  console.log(JSON.stringify({ event: 'api_shutdown_completed', signal, timedOut: result.timedOut }));
+  process.exit(exitCode);
+}
+
+process.once('SIGTERM', () => void shutdown('SIGTERM', 0));
+process.once('SIGINT', () => void shutdown('SIGINT', 0));
+process.once('uncaughtException', () => void shutdown('uncaughtException', 1));
+process.once('unhandledRejection', () => void shutdown('unhandledRejection', 1));

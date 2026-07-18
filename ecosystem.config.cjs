@@ -8,6 +8,7 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         HOST: '127.0.0.1',
+        APP_RELEASE: process.env.APP_RELEASE || 'unknown',
       },
     },
   ],

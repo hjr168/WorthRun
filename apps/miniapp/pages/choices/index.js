@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("../../utils/api");
 const format_1 = require("../../utils/format");
 const user_1 = require("../../utils/user");
+const product_feedback_1 = require("../../utils/product-feedback");
 const choiceLabels = {
     interested: '想跑',
     considering: '观望',
@@ -12,6 +13,7 @@ Page({
     data: {
         loading: true,
         error: '',
+        errorRequestId: '',
         userKey: '',
         filter: '',
         filters: [
@@ -27,7 +29,7 @@ Page({
     },
     async load() {
         const userKey = (0, user_1.getUserKey)();
-        this.setData({ userKey, loading: true, error: '' });
+        this.setData({ userKey, loading: true, error: '', errorRequestId: '' });
         try {
             const result = await (0, api_1.getEventChoices)(userKey, this.data.filter || undefined);
             this.setData({
@@ -36,7 +38,11 @@ Page({
             });
         }
         catch (error) {
-            this.setData({ loading: false, error: error.message || '网络异常' });
+            this.setData({
+                loading: false,
+                error: error.message || '网络异常',
+                errorRequestId: error instanceof api_1.ApiError ? error.requestId || '' : '',
+            });
         }
     },
     changeFilter(event) {
@@ -72,6 +78,9 @@ Page({
     },
     reload() {
         this.load();
+    },
+    reportProblem() {
+        (0, product_feedback_1.openProductFeedback)('choices', this.data.errorRequestId || undefined);
     },
     openEvents() {
         wx.switchTab({ url: '/pages/events/index' });

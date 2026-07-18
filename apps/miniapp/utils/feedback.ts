@@ -1,11 +1,13 @@
 export const feedbackReceiptStorageKey = 'worthrun_feedback_receipts';
 
 export interface FeedbackReceipt {
-  eventId: string;
-  eventName: string;
+  scope?: 'event_correction' | 'product_feedback';
+  eventId?: string;
+  eventName?: string;
   feedbackType: string;
   createdAt: string;
   requestId: string;
+  contextPage?: string;
 }
 
 export function mergeFeedbackReceipt(
@@ -23,6 +25,11 @@ export function getFeedbackReceipts(): FeedbackReceipt[] {
   } catch {
     return [];
   }
+}
+
+export function createFeedbackRequestId() {
+  const random = Math.random().toString(36).slice(2, 12);
+  return `feedback_${Date.now().toString(36)}_${random}`;
 }
 
 export function saveFeedbackReceipt(receipt: FeedbackReceipt) {

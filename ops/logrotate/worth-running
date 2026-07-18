@@ -1,0 +1,10 @@
+/root/.pm2/logs/worth-running-api-*.log /var/log/worth-running-event-source.log /var/log/worth-running-feedback-maintenance.log {
+  weekly
+  su root root
+  rotate 4
+  compress
+  delaycompress
+  missingok
+  notifempty
+  copytruncate
+}

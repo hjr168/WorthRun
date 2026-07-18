@@ -1,10 +1,12 @@
-import { EventSummary, getFavorites, removeFavorite } from '../../utils/api';
+import { ApiError, EventSummary, getFavorites, removeFavorite } from '../../utils/api';
 import { getUserKey } from '../../utils/user';
+import { openProductFeedback } from '../../utils/product-feedback';
 
 Page({
   data: {
     loading: true,
     error: '',
+    errorRequestId: '',
     userKey: '',
     events: [] as EventSummary[],
   },
@@ -13,7 +15,7 @@ Page({
   },
   async load() {
     const userKey = getUserKey();
-    this.setData({ userKey, loading: true, error: '' });
+    this.setData({ userKey, loading: true, error: '', errorRequestId: '' });
     try {
       const res = await getFavorites(userKey);
       this.setData({
@@ -25,11 +27,18 @@ Page({
         })),
       });
     } catch (error) {
-      this.setData({ loading: false, error: (error as Error).message || '网络异常' });
+      this.setData({
+        loading: false,
+        error: (error as Error).message || '网络异常',
+        errorRequestId: error instanceof ApiError ? error.requestId || '' : '',
+      });
     }
   },
   reload() {
     this.load();
+  },
+  reportProblem() {
+    openProductFeedback('favorites', this.data.errorRequestId || undefined);
   },
   openEvent(event: WechatMiniprogram.CustomEvent) {
     wx.navigateTo({ url: `/pages/event-detail/index?id=${event.detail.id}` });

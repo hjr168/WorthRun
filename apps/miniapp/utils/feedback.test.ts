@@ -11,6 +11,14 @@ function receipt(requestId: string): FeedbackReceipt {
   };
 }
 
+const productReceipt: FeedbackReceipt = {
+  scope: 'product_feedback',
+  feedbackType: '功能建议',
+  contextPage: 'mine',
+  createdAt: '2026-07-18T10:00:00.000Z',
+  requestId: 'product',
+};
+
 describe('feedback receipts', () => {
   it('deduplicates by request id and keeps the newest five', () => {
     const initial = ['a', 'b', 'c', 'd', 'e'].map(receipt);
@@ -28,5 +36,9 @@ describe('feedback receipts', () => {
       'c',
       'd',
     ]);
+  });
+
+  it('keeps product and event receipts in the same bounded list', () => {
+    expect(mergeFeedbackReceipt([receipt('event')], productReceipt)).toHaveLength(2);
   });
 });

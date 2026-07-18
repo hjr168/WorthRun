@@ -2,9 +2,9 @@ import { Prisma, prisma } from '@worth-running/database';
 import { chinaDateOnly, isGreaterBayAreaCity } from '@worth-running/shared';
 import {
   classifyFeedbackRisk,
+  isValidFeedbackType,
   isLowInformationFeedback,
   normalizeFeedbackContent,
-  publicFeedbackTypes,
 } from './feedbackAbuse.js';
 
 export const dataCleanupActions = [
@@ -40,6 +40,7 @@ interface FeedbackSnapshot {
   id: string;
   eventId: string | null;
   userKey: string | null;
+  scope?: 'event_correction' | 'product_feedback';
   feedbackType: string;
   content: string;
   createdAt: Date;
@@ -109,11 +110,11 @@ export function buildDataCleanupPlan(snapshot: GovernanceSnapshot, now: Date = n
     }
   }
 
-  const validTypes = new Set<string>(publicFeedbackTypes);
   const actionableFeedback: FeedbackSnapshot[] = [];
   for (const item of snapshot.feedback) {
     labels.set(item.id, `反馈 ${item.id.slice(0, 8)}（${item.feedbackType}）`);
-    if (!validTypes.has(item.feedbackType)) {
+    const feedbackScope = item.scope || 'event_correction';
+    if (!isValidFeedbackType(feedbackScope, item.feedbackType)) {
       ids.reject_invalid_feedback.push(item.id);
       continue;
     }
@@ -128,6 +129,7 @@ export function buildDataCleanupPlan(snapshot: GovernanceSnapshot, now: Date = n
       continue;
     }
     const eventIsPublic =
+      feedbackScope === 'product_feedback' ||
       item.eventPublishStatus === 'published' &&
       Boolean(item.eventDate && item.eventDate > today) &&
       isGreaterBayAreaCity(item.eventCity);
@@ -141,6 +143,7 @@ export function buildDataCleanupPlan(snapshot: GovernanceSnapshot, now: Date = n
   for (const item of actionableFeedback) {
     const key = [
       item.eventId || '',
+      item.scope || 'event_correction',
       item.userKey || '',
       item.feedbackType,
       normalizeFeedbackContent(item.content),
@@ -182,6 +185,7 @@ async function loadSnapshot(
         id: true,
         eventId: true,
         userKey: true,
+        scope: true,
         feedbackType: true,
         content: true,
         createdAt: true,

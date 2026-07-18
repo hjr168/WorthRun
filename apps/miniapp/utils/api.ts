@@ -104,6 +104,7 @@ export class ApiError extends Error {
     message: string,
     public statusCode?: number,
     public retryAfterSeconds?: number,
+    public requestId?: string,
   ) {
     super(message);
   }
@@ -136,7 +137,7 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
       data: isGet ? undefined : options.data,
       header: { 'content-type': 'application/json' },
       success(res) {
-        const data = res.data as { message?: string };
+        const data = res.data as { message?: string; requestId?: string };
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data as T);
           return;
@@ -151,6 +152,7 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
             message,
             res.statusCode,
             Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
+            data?.requestId,
           ),
         );
       },
@@ -259,6 +261,23 @@ export function submitFeedback(data: {
   return request<{ id: string; duplicate: boolean; message?: string }>('/api/feedback', {
     method: 'POST',
     data,
+    loadingText: '提交中',
+    silent: true,
+  });
+}
+
+export function submitProductFeedback(data: {
+  userKey: string;
+  requestId: string;
+  feedbackType: string;
+  content: string;
+  contextPage?: string;
+  appVersion?: string;
+  relatedRequestId?: string;
+}) {
+  return request<{ id: string; duplicate: boolean; message?: string }>('/api/feedback', {
+    method: 'POST',
+    data: { ...data, scope: 'product_feedback' },
     loadingText: '提交中',
     silent: true,
   });
