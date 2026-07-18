@@ -43,6 +43,7 @@ function sourceItem(overrides: Record<string, unknown> = {}) {
 function reviewedStore(sourceLevel: string, eventOverrides: Record<string, unknown> = {}) {
   const executeRaw = vi.fn().mockResolvedValue(1);
   const alertUpsert = vi.fn().mockResolvedValue({ createdAt: new Date('2026-07-16T00:00:00Z') });
+  const markSummaryStale = vi.fn().mockResolvedValue({ count: 1 });
   const store = {
     eventSource: { findUnique: vi.fn().mockResolvedValue({ sourceLevel }) },
     eventCandidate: {
@@ -70,9 +71,10 @@ function reviewedStore(sourceLevel: string, eventOverrides: Record<string, unkno
       findFirst: vi.fn(),
     },
     eventChangeAlert: { findUnique: vi.fn().mockResolvedValue(null), upsert: alertUpsert },
+    eventSourceSummary: { updateMany: markSummaryStale },
     $executeRaw: executeRaw,
   };
-  return { store, executeRaw, alertUpsert };
+  return { store, executeRaw, alertUpsert, markSummaryStale };
 }
 
 describe('decideCandidateWrite', () => {
@@ -182,7 +184,7 @@ describe('persistEventCandidates reviewed candidate monitoring', () => {
   });
 
   it('upserts one alert for changed official data without modifying event business fields', async () => {
-    const { store, executeRaw, alertUpsert } = reviewedStore('trusted');
+    const { store, executeRaw, alertUpsert, markSummaryStale } = reviewedStore('trusted');
 
     const result = await persistEventCandidates(
       'source-1',
@@ -209,6 +211,10 @@ describe('persistEventCandidates reviewed candidate monitoring', () => {
       }),
     );
     expect(executeRaw).toHaveBeenCalledOnce();
+    expect(markSummaryStale).toHaveBeenCalledWith({
+      where: { eventId: 'event-1', status: 'published' },
+      data: { staleAt: now },
+    });
     expect(store.eventCandidate.update).not.toHaveBeenCalled();
   });
 

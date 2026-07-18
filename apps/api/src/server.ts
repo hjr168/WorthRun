@@ -65,11 +65,7 @@ import {
 } from './candidateWorkflow.js';
 import { previewBulkAccept, runBulkAccept } from './candidateAcceptWorkflow.js';
 import { eventPublishIssues, previewBulkPublish, runBulkPublish } from './eventPublishWorkflow.js';
-import {
-  buildFeedbackSummary,
-  feedbackDisposition,
-  runFeedbackBulk,
-} from './feedbackWorkflow.js';
+import { buildFeedbackSummary, feedbackDisposition, runFeedbackBulk } from './feedbackWorkflow.js';
 import { chinaDay } from './feedbackMaintenance.js';
 import {
   EventChangeConflictError,
@@ -82,6 +78,30 @@ import {
   previewEventChangeResolution,
   resolveEventChangeAlert,
 } from './eventChangeWorkflow.js';
+import {
+  EventChoiceNotFoundError,
+  eventChoiceValues,
+  getEventChoiceCounts,
+  getViewerEventChoice,
+  listViewerEventChoices,
+  removeEventChoice,
+  setEventChoice,
+} from './eventChoiceWorkflow.js';
+import {
+  eventChoiceStatsSortValues,
+  getAdminEventChoiceStats,
+} from './eventChoiceStats.js';
+import { SourceSummaryGenerationError } from './sourceSummaryGeneration.js';
+import {
+  SourceSummaryConflictError,
+  SourceSummaryNotFoundError,
+  SourceSummaryValidationError,
+  createSourceSummaryDraft,
+  getPublicSourceSummary,
+  listSourceSummaries,
+  publishSourceSummary,
+  updateSourceSummaryDraft,
+} from './sourceSummaryWorkflow.js';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -98,6 +118,11 @@ if (isProduction && !process.env.FEEDBACK_ABUSE_SECRET) {
 
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'worth-running-dev-secret';
 const feedbackAbuseSecret = process.env.FEEDBACK_ABUSE_SECRET || tokenSecret;
+const eventChoiceRateLimit = {
+  scope: 'event-choice-user',
+  windowMs: 60_000,
+  limit: 30,
+};
 const corsOrigins = (process.env.CORS_ORIGINS ?? '')
   .split(',')
   .map((origin) => origin.trim())
@@ -177,6 +202,18 @@ class RateLimitError extends HttpError {
   ) {
     super(429, message);
   }
+}
+
+function sourceSummaryHttpError(error: unknown): never {
+  if (error instanceof SourceSummaryNotFoundError) throw new HttpError(404, error.message);
+  if (error instanceof SourceSummaryConflictError) throw new HttpError(409, error.message);
+  if (
+    error instanceof SourceSummaryValidationError ||
+    error instanceof SourceSummaryGenerationError
+  ) {
+    throw new HttpError(400, error.message);
+  }
+  throw error;
 }
 
 type AdminContext = { id: string; role: AdminRole };
@@ -325,6 +362,29 @@ const favoriteSchema = z.object({
   eventId: z.string().trim().min(1, 'eventId 不能为空'),
 });
 
+const eventChoiceSchema = z.object({
+  userKey: z.string().trim().min(1, 'userKey 不能为空').max(100, 'userKey 无效'),
+  eventId: z.string().trim().min(1, 'eventId 不能为空'),
+  choice: z.enum(eventChoiceValues),
+});
+
+const eventChoiceQuerySchema = z.object({
+  userKey: z.string().trim().min(1, 'userKey 不能为空').max(100, 'userKey 无效'),
+  choice: z.enum(eventChoiceValues).optional(),
+});
+
+const sourceSummaryUpdateSchema = z.object({
+  summary: z.string().trim().min(80, '摘要至少 80 字').max(400, '摘要不能超过 400 字'),
+  keyPoints: z.array(z.string().trim().min(1).max(120)).min(2).max(6),
+  limitations: z.string().trim().max(200).optional().nullable(),
+  expectedUpdatedAt: z.string().datetime(),
+});
+
+const sourceSummaryPublishSchema = z.object({
+  expectedUpdatedAt: z.string().datetime(),
+  note: z.string().trim().min(4, '发布备注至少 4 字').max(500),
+});
+
 const publicFeedbackSchema = z
   .object({
     eventId: z.string().trim().min(1, 'eventId 不能为空'),
@@ -396,8 +456,27 @@ const adminEventsQuerySchema = paginationQuerySchema.extend({
   publishStatus: z.enum(publishStatusValues).optional(),
   infoStatus: z.enum(infoStatusValues).optional(),
   runJudgement: z.enum(runJudgementValues).optional(),
-  sourceReviewPending: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+  sourceReviewPending: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
 });
+
+const eventChoiceStatsQuerySchema = paginationQuerySchema
+  .extend({
+    search: queryStringSchema,
+    publishStatus: z.enum(publishStatusValues).optional(),
+    eventDateFrom: dateOnlySchema.optional(),
+    eventDateTo: dateOnlySchema.optional(),
+    sort: z.enum(eventChoiceStatsSortValues).default('total_desc'),
+  })
+  .refine(
+    (value) =>
+      !value.eventDateFrom ||
+      !value.eventDateTo ||
+      value.eventDateFrom <= value.eventDateTo,
+    { message: '比赛日期起始值不能晚于结束值', path: ['eventDateFrom'] },
+  );
 
 const adminFeedbackQuerySchema = paginationQuerySchema.extend({
   status: z.enum(feedbackStatusValues).optional(),
@@ -434,14 +513,13 @@ const operationLogsQuerySchema = paginationQuerySchema.extend({
   action: queryStringSchema,
 });
 
-const eventChangeAlertQuerySchema = paginationQuerySchema
-  .extend({
-    pageSize: z.coerce.number().int().min(1).max(50).default(20),
-    status: z.enum(['open', 'applied', 'dismissed', 'archived_event', 'superseded']).optional(),
-    severity: z.enum(['normal', 'important', 'critical']).optional(),
-    changedField: z.enum([...eventChangeFields, ...eventChangeSignalFields]).optional(),
-    search: queryStringSchema,
-  });
+const eventChangeAlertQuerySchema = paginationQuerySchema.extend({
+  pageSize: z.coerce.number().int().min(1).max(50).default(20),
+  status: z.enum(['open', 'applied', 'dismissed', 'archived_event', 'superseded']).optional(),
+  severity: z.enum(['normal', 'important', 'critical']).optional(),
+  changedField: z.enum([...eventChangeFields, ...eventChangeSignalFields]).optional(),
+  search: queryStringSchema,
+});
 
 const eventChangeResolveSchema = z
   .object({
@@ -653,7 +731,7 @@ function getClientIp(req: Request) {
 
 async function consumeFeedbackRateLimit(
   tx: Prisma.TransactionClient,
-  config: (typeof feedbackRateLimits)[keyof typeof feedbackRateLimits],
+  config: { scope: string; windowMs: number; limit: number },
   value: string,
   now: Date,
 ) {
@@ -757,16 +835,40 @@ app.get(
   '/api/admin/dashboard',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
-    const [totalEvents, publishedEvents, pendingVerifyEvents, pendingFeedback, recentLogs] =
-      await Promise.all([
-        prisma.event.count(),
-        prisma.event.count({ where: { publishStatus: 'published' } }),
-        prisma.event.count({ where: { infoStatus: 'pending_verify' } }),
-        prisma.feedback.count({ where: { status: 'pending' } }),
-        prisma.adminOperationLog.findMany({ orderBy: { createdAt: 'desc' }, take: 8 }),
-      ]);
+    const [
+      totalEvents,
+      publishedEvents,
+      pendingVerifyEvents,
+      pendingFeedback,
+      recentLogs,
+      missingSourceSummaries,
+      staleSourceSummaries,
+    ] = await Promise.all([
+      prisma.event.count(),
+      prisma.event.count({ where: { publishStatus: 'published' } }),
+      prisma.event.count({ where: { infoStatus: 'pending_verify' } }),
+      prisma.feedback.count({ where: { status: 'pending' } }),
+      prisma.adminOperationLog.findMany({ orderBy: { createdAt: 'desc' }, take: 8 }),
+      prisma.event.count({
+        where: {
+          ...buildPublicEventWhere(),
+          sourceSummaries: { none: { status: 'published' } },
+        },
+      }),
+      prisma.eventSourceSummary.count({
+        where: { status: 'published', staleAt: { not: null }, event: buildPublicEventWhere() },
+      }),
+    ]);
 
-    res.json({ totalEvents, publishedEvents, pendingVerifyEvents, pendingFeedback, recentLogs });
+    res.json({
+      totalEvents,
+      publishedEvents,
+      pendingVerifyEvents,
+      pendingFeedback,
+      recentLogs,
+      missingSourceSummaries,
+      staleSourceSummaries,
+    });
   }),
 );
 
@@ -879,6 +981,52 @@ app.get(
       page,
       pageSize,
     });
+  }),
+);
+
+app.post(
+  '/api/admin/events/:id/source-summaries/generate',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    try {
+      res.status(201).json(await createSourceSummaryDraft(req.params.id, admin.id));
+    } catch (error) {
+      sourceSummaryHttpError(error);
+    }
+  }),
+);
+
+app.get(
+  '/api/admin/events/:id/source-summaries',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    res.json({ items: await listSourceSummaries(req.params.id) });
+  }),
+);
+
+app.put(
+  '/api/admin/source-summaries/:id',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(sourceSummaryUpdateSchema, req.body);
+    try {
+      res.json(await updateSourceSummaryDraft(req.params.id, { ...input, adminUserId: admin.id }));
+    } catch (error) {
+      sourceSummaryHttpError(error);
+    }
+  }),
+);
+
+app.post(
+  '/api/admin/source-summaries/:id/publish',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(sourceSummaryPublishSchema, req.body);
+    try {
+      res.json(await publishSourceSummary(req.params.id, { ...input, adminUserId: admin.id }));
+    } catch (error) {
+      sourceSummaryHttpError(error);
+    }
   }),
 );
 
@@ -1164,12 +1312,7 @@ app.get(
     const truncated = records.length > 2000;
     const items = records.slice(0, 2000);
     res.json({
-      ...buildFeedbackSummary(
-        items,
-        blocked7d._sum.count || 0,
-        blocked30d._sum.count || 0,
-        now,
-      ),
+      ...buildFeedbackSummary(items, blocked7d._sum.count || 0, blocked30d._sum.count || 0, now),
       truncated,
     });
   }),
@@ -1924,6 +2067,29 @@ app.get(
 );
 
 app.get(
+  '/api/admin/event-choice-stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = validateQuery(eventChoiceStatsQuerySchema, req.query);
+    res.json(
+      await getAdminEventChoiceStats({
+        page: query.page ?? 1,
+        pageSize: query.pageSize ?? 20,
+        search: typeof query.search === 'string' ? query.search : undefined,
+        publishStatus: query.publishStatus,
+        sort: query.sort ?? 'total_desc',
+        eventDateFrom: query.eventDateFrom
+          ? new Date(`${query.eventDateFrom}T00:00:00.000Z`)
+          : undefined,
+        eventDateTo: query.eventDateTo
+          ? new Date(`${query.eventDateTo}T00:00:00.000Z`)
+          : undefined,
+      }),
+    );
+  }),
+);
+
+app.get(
   '/api/events',
   asyncHandler(async (req, res) => {
     const query = validateQuery(publicEventsQuerySchema, req.query) as PublicEventsQuery;
@@ -1953,6 +2119,12 @@ app.get(
           updatedAt: true,
           sourceCheckedAt: true,
           changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
+          sourceSummaries: {
+            where: { status: 'published' },
+            select: { staleAt: true },
+            orderBy: { publishedAt: 'desc' },
+            take: 1,
+          },
         },
         orderBy: [{ eventDate: 'asc' }],
         skip: (page - 1) * pageSize,
@@ -1961,9 +2133,11 @@ app.get(
       prisma.event.count({ where }),
     ]);
     res.json({
-      items: items.map(({ changeAlerts, ...event }) => ({
+      items: items.map(({ changeAlerts, sourceSummaries, ...event }) => ({
         ...event,
         sourceReviewPending: changeAlerts.length > 0,
+        hasSourceSummary: sourceSummaries.length > 0,
+        sourceSummaryStale: Boolean(sourceSummaries[0]?.staleAt),
       })),
       total,
       page,
@@ -1983,15 +2157,79 @@ app.get(
         checklistItems: { orderBy: { sortOrder: 'asc' } },
         eventTags: true,
         changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
+        sourceSummaries: {
+          where: { status: 'published' },
+          select: { staleAt: true },
+          orderBy: { publishedAt: 'desc' },
+          take: 1,
+        },
       },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
-    const { changeAlerts, ...publicEvent } = event;
+    const { changeAlerts, sourceSummaries, ...publicEvent } = event;
+    const choiceCounts = await getEventChoiceCounts(event.id);
     res.json({
-      event: { ...publicEvent, sourceReviewPending: changeAlerts.length > 0 },
+      event: {
+        ...publicEvent,
+        sourceReviewPending: changeAlerts.length > 0,
+        hasSourceSummary: sourceSummaries.length > 0,
+        sourceSummaryStale: Boolean(sourceSummaries[0]?.staleAt),
+        choiceCounts,
+      },
       complianceNotice,
       officialActionText,
     });
+  }),
+);
+
+app.get(
+  '/api/events/:id/source-summary',
+  asyncHandler(async (req, res) => {
+    try {
+      res.json(await getPublicSourceSummary(req.params.id));
+    } catch (error) {
+      sourceSummaryHttpError(error);
+    }
+  }),
+);
+
+app.put(
+  '/api/event-choices',
+  asyncHandler(async (req, res) => {
+    const input = validateBody(eventChoiceSchema, req.body);
+    try {
+      await prisma.$transaction((tx) =>
+        consumeFeedbackRateLimit(tx, eventChoiceRateLimit, input.userKey, new Date()),
+      );
+      res.json(await setEventChoice(input));
+    } catch (error) {
+      if (error instanceof EventChoiceNotFoundError) throw new HttpError(404, error.message);
+      throw error;
+    }
+  }),
+);
+
+app.get(
+  '/api/event-choices',
+  asyncHandler(async (req, res) => {
+    const query = validateQuery(eventChoiceQuerySchema, req.query);
+    res.json(await listViewerEventChoices(query));
+  }),
+);
+
+app.get(
+  '/api/event-choices/:eventId',
+  asyncHandler(async (req, res) => {
+    const query = validateQuery(eventChoiceQuerySchema.pick({ userKey: true }), req.query);
+    res.json(await getViewerEventChoice({ userKey: query.userKey, eventId: req.params.eventId }));
+  }),
+);
+
+app.delete(
+  '/api/event-choices/:eventId',
+  asyncHandler(async (req, res) => {
+    const query = validateQuery(eventChoiceQuerySchema.pick({ userKey: true }), req.query);
+    res.json(await removeEventChoice({ userKey: query.userKey, eventId: req.params.eventId }));
   }),
 );
 
@@ -2189,11 +2427,20 @@ app.get(
   asyncHandler(async (req, res) => {
     const eventId = String(req.query.eventId || '');
     if (!eventId) throw new HttpError(400, 'eventId 不能为空');
+    const envVersion = z
+      .enum(['develop', 'trial', 'release'])
+      .default('release')
+      .parse(req.query.envVersion);
     // scene 值需 <=32 字符且为安全字符集。cuid 约 24 字符，id= 前缀共 27 字符，符合限制。
-    const buffer = await getMiniProgramCode(`id=${eventId}`, 'pages/event-detail/index');
+    const buffer = await getMiniProgramCode(
+      `id=${eventId}`,
+      'pages/event-detail/index',
+      envVersion,
+    );
     if (!buffer) throw new HttpError(503, '小程序码服务暂不可用');
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Vary', 'Accept-Encoding');
     res.send(buffer);
   }),
 );

@@ -114,6 +114,26 @@ enum EventChangeSeverity {
 enum EventInteractionAction {
   event_detail_view
   official_link_copy
+  source_summary_open
+  source_summary_view
+  source_original_link_copy
+}
+
+enum EventChoiceType {
+  interested
+  considering
+  registered
+}
+
+enum SourceSummaryStatus {
+  draft
+  published
+  superseded
+}
+
+enum SourceSummaryBasis {
+  page_text
+  stored_source_record
 }
 
 model Event {
@@ -146,13 +166,15 @@ model Event {
   publishedAt      DateTime?     @map("published_at")
   archivedAt       DateTime?     @map("archived_at")
 
-  checklistItems EventChecklistItem[]
-  eventTags      EventTag[]
-  favorites      UserFavorite[]
-  feedback       Feedback[]
-  shareRecords   ShareRecord[]
-  interactions   EventInteraction[]
-  changeAlerts   EventChangeAlert[]
+  checklistItems  EventChecklistItem[]
+  eventTags       EventTag[]
+  favorites       UserFavorite[]
+  feedback        Feedback[]
+  shareRecords    ShareRecord[]
+  interactions    EventInteraction[]
+  changeAlerts    EventChangeAlert[]
+  userChoices     UserEventChoice[]
+  sourceSummaries EventSourceSummary[]
 
   @@index([city])
   @@index([eventDate])
@@ -214,6 +236,54 @@ model UserFavorite {
   @@unique([userKey, eventId])
   @@index([eventId])
   @@map("user_favorites")
+}
+
+model UserEventChoice {
+  id        String          @id @default(cuid())
+  userKey   String          @map("user_key")
+  eventId   String          @map("event_id")
+  choice    EventChoiceType
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userKey, eventId])
+  @@index([userKey, choice, updatedAt])
+  @@index([eventId, choice])
+  @@index([createdAt])
+  @@map("user_event_choices")
+}
+
+model EventSourceSummary {
+  id            String              @id @default(cuid())
+  eventId       String              @map("event_id")
+  status        SourceSummaryStatus @default(draft)
+  basis         SourceSummaryBasis
+  sourceName    String              @map("source_name")
+  sourceUrl     String              @map("source_url")
+  sourceTitle   String?             @map("source_title")
+  summary       String
+  keyPoints     String[]            @map("key_points")
+  limitations   String?
+  contentHash   String              @map("content_hash")
+  aiProvider    String              @map("ai_provider")
+  aiModel       String              @map("ai_model")
+  promptVersion String              @map("prompt_version")
+  fetchedAt     DateTime            @map("fetched_at")
+  generatedAt   DateTime            @default(now()) @map("generated_at")
+  publishedAt   DateTime?           @map("published_at")
+  staleAt       DateTime?           @map("stale_at")
+  reviewedBy    String?             @map("reviewed_by")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, contentHash, promptVersion])
+  @@index([eventId, status, updatedAt])
+  @@index([status, staleAt])
+  @@map("event_source_summaries")
 }
 
 model Feedback {

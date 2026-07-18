@@ -15,6 +15,8 @@ interface CachedToken {
   expiresAt: number;
 }
 
+export type MiniProgramEnvVersion = 'develop' | 'trial' | 'release';
+
 let cachedToken: CachedToken | null = null;
 
 const TOKEN_BASE = 'https://api.weixin.qq.com/cgi-bin/token';
@@ -53,7 +55,11 @@ async function getAccessToken(): Promise<string | null> {
  * @param page 小程序页面路径（不带前导 /），如 `pages/event-detail/index`
  * @returns PNG Buffer，若未配置 AppSecret 或调用失败返回 null
  */
-export async function getMiniProgramCode(scene: string, page: string): Promise<Buffer | null> {
+export async function getMiniProgramCode(
+  scene: string,
+  page: string,
+  envVersion: MiniProgramEnvVersion = 'release',
+): Promise<Buffer | null> {
   const token = await getAccessToken();
   if (!token) return null;
 
@@ -65,6 +71,7 @@ export async function getMiniProgramCode(scene: string, page: string): Promise<B
       page,
       width: 280,
       check_path: false,
+      env_version: envVersion,
     }),
   });
 

@@ -4,7 +4,13 @@ import type { EventInteractionAction } from '@worth-running/database';
 import { chinaDateOnly } from '@worth-running/shared';
 import { buildPublicEventWhere } from './dataPolicy.js';
 
-export const interactionActions = ['event_detail_view', 'official_link_copy'] as const;
+export const interactionActions = [
+  'event_detail_view',
+  'official_link_copy',
+  'source_summary_open',
+  'source_summary_view',
+  'source_original_link_copy',
+] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function interactionUserHash(secret: string, userKey: string) {
@@ -55,6 +61,9 @@ export async function getInteractionStats(days: 7 | 30, now: Date = new Date()) 
     favoriteAdds,
     shares,
     preferenceUsers,
+    sourceSummaryOpens,
+    sourceSummaryViews,
+    sourceSummaryCopies,
   ] = await Promise.all([
     prisma.eventInteraction.count({
       where: { action: 'event_detail_view', occurredDate: { gte: sinceDate } },
@@ -79,6 +88,15 @@ export async function getInteractionStats(days: 7 | 30, now: Date = new Date()) 
       where: { createdAt: { gte: sinceTimestamp }, event: buildPublicEventWhere(now) },
     }),
     prisma.userPreference.count({ where: { updatedAt: { gte: sinceTimestamp } } }),
+    prisma.eventInteraction.count({
+      where: { action: 'source_summary_open', occurredDate: { gte: sinceDate } },
+    }),
+    prisma.eventInteraction.count({
+      where: { action: 'source_summary_view', occurredDate: { gte: sinceDate } },
+    }),
+    prisma.eventInteraction.count({
+      where: { action: 'source_original_link_copy', occurredDate: { gte: sinceDate } },
+    }),
   ]);
 
   return {
@@ -93,5 +111,9 @@ export async function getInteractionStats(days: 7 | 30, now: Date = new Date()) 
     officialClickRate: conversionRate(officialClicks, detailViews),
     favoriteRate: conversionRate(favoriteAdds, detailViews),
     shareRate: conversionRate(shares, detailViews),
+    sourceSummaryOpens,
+    sourceSummaryViews,
+    sourceSummaryCopies,
+    sourceSummaryLoadRate: conversionRate(sourceSummaryViews, sourceSummaryOpens),
   };
 }

@@ -186,6 +186,17 @@ body {
   margin-bottom: 16px;
 }
 
+.choice-stats-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(150px, 0.8fr) minmax(240px, 1fr) minmax(190px, 0.9fr) auto;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.choice-stats-summary {
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+}
+
 .event-change-diff {
   display: grid;
   gap: 6px;
@@ -266,6 +277,11 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .choice-stats-filters,
+  .choice-stats-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .ai-stat-strip .ant-statistic:nth-child(2) {
     border-right: 0;
   }
@@ -342,7 +358,9 @@ body {
   }
 
   .event-change-stat-strip,
-  .event-change-filters {
+  .event-change-filters,
+  .choice-stats-filters,
+  .choice-stats-summary {
     grid-template-columns: 1fr;
   }
 }

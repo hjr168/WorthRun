@@ -1,6 +1,7 @@
 import { Button, Layout, Menu } from 'antd';
 import {
   DashboardOutlined,
+  BarChartOutlined,
   DatabaseOutlined,
   FileTextOutlined,
   LogoutOutlined,
@@ -36,6 +37,7 @@ import { ShareStatsPage } from './pages/ShareStatsPage';
 import { LogsPage } from './pages/LogsPage';
 import { AdminProvider } from './context/AdminContext';
 import { EventChangesPage } from './pages/EventChangesPage';
+import { ChoiceStatsPage } from './pages/ChoiceStatsPage';
 
 const { Content, Sider } = Layout;
 
@@ -93,6 +95,8 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             ? '/quality'
             : location.pathname.startsWith('/share-stats')
               ? '/share-stats'
+              : location.pathname.startsWith('/choice-stats')
+                ? '/choice-stats'
               : location.pathname.startsWith('/logs')
                 ? '/logs'
                 : '/workbench';
@@ -137,6 +141,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               label: <Link to="/share-stats">分享数据</Link>,
             },
             {
+              key: '/choice-stats',
+              icon: <BarChartOutlined />,
+              label: <Link to="/choice-stats">选择数据</Link>,
+            },
+            {
               key: '/content',
               icon: <ToolOutlined />,
               label: <Link to="/content">内容配置</Link>,
@@ -172,6 +181,7 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/event-changes" element={<EventChangesPage />} />
             <Route path="/quality" element={<QualityPage />} />
             <Route path="/share-stats" element={<ShareStatsPage />} />
+            <Route path="/choice-stats" element={<ChoiceStatsPage />} />
             <Route path="/content" element={<ContentPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/logs" element={<LogsPage />} />

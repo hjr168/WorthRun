@@ -38,12 +38,74 @@ export interface AdminEvent {
   eventTags: Array<{ id?: string; tagName: string; tagType: string }>;
 }
 
+export type SourceSummaryStatus = 'draft' | 'published' | 'superseded';
+
+export interface EventSourceSummaryItem {
+  id: string;
+  eventId: string;
+  status: SourceSummaryStatus;
+  basis: 'page_text' | 'stored_source_record';
+  sourceName: string;
+  sourceUrl: string;
+  sourceTitle?: string | null;
+  summary: string;
+  keyPoints: string[];
+  limitations?: string | null;
+  contentHash: string;
+  aiProvider: string;
+  aiModel: string;
+  promptVersion: string;
+  fetchedAt: string;
+  generatedAt: string;
+  publishedAt?: string | null;
+  staleAt?: string | null;
+  reviewedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type EventChoiceStatsSort =
+  | 'total_desc'
+  | 'event_date_asc'
+  | 'event_date_desc'
+  | 'recent_choice_desc';
+
+export interface EventChoiceStatsQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  publishStatus?: PublishStatus;
+  eventDateFrom?: string;
+  eventDateTo?: string;
+  sort: EventChoiceStatsSort;
+}
+
+export interface EventChoiceStatsResponse {
+  summary: {
+    anonymousUsers: number;
+    totalChoices: number;
+    interested: number;
+    considering: number;
+    registered: number;
+    events: number;
+  };
+  items: Array<{
+    event: Pick<AdminEvent, 'id' | 'eventName' | 'city' | 'eventDate' | 'publishStatus'>;
+    counts: {
+      interested: number;
+      considering: number;
+      registered: number;
+      total: number;
+    };
+    lastChoiceAt: string | null;
+  }>;
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export type EventChangeAlertStatus =
-  | 'open'
-  | 'applied'
-  | 'dismissed'
-  | 'archived_event'
-  | 'superseded';
+  'open' | 'applied' | 'dismissed' | 'archived_event' | 'superseded';
 export type EventChangeSeverity = 'normal' | 'important' | 'critical';
 export type EventChangeField =
   | 'eventDate'
@@ -393,4 +455,8 @@ export interface InteractionStats {
   officialClickRate: number;
   favoriteRate: number;
   shareRate: number;
+  sourceSummaryOpens: number;
+  sourceSummaryViews: number;
+  sourceSummaryCopies: number;
+  sourceSummaryLoadRate: number;
 }

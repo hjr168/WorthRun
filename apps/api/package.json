@@ -14,6 +14,7 @@
     "event-source:bootstrap-v0.4.2": "node --max-old-space-size=160 dist/apps/api/src/eventSourceBootstrapCli.js",
     "data:backfill-candidate-confirmation-links": "node --max-old-space-size=160 dist/apps/api/src/candidateConfirmationBackfillCli.js",
     "feedback:maintenance": "node --max-old-space-size=96 dist/apps/api/src/feedbackMaintenanceCli.js",
+    "source-summary:backfill": "node --max-old-space-size=160 dist/apps/api/src/sourceSummaryBackfillCli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

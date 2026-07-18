@@ -47,6 +47,8 @@ export function WorkbenchPage() {
     publishedEvents: number;
     pendingVerifyEvents: number;
     pendingFeedback: number;
+    missingSourceSummaries: number;
+    staleSourceSummaries: number;
     recentLogs: OperationLog[];
   }>();
   const [quality, setQuality] = useState<DataQualitySummary>();
@@ -148,6 +150,22 @@ export function WorkbenchPage() {
         </div>
         <section className="form-section">
           <div className="section-heading">
+            <h2>来源摘要</h2>
+            <Link to="/events">
+              <Button>进入赛事库</Button>
+            </Link>
+          </div>
+          <div className="stat-grid">
+            <Card>
+              <Statistic title="缺少来源摘要" value={data?.missingSourceSummaries ?? 0} />
+            </Card>
+            <Card>
+              <Statistic title="摘要待复核" value={data?.staleSourceSummaries ?? 0} />
+            </Card>
+          </div>
+        </section>
+        <section className="form-section">
+          <div className="section-heading">
             <h2>信息新鲜度</h2>
             <Link to="/event-changes">
               <Button>进入变更复核</Button>
@@ -158,10 +176,7 @@ export function WorkbenchPage() {
               <Statistic title="待复核变更" value={eventChanges?.open ?? 0} />
             </Card>
             <Card>
-              <Statistic
-                title="超过 14 天未检查"
-                value={eventChanges?.stalePublishedEvents ?? 0}
-              />
+              <Statistic title="超过 14 天未检查" value={eventChanges?.stalePublishedEvents ?? 0} />
             </Card>
           </div>
         </section>
@@ -261,6 +276,16 @@ export function WorkbenchPage() {
               <Typography.Text type="secondary">
                 转化率 {metrics?.officialClickRate ?? 0}%
               </Typography.Text>
+            </Card>
+            <Card>
+              <Statistic title="来源摘要查看" value={metrics?.sourceSummaryViews ?? 0} />
+              <Typography.Text type="secondary">
+                打开 {metrics?.sourceSummaryOpens ?? 0} 次 · 成功率{' '}
+                {metrics?.sourceSummaryLoadRate ?? 0}%
+              </Typography.Text>
+            </Card>
+            <Card>
+              <Statistic title="来源链接复制" value={metrics?.sourceSummaryCopies ?? 0} />
             </Card>
             <Card>
               <Statistic title="新增收藏" value={metrics?.favoriteAdds ?? 0} />

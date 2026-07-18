@@ -195,6 +195,10 @@ export async function persistEventCandidates(
                   },
                   update: {},
                 });
+                await store.eventSourceSummary.updateMany({
+                  where: { eventId: event.id, status: 'published' },
+                  data: { staleAt: now },
+                });
                 summary.changeAlertsCreated += 1;
               } else {
                 if (existingAlert.status === 'open') {
