@@ -5,6 +5,7 @@
   <block wx:elif="{{error}}">
     <empty-state title="请求失败" description="{{error}}" />
     <button class="secondary-button" bindtap="reload">重新加载</button>
+    <button class="plain-button feedback-problem-link" bindtap="reportProblem">反馈问题</button>
   </block>
   <block wx:else>
     <view wx:for="{{events}}" wx:key="id" class="card-gap">

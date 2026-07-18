@@ -1,5 +1,6 @@
 import {
   addFavorite,
+  ApiError,
   EventSummary,
   getEvents,
   getFavorites,
@@ -9,11 +10,13 @@ import {
 } from '../../utils/api';
 import { getUserKey } from '../../utils/user';
 import { groupHomeEvents } from '../../utils/home';
+import { openProductFeedback } from '../../utils/product-feedback';
 
 Page({
   data: {
     loading: true,
     error: '',
+    errorRequestId: '',
     userKey: '',
     preference: null as Preference | null,
     preferenceText: '',
@@ -27,7 +30,7 @@ Page({
   },
   async load() {
     const userKey = getUserKey();
-    this.setData({ loading: true, error: '', fallbackNotice: '', userKey });
+    this.setData({ loading: true, error: '', errorRequestId: '', fallbackNotice: '', userKey });
     try {
       const preference = await getPreference(userKey).catch(() => null);
       const params = {
@@ -57,12 +60,19 @@ Page({
         loading: false,
       });
     } catch (error) {
-      this.setData({ loading: false, error: (error as Error).message || '网络异常' });
+      this.setData({
+        loading: false,
+        error: (error as Error).message || '网络异常',
+        errorRequestId: error instanceof ApiError ? error.requestId || '' : '',
+      });
       wx.showToast({ title: '网络异常', icon: 'none' });
     }
   },
   reload() {
     this.load();
+  },
+  reportProblem() {
+    openProductFeedback('home', this.data.errorRequestId || undefined);
   },
   async getEventsWithFallback(params: {
     page: number;

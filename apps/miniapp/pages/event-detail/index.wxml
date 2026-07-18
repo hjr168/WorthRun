@@ -3,6 +3,7 @@
   <block wx:elif="{{error}}">
     <empty-state title="赛事不存在或未发布" description="{{error}}" />
     <button class="secondary-button reload-button" bindtap="reload">重新加载</button>
+    <button class="plain-button feedback-problem-link" bindtap="reportProblem">反馈问题</button>
   </block>
 
   <block wx:elif="{{event}}">

@@ -3,10 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("../../utils/api");
 const user_1 = require("../../utils/user");
 const home_1 = require("../../utils/home");
+const product_feedback_1 = require("../../utils/product-feedback");
 Page({
     data: {
         loading: true,
         error: '',
+        errorRequestId: '',
         userKey: '',
         preference: null,
         preferenceText: '',
@@ -20,7 +22,7 @@ Page({
     },
     async load() {
         const userKey = (0, user_1.getUserKey)();
-        this.setData({ loading: true, error: '', fallbackNotice: '', userKey });
+        this.setData({ loading: true, error: '', errorRequestId: '', fallbackNotice: '', userKey });
         try {
             const preference = await (0, api_1.getPreference)(userKey).catch(() => null);
             const params = {
@@ -43,12 +45,19 @@ Page({
                 preferenceText, loading: false }));
         }
         catch (error) {
-            this.setData({ loading: false, error: error.message || '网络异常' });
+            this.setData({
+                loading: false,
+                error: error.message || '网络异常',
+                errorRequestId: error instanceof api_1.ApiError ? error.requestId || '' : '',
+            });
             wx.showToast({ title: '网络异常', icon: 'none' });
         }
     },
     reload() {
         this.load();
+    },
+    reportProblem() {
+        (0, product_feedback_1.openProductFeedback)('home', this.data.errorRequestId || undefined);
     },
     async getEventsWithFallback(params) {
         const firstRes = await (0, api_1.getEvents)(params);

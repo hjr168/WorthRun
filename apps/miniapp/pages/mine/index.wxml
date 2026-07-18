@@ -3,6 +3,7 @@
   <block wx:elif="{{error}}">
     <empty-state title="请求失败" description="{{error}}" />
     <button class="secondary-button" bindtap="reload">重新加载</button>
+    <button class="plain-button feedback-problem-link" bindtap="reportProblem">反馈问题</button>
   </block>
   <block wx:else>
     <view class="profile-card">
@@ -48,6 +49,10 @@
         <view class="menu-copy"><text class="menu-title">赛事纠错</text><text class="menu-summary">提交赛事信息变化</text></view>
         <text class="menu-action">打开</text>
       </view>
+      <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openProductFeedback" aria-label="打开产品反馈">
+        <view class="menu-copy"><text class="menu-title">产品反馈</text><text class="menu-summary">反馈功能建议或使用问题</text></view>
+        <text class="menu-action">打开</text>
+      </view>
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openPreferences" aria-label="打开偏好设置">
         <view class="menu-copy"><text class="menu-title">偏好设置</text><text class="menu-summary">调整城市、距离和关注点</text></view>
         <text class="menu-action">调整</text>
@@ -63,7 +68,7 @@
       <view class="receipt-note">仅记录提交回执，不代表管理员处理进度。</view>
       <view wx:for="{{feedbackReceipts}}" wx:key="requestId" class="receipt-row {{index === 0 ? 'receipt-row-first' : ''}} {{index === feedbackReceipts.length - 1 ? 'receipt-row-last' : ''}}">
         <view class="receipt-main">
-          <view class="receipt-event">{{item.eventName}}</view>
+          <view class="receipt-event">{{item.displayTitle}}</view>
           <view class="receipt-meta">{{item.feedbackType}} · {{item.createdAtText}}</view>
         </view>
         <view class="receipt-status">已提交</view>

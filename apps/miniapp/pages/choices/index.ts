@@ -1,6 +1,7 @@
-import { EventChoice, EventChoiceItem, getEventChoices, removeEventChoice } from '../../utils/api';
+import { ApiError, EventChoice, EventChoiceItem, getEventChoices, removeEventChoice } from '../../utils/api';
 import { formatDate, formatDistance } from '../../utils/format';
 import { getUserKey } from '../../utils/user';
+import { openProductFeedback } from '../../utils/product-feedback';
 
 const choiceLabels: Record<EventChoice, string> = {
   interested: '想跑',
@@ -12,6 +13,7 @@ Page({
   data: {
     loading: true,
     error: '',
+    errorRequestId: '',
     userKey: '',
     filter: '' as '' | EventChoice,
     filters: [
@@ -29,7 +31,7 @@ Page({
   },
   async load() {
     const userKey = getUserKey();
-    this.setData({ userKey, loading: true, error: '' });
+    this.setData({ userKey, loading: true, error: '', errorRequestId: '' });
     try {
       const result = await getEventChoices(userKey, this.data.filter || undefined);
       this.setData({
@@ -42,7 +44,11 @@ Page({
         })),
       });
     } catch (error) {
-      this.setData({ loading: false, error: (error as Error).message || '网络异常' });
+      this.setData({
+        loading: false,
+        error: (error as Error).message || '网络异常',
+        errorRequestId: error instanceof ApiError ? error.requestId || '' : '',
+      });
     }
   },
   changeFilter(event: WechatMiniprogram.TouchEvent) {
@@ -74,6 +80,9 @@ Page({
   },
   reload() {
     this.load();
+  },
+  reportProblem() {
+    openProductFeedback('choices', this.data.errorRequestId || undefined);
   },
   openEvents() {
     wx.switchTab({ url: '/pages/events/index' });

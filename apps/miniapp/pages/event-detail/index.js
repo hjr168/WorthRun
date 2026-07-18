@@ -6,12 +6,14 @@ const user_1 = require("../../utils/user");
 const launch_1 = require("../../utils/launch");
 const feedback_1 = require("../../utils/feedback");
 const event_detail_1 = require("../../utils/event-detail");
+const product_feedback_1 = require("../../utils/product-feedback");
 Page({
     data: {
         id: '',
         userKey: '',
         loading: true,
         error: '',
+        errorRequestId: '',
         event: null,
         isFavorite: false,
         viewerChoice: null,
@@ -50,7 +52,7 @@ Page({
             this.setData({ loading: false, error: '赛事不存在或未发布' });
             return;
         }
-        this.setData({ loading: true, error: '' });
+        this.setData({ loading: true, error: '', errorRequestId: '' });
         try {
             const [detail, favorites, viewerChoice] = await Promise.all([
                 (0, api_1.getEventDetail)(this.data.id),
@@ -92,11 +94,15 @@ Page({
                 loading: false,
                 event: null,
                 error: error.message || '赛事不存在或未发布',
+                errorRequestId: error instanceof api_1.ApiError ? error.requestId || '' : '',
             });
         }
     },
     reload() {
         this.load();
+    },
+    reportProblem() {
+        (0, product_feedback_1.openProductFeedback)('event_detail', this.data.errorRequestId || undefined);
     },
     async toggleFavorite() {
         if (!this.data.event)

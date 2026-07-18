@@ -4,6 +4,7 @@
     <empty-state title="来源摘要暂不可用" description="{{error}}" />
     <view class="error-actions">
       <button class="primary-button" bindtap="reload">重新加载</button>
+      <button class="plain-button feedback-problem-link" bindtap="reportProblem">反馈问题</button>
       <button class="secondary-button" bindtap="backToEvent">返回赛事详情</button>
     </view>
   </block>

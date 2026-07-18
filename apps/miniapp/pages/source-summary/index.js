@@ -3,12 +3,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("../../utils/api");
 const format_1 = require("../../utils/format");
 const user_1 = require("../../utils/user");
+const product_feedback_1 = require("../../utils/product-feedback");
 Page({
     data: {
         eventId: '',
         userKey: '',
         loading: true,
         error: '',
+        errorRequestId: '',
         item: null,
         eventDateText: '',
         fetchedAtText: '',
@@ -24,7 +26,7 @@ Page({
             this.setData({ loading: false, error: '缺少赛事信息' });
             return;
         }
-        this.setData({ loading: true, error: '' });
+        this.setData({ loading: true, error: '', errorRequestId: '' });
         try {
             const item = await (0, api_1.getSourceSummary)(this.data.eventId);
             this.setData({
@@ -46,11 +48,15 @@ Page({
                 loading: false,
                 item: null,
                 error: error.message || '来源摘要加载失败',
+                errorRequestId: error instanceof api_1.ApiError ? error.requestId || '' : '',
             });
         }
     },
     reload() {
         this.load();
+    },
+    reportProblem() {
+        (0, product_feedback_1.openProductFeedback)('source_summary', this.data.errorRequestId || undefined);
     },
     copySourceUrl() {
         var _a;

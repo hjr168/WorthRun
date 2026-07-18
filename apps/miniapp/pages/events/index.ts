@@ -1,11 +1,13 @@
 import {
   addFavorite,
+  ApiError,
   EventSummary,
   getEvents,
   getFavorites,
   removeFavorite,
 } from '../../utils/api';
 import { getUserKey } from '../../utils/user';
+import { openProductFeedback } from '../../utils/product-feedback';
 
 const cities = [
   '全部',
@@ -41,6 +43,7 @@ Page({
   data: {
     loading: true,
     error: '',
+    errorRequestId: '',
     userKey: '',
     search: '',
     cityIndex: 0,
@@ -76,6 +79,7 @@ Page({
       loading: reset,
       loadingMore: !reset,
       error: '',
+      errorRequestId: '',
       userKey,
       page,
       ...(reset ? { events: [], hasMore: true, total: 0 } : {}),
@@ -123,12 +127,17 @@ Page({
         loadingMore: false,
         didInitialLoad: true,
         error: reset ? (error as Error).message || '网络异常' : this.data.error,
+        errorRequestId:
+          reset && error instanceof ApiError ? error.requestId || '' : this.data.errorRequestId,
       });
       wx.showToast({ title: reset ? '网络异常' : '加载失败', icon: 'none' });
     }
   },
   reload() {
     this.load(true);
+  },
+  reportProblem() {
+    openProductFeedback('events', this.data.errorRequestId || undefined);
   },
   onReachBottom() {
     if (!this.data.hasMore) {

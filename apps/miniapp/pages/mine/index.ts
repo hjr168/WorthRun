@@ -1,4 +1,5 @@
 import {
+  ApiError,
   EventDetail,
   EventSummary,
   getEventChoices,
@@ -10,11 +11,13 @@ import { config } from '../../config/index';
 import { complianceNotice, formatDate, formatDateTime } from '../../utils/format';
 import { clearUserKey, getUserKey } from '../../utils/user';
 import { feedbackReceiptStorageKey, getFeedbackReceipts } from '../../utils/feedback';
+import { openProductFeedback } from '../../utils/product-feedback';
 
 Page({
   data: {
     loading: true,
     error: '',
+    errorRequestId: '',
     userKey: '',
     shortUserKey: '',
     preference: null as Preference | null,
@@ -26,7 +29,7 @@ Page({
     isDev: config.env === 'dev',
     feedbackReceipts: [] as Array<{
       requestId: string;
-      eventName: string;
+      displayTitle: string;
       feedbackType: string;
       createdAtText: string;
     }>,
@@ -36,7 +39,7 @@ Page({
   },
   async load() {
     const userKey = getUserKey();
-    this.setData({ loading: true, error: '', userKey });
+    this.setData({ loading: true, error: '', errorRequestId: '', userKey });
     try {
       const [preference, favorites, choices] = await Promise.all([
         getPreference(userKey).catch(() => null),
@@ -65,6 +68,8 @@ Page({
         : '尚未设置偏好';
       const feedbackReceipts = getFeedbackReceipts().map((item) => ({
         ...item,
+        displayTitle:
+          item.scope === 'product_feedback' ? '产品反馈' : item.eventName || '赛事纠错',
         createdAtText: formatDateTime(item.createdAt),
       }));
       this.setData({
@@ -84,11 +89,15 @@ Page({
         loading: false,
         shortUserKey: `${userKey.slice(0, 10)}...`,
         error: (error as Error).message || '网络异常',
+        errorRequestId: error instanceof ApiError ? error.requestId || '' : '',
       });
     }
   },
   reload() {
     this.load();
+  },
+  reportProblem() {
+    openProductFeedback('mine', this.data.errorRequestId || undefined);
   },
   openPreferences() {
     wx.navigateTo({ url: '/pages/preferences/index' });
@@ -104,6 +113,9 @@ Page({
       url: '/pages/events/index',
       success: () => wx.showToast({ title: '请选择赛事后进入详情反馈', icon: 'none' }),
     });
+  },
+  openProductFeedback() {
+    openProductFeedback('mine');
   },
   openTools() {
     wx.navigateTo({ url: '/pages/tools/index' });

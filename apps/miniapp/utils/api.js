@@ -15,15 +15,17 @@ exports.setEventChoice = setEventChoice;
 exports.removeEventChoice = removeEventChoice;
 exports.getSourceSummary = getSourceSummary;
 exports.submitFeedback = submitFeedback;
+exports.submitProductFeedback = submitProductFeedback;
 exports.getChecklistTemplates = getChecklistTemplates;
 exports.recordShare = recordShare;
 exports.recordInteraction = recordInteraction;
 const index_1 = require("../config/index");
 class ApiError extends Error {
-    constructor(message, statusCode, retryAfterSeconds) {
+    constructor(message, statusCode, retryAfterSeconds, requestId) {
         super(message);
         this.statusCode = statusCode;
         this.retryAfterSeconds = retryAfterSeconds;
+        this.requestId = requestId;
     }
 }
 exports.ApiError = ApiError;
@@ -63,7 +65,7 @@ function request(path, options = {}) {
                     wx.showToast({ title: message, icon: 'none' });
                 const retryAfterHeader = ((_a = res.header) === null || _a === void 0 ? void 0 : _a['Retry-After']) || ((_b = res.header) === null || _b === void 0 ? void 0 : _b['retry-after']);
                 const retryAfterSeconds = Number(retryAfterHeader);
-                reject(new ApiError(message, res.statusCode, Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined));
+                reject(new ApiError(message, res.statusCode, Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined, data === null || data === void 0 ? void 0 : data.requestId));
             },
             fail(error) {
                 const message = error.errMsg || '网络异常';
@@ -142,6 +144,14 @@ function submitFeedback(data) {
     return request('/api/feedback', {
         method: 'POST',
         data,
+        loadingText: '提交中',
+        silent: true,
+    });
+}
+function submitProductFeedback(data) {
+    return request('/api/feedback', {
+        method: 'POST',
+        data: Object.assign(Object.assign({}, data), { scope: 'product_feedback' }),
         loadingText: '提交中',
         silent: true,
     });

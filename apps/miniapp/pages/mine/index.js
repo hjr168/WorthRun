@@ -5,10 +5,12 @@ const index_1 = require("../../config/index");
 const format_1 = require("../../utils/format");
 const user_1 = require("../../utils/user");
 const feedback_1 = require("../../utils/feedback");
+const product_feedback_1 = require("../../utils/product-feedback");
 Page({
     data: {
         loading: true,
         error: '',
+        errorRequestId: '',
         userKey: '',
         shortUserKey: '',
         preference: null,
@@ -26,7 +28,7 @@ Page({
     async load() {
         var _a;
         const userKey = (0, user_1.getUserKey)();
-        this.setData({ loading: true, error: '', userKey });
+        this.setData({ loading: true, error: '', errorRequestId: '', userKey });
         try {
             const [preference, favorites, choices] = await Promise.all([
                 (0, api_1.getPreference)(userKey).catch(() => null),
@@ -48,7 +50,7 @@ Page({
             const preferenceText = preference
                 ? `${preference.cities.join('、') || '城市不限'} · ${preference.distances.join('、') || '距离不限'}`
                 : '尚未设置偏好';
-            const feedbackReceipts = (0, feedback_1.getFeedbackReceipts)().map((item) => (Object.assign(Object.assign({}, item), { createdAtText: (0, format_1.formatDateTime)(item.createdAt) })));
+            const feedbackReceipts = (0, feedback_1.getFeedbackReceipts)().map((item) => (Object.assign(Object.assign({}, item), { displayTitle: item.scope === 'product_feedback' ? '产品反馈' : item.eventName || '赛事纠错', createdAtText: (0, format_1.formatDateTime)(item.createdAt) })));
             this.setData({
                 loading: false,
                 userKey,
@@ -67,11 +69,15 @@ Page({
                 loading: false,
                 shortUserKey: `${userKey.slice(0, 10)}...`,
                 error: error.message || '网络异常',
+                errorRequestId: error instanceof api_1.ApiError ? error.requestId || '' : '',
             });
         }
     },
     reload() {
         this.load();
+    },
+    reportProblem() {
+        (0, product_feedback_1.openProductFeedback)('mine', this.data.errorRequestId || undefined);
     },
     openPreferences() {
         wx.navigateTo({ url: '/pages/preferences/index' });
@@ -87,6 +93,9 @@ Page({
             url: '/pages/events/index',
             success: () => wx.showToast({ title: '请选择赛事后进入详情反馈', icon: 'none' }),
         });
+    },
+    openProductFeedback() {
+        (0, product_feedback_1.openProductFeedback)('mine');
     },
     openTools() {
         wx.navigateTo({ url: '/pages/tools/index' });
