@@ -24,6 +24,7 @@ export const runJudgementOptions = Object.entries(runJudgementLabels).map(([valu
 export const sourceLevelOptions = [
   { value: 'official', label: '官方来源' },
   { value: 'trusted', label: '可信来源' },
+  { value: 'community', label: '社区来源' },
   { value: 'secondary', label: '二级来源' },
   { value: 'unknown', label: '待核实' },
 ];

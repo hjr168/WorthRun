@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "我的选择",
+  "usingComponents": {
+    "loading-state": "/components/loading-state/index",
+    "empty-state": "/components/empty-state/index",
+    "page-header": "/components/page-header/index"
+  }
+}

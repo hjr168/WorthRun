@@ -1,7 +1,9 @@
 import { config } from '../../config/index';
 import { EventDetail, getEventDetail, recordShare } from '../../utils/api';
-import { formatDate, formatDistance, labelOf, signupStatusLabels } from '../../utils/format';
+import { formatDate, formatDistance } from '../../utils/format';
+import { getEventDisplayStatus } from '../../utils/event-detail';
 import { getUserKey } from '../../utils/user';
+import { resolveMiniProgramEnvVersion } from '../../utils/launch';
 
 const CANVAS_W = 375;
 const CANVAS_H = 667;
@@ -235,10 +237,12 @@ Page({
     y = wrapText(ctx, metaText, 20, y + 8, W - 40, 20, 1);
 
     // 5. 报名状态
-    const statusText = labelOf(signupStatusLabels, event.signupStatus);
+    const displayStatus = getEventDisplayStatus(event.signupStatus, event.eventDate);
+    const statusText = displayStatus.text;
     let statusColor = '#64748B';
-    if (event.signupStatus === 'signup_open') statusColor = '#2A9D8F';
-    else if (event.signupStatus === 'closing_soon') statusColor = '#E76F51';
+    if (displayStatus.tone === 'positive') statusColor = '#2A9D8F';
+    else if (displayStatus.tone === 'urgent') statusColor = '#E76F51';
+    else if (displayStatus.tone === 'neutral') statusColor = '#52736E';
     // 报名状态胶囊
     const statusPadX = 10;
     ctx.font = '13px sans-serif';
@@ -314,7 +318,10 @@ Page({
     // 尝试加载小程序码
     let codeImage: CanvasImage | null = null;
     try {
-      const codeUrl = `${config.apiBaseUrl}/api/wxacode?eventId=${event.id}`;
+      const envVersion = resolveMiniProgramEnvVersion(
+        wx.getAccountInfoSync().miniProgram.envVersion,
+      );
+      const codeUrl = `${config.apiBaseUrl}/api/wxacode?eventId=${event.id}&envVersion=${envVersion}`;
       const info = await this.loadImage(codeUrl);
       codeImage = info;
     } catch {
@@ -348,7 +355,7 @@ Page({
     ctx.fillStyle = '#94A3B8';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('AI 整理，仅供参考｜报名以官方为准', W / 2, H - 26);
+    ctx.fillText('AI 整理，仅供参考，报名以官方为准。', W / 2, H - 26);
     ctx.textAlign = 'left';
 
     // 生成临时图片

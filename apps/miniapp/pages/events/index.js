@@ -2,15 +2,28 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("../../utils/api");
 const user_1 = require("../../utils/user");
-const cities = ['全部', '广州', '深圳', '佛山', '东莞', '珠海', '中山', '惠州', '香港', '澳门'];
+const cities = [
+    '全部',
+    '广州',
+    '深圳',
+    '珠海',
+    '佛山',
+    '惠州',
+    '东莞',
+    '中山',
+    '江门',
+    '肇庆',
+    '香港',
+    '澳门',
+];
 const distances = ['全部', '5K', '10K', '半马', '全马', '欢乐跑'];
 const signupOptions = [
     { label: '全部', value: '' },
     { label: '报名中', value: 'signup_open' },
     { label: '即将截止', value: 'closing_soon' },
-    { label: '未开始', value: 'not_started' },
-    { label: '已截止', value: 'closed' },
-    { label: '待核实', value: 'unknown' },
+    { label: '即将开放', value: 'not_started' },
+    { label: '报名已截止', value: 'closed' },
+    { label: '待确认', value: 'unknown' },
 ];
 const judgementOptions = [
     { label: '全部', value: '' },
@@ -39,6 +52,8 @@ Page({
         hasMore: true,
         loadingMore: false,
         didInitialLoad: false,
+        activeFilterText: '全部未来赛事',
+        resultText: '',
     },
     onLoad() {
         this.load(true);
@@ -65,6 +80,13 @@ Page({
                 signupStatus: signupOptions[this.data.signupIndex].value,
                 runJudgement: judgementOptions[this.data.judgementIndex].value,
             };
+            const activeFilters = [
+                this.data.search.trim() ? `搜索：${this.data.search.trim()}` : '',
+                this.data.cityIndex ? cities[this.data.cityIndex] : '',
+                this.data.distanceIndex ? distances[this.data.distanceIndex] : '',
+                this.data.signupIndex ? signupOptions[this.data.signupIndex].label : '',
+                this.data.judgementIndex ? judgementOptions[this.data.judgementIndex].label : '',
+            ].filter(Boolean);
             const [eventRes, favoriteRes] = await Promise.all([
                 (0, api_1.getEvents)(params),
                 (0, api_1.getFavorites)(userKey).catch(() => ({ items: [] })),
@@ -77,6 +99,8 @@ Page({
                 loadingMore: false,
                 didInitialLoad: true,
                 total: eventRes.total,
+                resultText: `找到 ${eventRes.total} 场赛事`,
+                activeFilterText: activeFilters.join(' · ') || '全部未来赛事',
                 hasMore: events.length < eventRes.total,
                 events,
             });

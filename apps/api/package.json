@@ -5,8 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:event-source-cron": "tsx src/eventSourceCron.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js",
+    "start": "node --max-old-space-size=256 dist/apps/api/src/server.js",
+    "event-source:run-due": "node --max-old-space-size=160 dist/apps/api/src/eventSourceCron.js",
+    "data-quality:cleanup": "node --max-old-space-size=160 dist/apps/api/src/dataGovernanceCli.js",
+    "data:import-chinaath-plan": "node --max-old-space-size=160 dist/apps/api/src/chinaAthPlanImportCli.js",
+    "event-source:bootstrap-v0.4.2": "node --max-old-space-size=160 dist/apps/api/src/eventSourceBootstrapCli.js",
+    "data:backfill-candidate-confirmation-links": "node --max-old-space-size=160 dist/apps/api/src/candidateConfirmationBackfillCli.js",
+    "feedback:maintenance": "node --max-old-space-size=96 dist/apps/api/src/feedbackMaintenanceCli.js",
+    "source-summary:backfill": "node --max-old-space-size=160 dist/apps/api/src/sourceSummaryBackfillCli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

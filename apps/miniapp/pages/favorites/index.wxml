@@ -1,8 +1,5 @@
 <view class="page favorites-page">
-  <view class="favorites-head">
-    <view class="favorites-title">我的收藏</view>
-    <view class="favorites-subtitle">把想跑、待确认的赛事先收在这里。</view>
-  </view>
+  <page-header title="我的收藏" subtitle="把想跑、待确认的赛事先收在这里。" />
 
   <loading-state wx:if="{{loading}}" text="正在加载收藏" />
   <block wx:elif="{{error}}">
@@ -10,14 +7,14 @@
     <button class="secondary-button" bindtap="reload">重新加载</button>
   </block>
   <block wx:else>
-    <event-card
-      wx:for="{{events}}"
-      wx:key="id"
-      class="card-gap"
-      event="{{item}}"
-      bind:open="openEvent"
-      bind:favorite="toggleFavorite"
-    />
+    <view wx:for="{{events}}" wx:key="id" class="card-gap">
+      <view wx:if="{{item.sourceReviewPending}}" class="source-review-tag">信息复核中</view>
+      <event-card
+        event="{{item}}"
+        bind:open="openEvent"
+        bind:favorite="toggleFavorite"
+      />
+    </view>
     <view wx:if="{{!events.length}}" bindtap="openEvents">
       <empty-state title="还没有收藏赛事" description="去找一场值得跑的比赛" />
     </view>

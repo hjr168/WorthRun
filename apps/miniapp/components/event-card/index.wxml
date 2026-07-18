@@ -6,7 +6,7 @@
     </view>
   </view>
   <view class="status-row">
-    <text class="status">{{signupText}}</text>
+    <event-status-tag signup-status="{{event.signupStatus || 'unknown'}}" event-date="{{event.eventDate || ''}}" />
     <text class="judgement">{{judgementText}}</text>
   </view>
   <view wx:if="{{event.judgementSummary}}" class="summary">{{event.judgementSummary}}</view>
@@ -18,7 +18,6 @@
       <text wx:for="{{tags}}" wx:key="*this" class="tag">{{item}}</text>
     </view>
     <button wx:if="{{showFavorite}}" class="favorite {{event.isFavorite ? 'active' : ''}}" catchtap="onFavorite" aria-label="{{event.isFavorite ? '取消收藏' : '收藏赛事'}}">
-      <text class="favorite-icon">{{event.isFavorite ? '★' : '☆'}}</text>
       <text class="favorite-label">{{event.isFavorite ? '已收藏' : '收藏'}}</text>
     </button>
   </view>

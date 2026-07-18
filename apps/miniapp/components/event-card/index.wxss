@@ -2,7 +2,7 @@
   border: 1rpx solid #e5edf0;
   border-radius: 18rpx;
   background: #ffffff;
-  padding: 26rpx;
+  padding: 22rpx 24rpx;
   box-shadow: 0 8rpx 22rpx rgba(15, 23, 42, 0.05);
 }
 
@@ -16,7 +16,7 @@
 
 .event-name {
   color: #111827;
-  font-size: 34rpx;
+  font-size: 32rpx;
   font-weight: 800;
   line-height: 1.32;
 }
@@ -24,7 +24,7 @@
 .event-meta,
 .summary,
 .reason {
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   color: #64748b;
   font-size: 25rpx;
   line-height: 1.5;
@@ -35,16 +35,15 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 5rpx;
-  width: 104rpx;
-  height: 54rpx;
+  min-width: 112rpx;
+  min-height: 88rpx;
   border: 1rpx solid #d6e3e0;
   border-radius: 999rpx;
   background: #f8fafc;
   color: #475569;
-  padding: 0;
+  padding: 12rpx 16rpx;
   line-height: 1;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 .favorite.active {
@@ -53,32 +52,24 @@
   color: #1f8a7f;
 }
 
-.favorite-icon {
-  font-size: 24rpx;
-  line-height: 1;
-}
-
 .favorite-label {
-  font-size: 21rpx;
+  font-size: 24rpx;
+  font-weight: 700;
   line-height: 1;
 }
 
 .status-row {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 12rpx;
   margin-top: 18rpx;
 }
 
-.status,
 .judgement {
   border-radius: 999rpx;
   padding: 6rpx 14rpx;
   font-size: 24rpx;
-}
-
-.status {
-  background: #f1f5f9;
-  color: #1e293b;
 }
 
 .judgement {
@@ -92,6 +83,20 @@
   flex-wrap: wrap;
   gap: 10rpx;
   min-width: 0;
+}
+
+.summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.reason {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .tag {

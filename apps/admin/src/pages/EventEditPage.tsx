@@ -1,21 +1,26 @@
 import {
+  Alert,
   Button,
   Card,
   Descriptions,
   Form,
   Input,
   InputNumber,
+  Modal,
   Select,
   Space,
+  Table,
   Tabs,
+  Tag,
+  Typography,
   message,
 } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, FileDoneOutlined, PlusOutlined, RobotOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiGet, apiSend } from '../api';
-import { AdminEvent, OperationLog } from '../types';
+import { AdminEvent, EventSourceSummaryItem, OperationLog } from '../types';
 import {
   infoStatusOptions,
   publishStatusOptions,
@@ -30,6 +35,7 @@ import { OperationLogTable } from '../components/OperationLogTable';
 import { MiniappPublishChecks } from '../components/MiniappPublishChecks';
 import { useConfig } from '../hooks/useConfig';
 import { DEFAULT_CITIES, DEFAULT_DISTANCES } from './ContentPage';
+import { useAdmin } from '../context/AdminContext';
 
 const { TextArea } = Input;
 
@@ -71,7 +77,11 @@ export function EventEditPage() {
   }, [form, id]);
 
   const submit = async () => {
-    const values = await form.validateFields();
+    // Tabs only mount their active panel on first visit. validateFields() returns
+    // the mounted fields, so using its return value here could omit values already
+    // loaded into the "跑前判断" and "来源与发布" tabs when saving from another tab.
+    await form.validateFields();
+    const values = form.getFieldsValue(true);
     const body = {
       ...values,
       city: Array.isArray(values.city) ? values.city[0] : values.city,
@@ -276,6 +286,11 @@ export function EventEditPage() {
               ...(id
                 ? [
                     {
+                      key: 'source-summary',
+                      label: '用户端来源摘要',
+                      children: <SourceSummaryPanel eventId={id} />,
+                    },
+                    {
                       key: 'logs',
                       label: '操作日志',
                       children: <OperationLogTable logs={logs} />,
@@ -287,6 +302,215 @@ export function EventEditPage() {
         </Form>
       </Card>
     </main>
+  );
+}
+
+function SourceSummaryPanel({ eventId }: { eventId: string }) {
+  const { can } = useAdmin();
+  const [items, setItems] = useState<EventSourceSummaryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [editing, setEditing] = useState<EventSourceSummaryItem | null>(null);
+  const [summaryForm] = Form.useForm();
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const result = await apiGet<{ items: EventSourceSummaryItem[] }>(
+        `/api/admin/events/${eventId}/source-summaries`,
+      );
+      setItems(result.items);
+    } catch (error) {
+      showError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => void load(), [eventId]);
+
+  const generate = async () => {
+    try {
+      setGenerating(true);
+      await apiSend('POST', `/api/admin/events/${eventId}/source-summaries/generate`);
+      message.success('来源摘要草稿已生成，请人工核对后发布');
+      await load();
+    } catch (error) {
+      showError(error);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const openEdit = (item: EventSourceSummaryItem) => {
+    setEditing(item);
+    summaryForm.setFieldsValue({
+      summary: item.summary,
+      keyPoints: item.keyPoints.join('\n'),
+      limitations: item.limitations || '',
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    const values = await summaryForm.validateFields();
+    await apiSend('PUT', `/api/admin/source-summaries/${editing.id}`, {
+      summary: values.summary,
+      keyPoints: splitLines(values.keyPoints),
+      limitations: values.limitations || null,
+      expectedUpdatedAt: editing.updatedAt,
+    });
+    message.success('摘要草稿已保存');
+    setEditing(null);
+    await load();
+  };
+
+  const publish = (item: EventSourceSummaryItem) => {
+    let note = '';
+    Modal.confirm({
+      title: '发布用户端来源摘要',
+      width: 620,
+      okText: '确认发布',
+      cancelText: '取消',
+      content: (
+        <Space direction="vertical" size={12} style={{ width: '100%', marginTop: 12 }}>
+          <Alert
+            type="warning"
+            showIcon
+            message="发布后将取代当前公开版本；AI 内容必须已经人工核对。"
+          />
+          <Input.TextArea
+            rows={3}
+            maxLength={500}
+            placeholder="填写 4-500 字发布备注"
+            onChange={(event) => {
+              note = event.target.value;
+            }}
+          />
+        </Space>
+      ),
+      onOk: async () => {
+        if (note.trim().length < 4) {
+          message.warning('请填写至少 4 个字的发布备注');
+          throw new Error('发布备注不足');
+        }
+        await apiSend('POST', `/api/admin/source-summaries/${item.id}/publish`, {
+          expectedUpdatedAt: item.updatedAt,
+          note: note.trim(),
+        });
+        message.success('来源摘要已发布');
+        await load();
+      },
+    });
+  };
+
+  return (
+    <Section title="用户端来源摘要">
+      <Space direction="vertical" size={14} style={{ width: '100%' }}>
+        <Alert
+          type="info"
+          showIcon
+          message="AI 只生成草稿。页面正文不会保存，发布前必须人工核对来源摘要。"
+        />
+        {can('edit_event') && (
+          <div>
+            <Button type="primary" icon={<RobotOutlined />} loading={generating} onClick={generate}>
+              抓取并生成草稿
+            </Button>
+          </div>
+        )}
+        <Table<EventSourceSummaryItem>
+          rowKey="id"
+          size="small"
+          loading={loading}
+          dataSource={items}
+          pagination={false}
+          scroll={{ x: 1080 }}
+          columns={[
+            {
+              title: '状态',
+              dataIndex: 'status',
+              width: 100,
+              render: (value, record) => (
+                <Space direction="vertical" size={2}>
+                  <Tag
+                    color={value === 'published' ? 'green' : value === 'draft' ? 'blue' : undefined}
+                  >
+                    {value === 'published' ? '已发布' : value === 'draft' ? '草稿' : '已取代'}
+                  </Tag>
+                  {record.staleAt && <Tag color="orange">待复核</Tag>}
+                </Space>
+              ),
+            },
+            {
+              title: '摘要',
+              dataIndex: 'summary',
+              width: 340,
+              render: (value: string) => (
+                <Typography.Paragraph ellipsis={{ rows: 3 }} style={{ marginBottom: 0 }}>
+                  {value}
+                </Typography.Paragraph>
+              ),
+            },
+            {
+              title: '依据',
+              dataIndex: 'basis',
+              width: 150,
+              render: (value) => (value === 'page_text' ? '页面正文' : '已保存来源记录'),
+            },
+            { title: '模型', dataIndex: 'aiModel', width: 150 },
+            {
+              title: '抓取时间',
+              dataIndex: 'fetchedAt',
+              width: 150,
+              render: (value) => dayjs(value).format('MM-DD HH:mm'),
+            },
+            {
+              title: '操作',
+              width: 180,
+              fixed: 'right',
+              render: (_, record) =>
+                can('edit_event') && record.status === 'draft' ? (
+                  <Space>
+                    <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                      编辑
+                    </Button>
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<FileDoneOutlined />}
+                      onClick={() => publish(record)}
+                    >
+                      发布
+                    </Button>
+                  </Space>
+                ) : null,
+            },
+          ]}
+        />
+      </Space>
+      <Modal
+        title="编辑来源摘要草稿"
+        open={Boolean(editing)}
+        width={720}
+        okText="保存草稿"
+        cancelText="取消"
+        onCancel={() => setEditing(null)}
+        onOk={() => void saveEdit().catch(showError)}
+      >
+        <Form form={summaryForm} layout="vertical">
+          <Form.Item label="摘要" name="summary" rules={[{ required: true, min: 80, max: 400 }]}>
+            <Input.TextArea rows={6} showCount maxLength={400} />
+          </Form.Item>
+          <Form.Item label="关键点" name="keyPoints" rules={[{ required: true }]}>
+            <Input.TextArea rows={5} placeholder="每行一条，共 2-6 条" />
+          </Form.Item>
+          <Form.Item label="限制说明" name="limitations">
+            <Input.TextArea rows={3} showCount maxLength={200} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </Section>
   );
 }
 

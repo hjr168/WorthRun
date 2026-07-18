@@ -1,6 +1,7 @@
 import { Button, Layout, Menu } from 'antd';
 import {
   DashboardOutlined,
+  BarChartOutlined,
   DatabaseOutlined,
   FileTextOutlined,
   LogoutOutlined,
@@ -9,6 +10,7 @@ import {
   SettingOutlined,
   ShareAltOutlined,
   ToolOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import {
@@ -34,6 +36,8 @@ import { ContentPage } from './pages/ContentPage';
 import { ShareStatsPage } from './pages/ShareStatsPage';
 import { LogsPage } from './pages/LogsPage';
 import { AdminProvider } from './context/AdminContext';
+import { EventChangesPage } from './pages/EventChangesPage';
+import { ChoiceStatsPage } from './pages/ChoiceStatsPage';
 
 const { Content, Sider } = Layout;
 
@@ -79,7 +83,9 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
   const location = useLocation();
   const selectedKey = location.pathname.startsWith('/events')
     ? '/events'
-    : location.pathname.startsWith('/ai-sources')
+    : location.pathname.startsWith('/event-changes')
+      ? '/event-changes'
+      : location.pathname.startsWith('/ai-sources')
       ? '/ai-sources'
       : location.pathname.startsWith('/content')
         ? '/content'
@@ -89,13 +95,15 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             ? '/quality'
             : location.pathname.startsWith('/share-stats')
               ? '/share-stats'
+              : location.pathname.startsWith('/choice-stats')
+                ? '/choice-stats'
               : location.pathname.startsWith('/logs')
                 ? '/logs'
                 : '/workbench';
 
   return (
     <Layout className="app-shell">
-      <Sider width={220}>
+      <Sider width={220} className="app-sider">
         <div className="app-logo">哪场值得跑后台</div>
         <Menu
           theme="dark"
@@ -118,6 +126,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               label: <Link to="/ai-sources">AI 赛事源</Link>,
             },
             {
+              key: '/event-changes',
+              icon: <WarningOutlined />,
+              label: <Link to="/event-changes">变更复核</Link>,
+            },
+            {
               key: '/quality',
               icon: <ProfileOutlined />,
               label: <Link to="/quality">质量反馈</Link>,
@@ -126,6 +139,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               key: '/share-stats',
               icon: <ShareAltOutlined />,
               label: <Link to="/share-stats">分享数据</Link>,
+            },
+            {
+              key: '/choice-stats',
+              icon: <BarChartOutlined />,
+              label: <Link to="/choice-stats">选择数据</Link>,
             },
             {
               key: '/content',
@@ -160,8 +178,10 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/events/edit" element={<EventEditPage />} />
             <Route path="/events/edit/:id" element={<EventEditPage />} />
             <Route path="/ai-sources" element={<AiSourcesPage />} />
+            <Route path="/event-changes" element={<EventChangesPage />} />
             <Route path="/quality" element={<QualityPage />} />
             <Route path="/share-stats" element={<ShareStatsPage />} />
+            <Route path="/choice-stats" element={<ChoiceStatsPage />} />
             <Route path="/content" element={<ContentPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/logs" element={<LogsPage />} />

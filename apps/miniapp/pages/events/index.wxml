@@ -1,8 +1,5 @@
 <view class="page events-page">
-  <view class="list-head">
-    <view class="list-title">赛事列表</view>
-    <view class="list-subtitle">按城市、距离和报名状态快速筛选。</view>
-  </view>
+  <page-header title="赛事列表" subtitle="按城市、距离和报名状态快速筛选。" />
 
   <view class="filters">
     <view class="search-row">
@@ -28,6 +25,11 @@
     </view>
   </view>
 
+  <view wx:if="{{didInitialLoad && !error}}" class="result-summary">
+    <view class="result-count">{{resultText}}</view>
+    <view class="active-filter">{{activeFilterText}}</view>
+  </view>
+
   <loading-state wx:if="{{loading}}" text="正在加载赛事" />
   <block wx:elif="{{error}}">
     <empty-state title="请求失败" description="{{error}}" />
@@ -42,7 +44,10 @@
       bind:open="openEvent"
       bind:favorite="toggleFavorite"
     />
-    <empty-state wx:if="{{!events.length}}" title="暂无赛事" description="换个城市、距离或报名状态再试试" />
+    <block wx:if="{{!events.length}}">
+      <empty-state title="暂无赛事" description="换个城市、距离或报名状态再试试" />
+      <button class="secondary-button empty-reset" bindtap="resetFilters">清除筛选</button>
+    </block>
     <view wx:elif="{{loadingMore}}" class="load-more">正在加载更多...</view>
     <view wx:elif="{{events.length && !hasMore}}" class="load-more">没有更多了</view>
   </block>

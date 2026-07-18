@@ -3,6 +3,7 @@
   "usingComponents": {
     "checklist-block": "../../components/checklist-block/index",
     "empty-state": "../../components/empty-state/index",
-    "loading-state": "../../components/loading-state/index"
+    "loading-state": "../../components/loading-state/index",
+    "page-header": "../../components/page-header/index"
   }
 }

@@ -18,7 +18,11 @@ Page({
       const res = await getFavorites(userKey);
       this.setData({
         loading: false,
-        events: res.items.map((item) => ({ ...item.event, isFavorite: true })),
+        events: res.items.map((item) => ({
+          ...item.event,
+          sourceReviewPending: Boolean(item.event.sourceReviewPending),
+          isFavorite: true,
+        })),
       });
     } catch (error) {
       this.setData({ loading: false, error: (error as Error).message || '网络异常' });

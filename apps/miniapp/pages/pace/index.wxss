@@ -4,33 +4,11 @@
   padding-bottom: calc(64rpx + env(safe-area-inset-bottom));
 }
 
-.pace-head {
-  margin-bottom: 24rpx;
-  border: 1rpx solid #17353b;
-  border-radius: 18rpx;
-  background: #122b32;
-  padding: 30rpx 28rpx;
-  box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.12);
-}
-
-.pace-head-title {
-  color: #ffffff;
-  font-size: 38rpx;
-  font-weight: 800;
-  line-height: 1.3;
-}
-
-.pace-head-subtitle {
-  margin-top: 10rpx;
-  color: #c6d7d5;
-  font-size: 25rpx;
-  line-height: 1.5;
-}
-
 .input-card,
 .result-card {
+  margin-top: 20rpx;
   border-color: #e5edf0;
-  border-radius: 16rpx;
+  border-radius: 18rpx;
   box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
 }
 
@@ -76,7 +54,7 @@
   justify-content: center;
   margin-top: 24rpx;
   width: 100%;
-  min-height: 78rpx;
+  min-height: 88rpx;
   line-height: 1.2;
 }
 

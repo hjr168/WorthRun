@@ -92,4 +92,35 @@ describe('aiEventCandidateSchema', () => {
 
     expect(result.officialUrl).toBeNull();
   });
+
+  it('normalizes a date-only signup deadline to the end of the Beijing day', () => {
+    const result = normalizeAiCandidate({
+      eventName: '港珠澳大桥半马',
+      city: '香港',
+      eventDate: '2026-11-15',
+      distanceItems: ['半程马拉松'],
+      signupStatus: 'unknown',
+      signupDeadline: '2026-08-24',
+      officialUrl: null,
+      sourceName: '赛事官网',
+      sourceUrl: 'https://hzmb-halfmarathon.com/zh_cn/important-information',
+      sourceLevel: 'official',
+      runJudgement: 'unverified',
+      judgementSummary: '',
+      judgementReasons: [],
+      suitableFor: [],
+      notSuitableFor: [],
+      tags: [],
+      evidence: [
+        {
+          field: 'signupDeadline',
+          sourceUrl: 'https://hzmb-halfmarathon.com/zh_cn/important-information',
+          quote: '报名截止日期：2026年8月24日',
+        },
+      ],
+      confidence: {},
+    });
+
+    expect(result.signupDeadline).toBe('2026-08-24T15:59:59.999Z');
+  });
 });

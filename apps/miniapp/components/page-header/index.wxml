@@ -1,0 +1,5 @@
+<view class="page-header {{compact ? 'compact' : 'hero'}}">
+  <view wx:if="{{kicker}}" class="page-header-kicker">{{kicker}}</view>
+  <view class="page-header-title">{{title}}</view>
+  <view wx:if="{{subtitle}}" class="page-header-subtitle">{{subtitle}}</view>
+</view>

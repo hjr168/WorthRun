@@ -2,6 +2,7 @@
   "navigationBarTitleText": "赛事详情",
   "usingComponents": {
     "judgement-card": "../../components/judgement-card/index",
+    "event-status-tag": "../../components/event-status-tag/index",
     "checklist-block": "../../components/checklist-block/index",
     "empty-state": "../../components/empty-state/index",
     "loading-state": "../../components/loading-state/index"

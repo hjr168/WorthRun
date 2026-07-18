@@ -3,20 +3,23 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const index_1 = require("../../config/index");
 const api_1 = require("../../utils/api");
 const format_1 = require("../../utils/format");
+const event_detail_1 = require("../../utils/event-detail");
 const user_1 = require("../../utils/user");
+const launch_1 = require("../../utils/launch");
 const CANVAS_W = 375;
 const CANVAS_H = 667;
 function getCanvasDisplaySize() {
     const windowInfo = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
     const windowWidth = Number(windowInfo === null || windowInfo === void 0 ? void 0 : windowInfo.windowWidth) || CANVAS_W;
     const rpx = windowWidth / 750;
-    const horizontalChrome = 68 * rpx;
+    const horizontalChrome = 68 * rpx; // page horizontal padding + canvas wrapper padding.
     const displayW = Math.max(260, Math.min(CANVAS_W, Math.floor(windowWidth - horizontalChrome)));
     return {
         width: displayW,
         height: Math.round((displayW * CANVAS_H) / CANVAS_W),
     };
 }
+/** 自动换行绘制，超出 maxLines 截断加省略号。返回绘制后下一个 y 坐标。 */
 function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
     if (!text)
         return y;
@@ -30,6 +33,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
         if (width > maxWidth && line) {
             lineCount += 1;
             if (lineCount >= maxLines) {
+                // 当前已是最后一行，截断加省略号
                 let truncated = line;
                 while (ctx.measureText(truncated + '…').width > maxWidth && truncated.length > 0) {
                     truncated = truncated.slice(0, -1);
@@ -45,11 +49,13 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
             line = testLine;
         }
     }
+    // 绘制最后一行
     if (line) {
         ctx.fillText(line, x, currentY);
     }
     return currentY + lineHeight;
 }
+/** 画圆角矩形路径（不填充不描边，需调用方执行 fill/stroke）。 */
 function drawRoundRect(ctx, x, y, w, h, r) {
     const radius = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
@@ -111,6 +117,7 @@ Page({
             });
         }
     },
+    /** 异步获取 Canvas 2D 节点并绘制 */
     initCanvasAndDraw() {
         return new Promise((resolve) => {
             const query = wx.createSelectorQuery();
@@ -130,6 +137,7 @@ Page({
                 canvas.width = CANVAS_W * dpr;
                 canvas.height = CANVAS_H * dpr;
                 ctx.scale(dpr, dpr);
+                // 先渲染布局，再异步绘制（等小程序码图片加载）
                 wx.nextTick(() => {
                     this.drawShareCard(ctx).then(resolve).catch(() => resolve());
                 });
@@ -137,6 +145,7 @@ Page({
                 .exec();
         });
     },
+    /** 主绘制流程，包含小程序码图片加载（异步）。 */
     async drawShareCard(ctx) {
         const event = this.data.event;
         const W = CANVAS_W;
@@ -169,12 +178,16 @@ Page({
         ctx.font = '14px sans-serif';
         y = wrapText(ctx, metaText, 20, y + 8, W - 40, 20, 1);
         // 5. 报名状态
-        const statusText = (0, format_1.labelOf)(format_1.signupStatusLabels, event.signupStatus);
+        const displayStatus = (0, event_detail_1.getEventDisplayStatus)(event.signupStatus, event.eventDate);
+        const statusText = displayStatus.text;
         let statusColor = '#64748B';
-        if (event.signupStatus === 'signup_open')
+        if (displayStatus.tone === 'positive')
             statusColor = '#2A9D8F';
-        else if (event.signupStatus === 'closing_soon')
+        else if (displayStatus.tone === 'urgent')
             statusColor = '#E76F51';
+        else if (displayStatus.tone === 'neutral')
+            statusColor = '#52736E';
+        // 报名状态胶囊
         const statusPadX = 10;
         ctx.font = '13px sans-serif';
         const statusTextWidth = ctx.measureText(statusText).width;
@@ -185,6 +198,7 @@ Page({
         ctx.fill();
         ctx.fillStyle = '#FFFFFF';
         ctx.fillText(statusText, 20 + statusPadX, y + 6 + (statusBoxH - 13) / 2 + 1);
+        // 截止倒计时提示（状态胶囊右侧）
         const deadlineText = this.buildDeadlineText(event);
         if (deadlineText) {
             ctx.fillStyle = statusColor;
@@ -220,7 +234,7 @@ Page({
             ctx.font = '14px sans-serif';
             y = wrapText(ctx, event.judgementSummary, 20, y, W - 40, 22, 4);
         }
-        // 8. 小程序码区域（底部右侧）
+        // 8. 小程序码区域（底部右侧）— 内容较少时上移，减少海报中部留白。
         const fixedFooterY = H - 156;
         const raisedFooterY = H - 280;
         const footerPanelY = Math.min(fixedFooterY, Math.max(raisedFooterY, y + 24));
@@ -231,6 +245,7 @@ Page({
         drawRoundRect(ctx, 20, footerPanelY, W - 40, footerPanelH, 14);
         ctx.fillStyle = '#F8FAFC';
         ctx.fill();
+        // 先绘制左侧提示文字
         ctx.fillStyle = '#64748B';
         ctx.font = '12px sans-serif';
         ctx.fillText('扫码查看赛事决策卡', 36, footerPanelY + 30);
@@ -238,15 +253,18 @@ Page({
         ctx.font = '11px sans-serif';
         ctx.fillText('更多跑者评测', 36, footerPanelY + 52);
         ctx.fillText('报名清单与官方确认', 36, footerPanelY + 72);
+        // 尝试加载小程序码
         let codeImage = null;
         try {
-            const codeUrl = `${index_1.config.apiBaseUrl}/api/wxacode?eventId=${event.id}`;
+            const envVersion = (0, launch_1.resolveMiniProgramEnvVersion)(wx.getAccountInfoSync().miniProgram.envVersion);
+            const codeUrl = `${index_1.config.apiBaseUrl}/api/wxacode?eventId=${event.id}&envVersion=${envVersion}`;
             const info = await this.loadImage(codeUrl);
             codeImage = info;
         }
         catch (_a) {
             codeImage = null;
         }
+        // 小程序码边框背景
         drawRoundRect(ctx, codeX, codeY, codeSize, codeSize, 8);
         ctx.fillStyle = '#F1F5F9';
         ctx.fill();
@@ -259,6 +277,7 @@ Page({
                     image.src = codeImage.path;
                 });
                 await loaded;
+                // 居中绘制（保持正方形，留出小程序码安静区）
                 ctx.drawImage(image, codeX + 6, codeY + 6, codeSize - 12, codeSize - 12);
             }
             catch (_b) {
@@ -272,10 +291,12 @@ Page({
         ctx.fillStyle = '#94A3B8';
         ctx.font = '11px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('AI 整理，仅供参考｜报名以官方为准', W / 2, H - 26);
+        ctx.fillText('AI 整理，仅供参考，报名以官方为准。', W / 2, H - 26);
         ctx.textAlign = 'left';
+        // 生成临时图片
         this.toTempFile();
     },
+    /** 小程序码加载失败时的占位文字 */
     drawCodePlaceholder(ctx, x, y, size) {
         ctx.fillStyle = '#94A3B8';
         ctx.font = '11px sans-serif';
@@ -284,6 +305,7 @@ Page({
         ctx.fillText('更多', x + size / 2, y + size / 2 + 10);
         ctx.textAlign = 'left';
     },
+    /** 加载网络图片为本地临时文件信息 */
     loadImage(src) {
         return new Promise((resolve, reject) => {
             wx.getImageInfo({
@@ -293,6 +315,7 @@ Page({
             });
         });
     },
+    /** 计算「距截止还有 X 天」或「距比赛还有 X 天」提示文字 */
     buildDeadlineText(event) {
         const target = event.signupDeadline || event.eventDate;
         if (!target)
@@ -312,12 +335,13 @@ Page({
         }
         return '';
     },
+    /** 将 canvas 导出为临时图片文件 */
     toTempFile() {
         const canvas = this.canvasNode;
         if (!canvas)
             return;
         wx.canvasToTempFilePath({
-            canvas,
+            canvas: canvas,
             success: (res) => {
                 this.setData({ tempFilePath: res.tempFilePath });
             },
@@ -333,8 +357,10 @@ Page({
         }
         this.setData({ saving: true });
         try {
+            // 检查相册授权
             const setting = await wx.getSetting();
             if (setting.authSetting['scope.writePhotosAlbum'] === false) {
+                // 明确拒绝过，引导去设置
                 const modalRes = await wx.showModal({
                     title: '需要相册权限',
                     content: '保存图片需要相册权限，是否前往设置开启？',
@@ -345,10 +371,12 @@ Page({
                 return;
             }
             if (setting.authSetting['scope.writePhotosAlbum'] === undefined) {
+                // 未授权过，主动请求
                 await wx.authorize({ scope: 'scope.writePhotosAlbum' });
             }
             await wx.saveImageToPhotosAlbum({ filePath: this.data.tempFilePath });
             wx.showToast({ title: '已保存到相册', icon: 'success' });
+            // 静默上报
             (0, api_1.recordShare)({
                 userKey: this.data.userKey,
                 eventId: this.data.id,

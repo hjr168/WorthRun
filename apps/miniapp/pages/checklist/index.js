@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("../../utils/api");
 const groups = ['通用清单', '5K', '10K', '半马', '全马'];
+// 页面显示文案 → 后端 checklist_templates 的 key
 const typeKeyMap = {
     通用清单: 'general',
     '5K': '5K',
@@ -63,7 +64,11 @@ Page({
             this.setData({ items: result.items, loading: false, error: '' });
         })
             .catch(() => {
-            this.setData({ items: fallbackChecklist[groupName] || [], loading: false });
+            // 接口失败用本地兜底，保证离线可用
+            this.setData({
+                items: fallbackChecklist[groupName] || [],
+                loading: false,
+            });
         });
     },
     reload() {

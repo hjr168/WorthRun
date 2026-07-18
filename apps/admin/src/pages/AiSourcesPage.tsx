@@ -1,35 +1,69 @@
 import {
   Alert,
   Button,
+  Divider,
+  Drawer,
+  Empty,
   Form,
   Input,
+  InputNumber,
   Modal,
   Select,
   Space,
+  Statistic,
+  Switch,
   Table,
   Tag,
   Typography,
   message,
 } from 'antd';
-import { EditOutlined, PlusOutlined, RobotOutlined } from '@ant-design/icons';
+import {
+  ApartmentOutlined,
+  CheckSquareOutlined,
+  EditOutlined,
+  HistoryOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  RobotOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet, apiSend } from '../api';
 import { runJudgementOptions, signupStatusOptions, sourceLevelOptions } from '../constants';
 import { useAdmin } from '../context/AdminContext';
-import { EventCandidateItem, EventSourceItem, EventSourceRunSummary } from '../types';
-import { formatEventSourceRunSummary } from '../utils/aiSources';
+import {
+  BulkAcceptResult,
+  CandidateDuplicateGroup,
+  CandidateReviewIssue,
+  EventCandidateItem,
+  EventCandidateStats,
+  EventSourceItem,
+  EventSourceRunItem,
+  EventSourceRunSummary,
+} from '../types';
+import {
+  candidateIssueLabel,
+  formatEventSourceRunSummary,
+  formatRunDuration,
+  formatRunPageRange,
+  formatScheduleInterval,
+  runStatusLabel,
+} from '../utils/aiSources';
 import { showError } from '../utils/helpers';
 
 const sourceTypeOptions = [
   { value: 'page_url', label: '网页 AI 抽取' },
   { value: 'chinaath_api', label: '中国田协官方赛事目录' },
+  { value: 'world_athletics', label: '世界田联香港路跑' },
+  { value: 'chinamarathon_sitemap', label: '中国马拉松社区发现' },
 ];
 
 const sourceTypeLabels: Record<EventSourceItem['sourceType'], string> = {
   page_url: '网页 AI 抽取',
   chinaath_api: '中国田协目录',
+  world_athletics: '世界田联香港路跑',
+  chinamarathon_sitemap: '中国马拉松社区发现',
   search_query: '搜索关键词',
   rss: 'RSS',
 };
@@ -47,6 +81,25 @@ const candidateStatusLabels: Record<EventCandidateItem['status'], string> = {
   merged: '已合并',
 };
 
+function fixedSourceHelp(sourceType: EventSourceItem['sourceType']) {
+  if (sourceType === 'world_athletics') {
+    return {
+      message: '固定读取世界田联香港路跑日历',
+      description: '只生成未来一年的香港路跑候选；报名入口仍需人工补充。',
+    };
+  }
+  if (sourceType === 'chinamarathon_sitemap') {
+    return {
+      message: '固定读取中国马拉松社区发现源',
+      description: '每次最多顺序核对 10 个详情页；聚合信息只能进入人工审核。',
+    };
+  }
+  return {
+    message: '固定读取中国田协公开赛事目录',
+    description: '每个来源只查询一个大湾区内地城市；官方报名入口仍需人工补充。',
+  };
+}
+
 interface SourceFormValues {
   name: string;
   sourceType: EventSourceItem['sourceType'];
@@ -54,6 +107,12 @@ interface SourceFormValues {
   searchQuery?: string;
   allowedDomains?: string;
   cityHints?: string;
+  sourceLevel: EventSourceItem['sourceLevel'];
+  status: EventSourceItem['status'];
+  scheduleEnabled: boolean;
+  scheduleIntervalHours: number;
+  pageSize: number;
+  maxPagesPerRun: number;
   notes?: string;
 }
 
@@ -81,17 +140,41 @@ export function AiSourcesPage() {
   const [sourceForm] = Form.useForm<SourceFormValues>();
   const [candidateForm] = Form.useForm<CandidateFormValues>();
   const selectedSourceType = Form.useWatch('sourceType', sourceForm) || 'page_url';
+  const scheduleEnabled = Form.useWatch('scheduleEnabled', sourceForm);
   const [sources, setSources] = useState<EventSourceItem[]>([]);
   const [candidates, setCandidates] = useState<EventCandidateItem[]>([]);
+  const [candidateStats, setCandidateStats] = useState<EventCandidateStats>({
+    pending: 0,
+    urgent: 0,
+    missingOfficialUrl: 0,
+    duplicates: 0,
+  });
+  const [candidateTotal, setCandidateTotal] = useState(0);
+  const [candidatePage, setCandidatePage] = useState(1);
+  const [candidatePageSize, setCandidatePageSize] = useState(20);
+  const [candidateIssue, setCandidateIssue] = useState('');
+  const [candidateReadiness, setCandidateReadiness] = useState('');
+  const [candidateSort, setCandidateSort] = useState<'priority' | 'newest'>('priority');
   const [sourcesLoading, setSourcesLoading] = useState(false);
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [sourceModalOpen, setSourceModalOpen] = useState(false);
+  const [editingSource, setEditingSource] = useState<EventSourceItem | null>(null);
+  const [historySource, setHistorySource] = useState<EventSourceItem | null>(null);
+  const [sourceRuns, setSourceRuns] = useState<EventSourceRunItem[]>([]);
+  const [sourceRunTotal, setSourceRunTotal] = useState(0);
+  const [sourceRunPage, setSourceRunPage] = useState(1);
+  const [sourceRunsLoading, setSourceRunsLoading] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<EventCandidateItem | null>(null);
   const [savingSource, setSavingSource] = useState(false);
   const [savingCandidate, setSavingCandidate] = useState(false);
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
   const [candidateSourceId, setCandidateSourceId] = useState<string>('');
   const [candidateStatus, setCandidateStatus] = useState<string>('');
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+  const [duplicateGroups, setDuplicateGroups] = useState<CandidateDuplicateGroup[]>([]);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [duplicatePrimaries, setDuplicatePrimaries] = useState<Record<string, string>>({});
+  const [workflowLoading, setWorkflowLoading] = useState(false);
 
   const loadSources = () => {
     setSourcesLoading(true);
@@ -106,13 +189,41 @@ export function AiSourcesPage() {
     const params = new URLSearchParams();
     if (candidateSourceId) params.set('sourceId', candidateSourceId);
     if (candidateStatus) params.set('status', candidateStatus);
+    if (candidateIssue) params.set('issue', candidateIssue);
+    if (candidateReadiness) params.set('readiness', candidateReadiness);
+    params.set('sort', candidateSort);
+    params.set('page', String(candidatePage));
+    params.set('pageSize', String(candidatePageSize));
     const query = params.toString();
-    return apiGet<{ items: EventCandidateItem[] }>(
+    return apiGet<{ items: EventCandidateItem[]; total: number }>(
       `/api/admin/event-candidates${query ? `?${query}` : ''}`,
     )
-      .then((result) => setCandidates(result.items))
+      .then((result) => {
+        setCandidates(result.items);
+        setCandidateTotal(result.total);
+      })
       .catch(showError)
       .finally(() => setCandidatesLoading(false));
+  };
+
+  const loadCandidateStats = () => {
+    const query = candidateSourceId ? `?sourceId=${encodeURIComponent(candidateSourceId)}` : '';
+    return apiGet<EventCandidateStats>(`/api/admin/event-candidate-stats${query}`)
+      .then(setCandidateStats)
+      .catch(showError);
+  };
+
+  const loadSourceRuns = (source: EventSourceItem, page = sourceRunPage) => {
+    setSourceRunsLoading(true);
+    return apiGet<{ items: EventSourceRunItem[]; total: number }>(
+      `/api/admin/event-source-runs?sourceId=${encodeURIComponent(source.id)}&page=${page}&pageSize=10`,
+    )
+      .then((result) => {
+        setSourceRuns(result.items);
+        setSourceRunTotal(result.total);
+      })
+      .catch(showError)
+      .finally(() => setSourceRunsLoading(false));
   };
 
   useEffect(() => {
@@ -120,25 +231,129 @@ export function AiSourcesPage() {
   }, []);
 
   useEffect(() => {
-    void loadCandidates();
-  }, [candidateSourceId, candidateStatus]);
+    void Promise.all([loadCandidates(), loadCandidateStats()]);
+  }, [
+    candidateSourceId,
+    candidateStatus,
+    candidateIssue,
+    candidateReadiness,
+    candidateSort,
+    candidatePage,
+    candidatePageSize,
+  ]);
 
-  const createSource = async () => {
+  const openDuplicateGroups = async () => {
+    try {
+      setWorkflowLoading(true);
+      const result = await apiGet<{ groups: CandidateDuplicateGroup[] }>(
+        '/api/admin/event-candidate-duplicate-groups',
+      );
+      setDuplicateGroups(result.groups);
+      setDuplicatePrimaries(
+        Object.fromEntries(
+          result.groups.map((group) => [group.groupKey, group.suggestedPrimaryId]),
+        ),
+      );
+      setDuplicateModalOpen(true);
+    } catch (error) {
+      showError(error);
+    } finally {
+      setWorkflowLoading(false);
+    }
+  };
+
+  const mergeDuplicateGroup = async (group: CandidateDuplicateGroup) => {
+    const primaryId = duplicatePrimaries[group.groupKey] || group.suggestedPrimaryId;
+    try {
+      setWorkflowLoading(true);
+      await apiSend('POST', '/api/admin/event-candidates/merge', {
+        primaryId,
+        mergedIds: group.items.filter((item) => item.id !== primaryId).map((item) => item.id),
+      });
+      message.success('候选已归并，主候选保留完整证据');
+      const result = await apiGet<{ groups: CandidateDuplicateGroup[] }>(
+        '/api/admin/event-candidate-duplicate-groups',
+      );
+      setDuplicateGroups(result.groups);
+      setDuplicatePrimaries(
+        Object.fromEntries(result.groups.map((item) => [item.groupKey, item.suggestedPrimaryId])),
+      );
+      await Promise.all([loadCandidates(), loadCandidateStats()]);
+    } catch (error) {
+      showError(error);
+    } finally {
+      setWorkflowLoading(false);
+    }
+  };
+
+  const previewBulkAccept = async () => {
+    if (!selectedCandidateIds.length) return;
+    try {
+      setWorkflowLoading(true);
+      const preview = await apiSend<BulkAcceptResult>(
+        'POST',
+        '/api/admin/event-candidates/bulk-accept',
+        { candidateIds: selectedCandidateIds, dryRun: true },
+      );
+      const readyCount = preview.items.filter((item) => item.ready).length;
+      Modal.confirm({
+        title: `批量采纳预览：${readyCount}/${preview.items.length} 条可采纳`,
+        width: 720,
+        content: renderWorkflowPreview(preview.items),
+        okText: '采纳合格项为草稿',
+        cancelText: '取消',
+        okButtonProps: { disabled: readyCount === 0 },
+        onOk: async () => {
+          const result = await apiSend<BulkAcceptResult>(
+            'POST',
+            '/api/admin/event-candidates/bulk-accept',
+            {
+              candidateIds: selectedCandidateIds,
+              dryRun: false,
+              expected: preview.items
+                .filter((item) => item.updatedAt)
+                .map((item) => ({ id: item.id, updatedAt: item.updatedAt })),
+            },
+          );
+          message.success(`已采纳 ${result.accepted.length} 条，失败 ${result.failed.length} 条`);
+          setSelectedCandidateIds([]);
+          await Promise.all([loadCandidates(), loadCandidateStats()]);
+        },
+      });
+    } catch (error) {
+      showError(error);
+    } finally {
+      setWorkflowLoading(false);
+    }
+  };
+
+  const saveSource = async () => {
     try {
       const values = await sourceForm.validateFields();
       setSavingSource(true);
-      await apiSend('POST', '/api/admin/event-sources', {
+      const payload = {
         name: values.name,
         sourceType: values.sourceType,
         entryUrl: normalizeOptionalString(values.entryUrl),
         searchQuery: normalizeOptionalString(values.searchQuery),
         allowedDomains: splitList(values.allowedDomains),
         cityHints: splitList(values.cityHints),
-        status: 'active',
+        sourceLevel: values.sourceLevel,
+        status: values.status,
+        scheduleEnabled: values.scheduleEnabled,
+        scheduleIntervalHours: values.scheduleIntervalHours,
+        pageSize: values.pageSize,
+        maxPagesPerRun: values.maxPagesPerRun,
         notes: normalizeOptionalString(values.notes),
-      });
-      message.success('赛事源已创建');
+      };
+      await apiSend(
+        editingSource ? 'PUT' : 'POST',
+        editingSource ? `/api/admin/event-sources/${editingSource.id}` : '/api/admin/event-sources',
+        payload,
+      );
+      message.success(editingSource ? '赛事源已更新' : '赛事源已创建');
       setSourceModalOpen(false);
+      setEditingSource(null);
       sourceForm.resetFields();
       await loadSources();
     } catch (error) {
@@ -146,6 +361,44 @@ export function AiSourcesPage() {
     } finally {
       setSavingSource(false);
     }
+  };
+
+  const openSourceEditor = (source?: EventSourceItem) => {
+    setEditingSource(source || null);
+    sourceForm.setFieldsValue(
+      source
+        ? {
+            name: source.name,
+            sourceType: source.sourceType,
+            entryUrl: source.entryUrl || '',
+            searchQuery: source.searchQuery || '',
+            allowedDomains: joinList(source.allowedDomains),
+            cityHints: joinList(source.cityHints),
+            sourceLevel: source.sourceLevel,
+            status: source.status,
+            scheduleEnabled: source.scheduleEnabled,
+            scheduleIntervalHours: source.scheduleIntervalHours,
+            pageSize: source.pageSize,
+            maxPagesPerRun: source.maxPagesPerRun,
+            notes: source.notes || '',
+          }
+        : {
+            sourceType: 'page_url',
+            sourceLevel: 'unknown',
+            status: 'active',
+            scheduleEnabled: false,
+            scheduleIntervalHours: 24,
+            pageSize: 20,
+            maxPagesPerRun: 1,
+          },
+    );
+    setSourceModalOpen(true);
+  };
+
+  const openRunHistory = (source: EventSourceItem) => {
+    setHistorySource(source);
+    setSourceRunPage(1);
+    void loadSourceRuns(source, 1);
   };
 
   const runSource = async (source: EventSourceItem) => {
@@ -161,7 +414,7 @@ export function AiSourcesPage() {
       showError(error);
     } finally {
       setRunningSourceId(null);
-      await Promise.all([loadSources(), loadCandidates()]);
+      await Promise.all([loadSources(), loadCandidates(), loadCandidateStats()]);
     }
   };
 
@@ -206,7 +459,7 @@ export function AiSourcesPage() {
       message.success('候选赛事已保存');
       setEditingCandidate(null);
       candidateForm.resetFields();
-      await loadCandidates();
+      await Promise.all([loadCandidates(), loadCandidateStats()]);
     } catch (error) {
       showError(error);
     } finally {
@@ -240,7 +493,7 @@ export function AiSourcesPage() {
         );
         message.success('已采纳为赛事草稿，请继续人工核验和补充');
         if (result.event?.id) navigate(`/events/edit/${result.event.id}`);
-        else await loadCandidates();
+        else await Promise.all([loadCandidates(), loadCandidateStats()]);
       } catch (error) {
         showError(error);
       }
@@ -269,7 +522,7 @@ export function AiSourcesPage() {
             rejectReason: normalizeOptionalString(rejectReason),
           });
           message.success('候选赛事已驳回');
-          await loadCandidates();
+          await Promise.all([loadCandidates(), loadCandidateStats()]);
         } catch (error) {
           showError(error);
         }
@@ -282,16 +535,10 @@ export function AiSourcesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">AI 赛事源</h1>
-          <div className="page-subtitle">
-            AI 只生成候选草稿，发布前必须人工核验和补充。
-          </div>
+          <div className="page-subtitle">AI 只生成候选草稿，发布前必须人工核验和补充。</div>
         </div>
         {can('manage_ai_sources') && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setSourceModalOpen(true)}
-          >
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openSourceEditor()}>
             新增赛事源
           </Button>
         )}
@@ -312,9 +559,17 @@ export function AiSourcesPage() {
             loading={sourcesLoading}
             dataSource={sources}
             pagination={false}
-            scroll={{ x: 980 }}
+            scroll={{ x: 1080 }}
             columns={[
-              { title: '名称', dataIndex: 'name', width: 180, fixed: 'left' },
+              {
+                title: '名称',
+                dataIndex: 'name',
+                width: 180,
+                fixed: 'left',
+                render: (value: string, record) => (
+                  <Typography.Link onClick={() => openRunHistory(record)}>{value}</Typography.Link>
+                ),
+              },
               {
                 title: '类型',
                 dataIndex: 'sourceType',
@@ -322,9 +577,26 @@ export function AiSourcesPage() {
                 render: (value: EventSourceItem['sourceType']) => sourceTypeLabels[value],
               },
               {
-                title: '入口',
-                width: 280,
-                render: (_, record) => renderSourceEntry(record),
+                title: '等级',
+                dataIndex: 'sourceLevel',
+                width: 100,
+                render: (value: EventSourceItem['sourceLevel']) =>
+                  sourceLevelOptions.find((item) => item.value === value)?.label || value,
+              },
+              {
+                title: '自动运行',
+                width: 140,
+                render: (_, record) =>
+                  record.scheduleEnabled ? (
+                    <Space direction="vertical" size={2}>
+                      <Tag color="blue">已开启</Tag>
+                      <Typography.Text type="secondary">
+                        {formatScheduleInterval(record.scheduleIntervalHours)}
+                      </Typography.Text>
+                    </Space>
+                  ) : (
+                    <Tag>未开启</Tag>
+                  ),
               },
               {
                 title: '状态',
@@ -337,8 +609,13 @@ export function AiSourcesPage() {
                 ),
               },
               {
-                title: '最近运行状态/时间',
-                width: 230,
+                title: '下次运行',
+                width: 150,
+                render: (_, record) => formatDateTime(record.nextRunAt),
+              },
+              {
+                title: '最近运行',
+                width: 210,
                 render: (_, record) => (
                   <Space direction="vertical" size={2}>
                     <span>{record.lastRunStatus || '尚未运行'}</span>
@@ -349,28 +626,55 @@ export function AiSourcesPage() {
                 ),
               },
               {
-                title: '城市提示',
-                dataIndex: 'cityHints',
-                width: 180,
-                render: (items: string[]) => (items.length ? items.join('、') : '-'),
+                title: '连续失败',
+                dataIndex: 'consecutiveFailures',
+                width: 100,
+                render: (value: number) => (
+                  <Typography.Text type={value ? 'danger' : 'secondary'}>{value}</Typography.Text>
+                ),
               },
               {
                 title: '操作',
                 fixed: 'right',
-                width: 130,
+                width: 250,
                 render: (_, record) =>
                   can('manage_ai_sources') ? (
+                    <Space>
+                      <Button
+                        size="small"
+                        icon={<RobotOutlined />}
+                        loading={runningSourceId === record.id}
+                        disabled={
+                          record.status !== 'active' ||
+                          Boolean(runningSourceId && runningSourceId !== record.id)
+                        }
+                        onClick={() => runSource(record)}
+                      >
+                        立即抓取
+                      </Button>
+                      <Button
+                        size="small"
+                        icon={<HistoryOutlined />}
+                        aria-label="运行历史"
+                        title="运行历史"
+                        onClick={() => openRunHistory(record)}
+                      />
+                      <Button
+                        size="small"
+                        icon={<EditOutlined />}
+                        aria-label="编辑赛事源"
+                        title="编辑赛事源"
+                        onClick={() => openSourceEditor(record)}
+                      />
+                    </Space>
+                  ) : (
                     <Button
                       size="small"
-                      icon={<RobotOutlined />}
-                      loading={runningSourceId === record.id}
-                      disabled={Boolean(runningSourceId && runningSourceId !== record.id)}
-                      onClick={() => runSource(record)}
+                      icon={<HistoryOutlined />}
+                      onClick={() => openRunHistory(record)}
                     >
-                      手动抓取
+                      运行历史
                     </Button>
-                  ) : (
-                    '-'
                   ),
               },
             ]}
@@ -378,13 +682,55 @@ export function AiSourcesPage() {
         </section>
 
         <section className="form-section">
-          <h2>候选赛事</h2>
-          <Space wrap style={{ marginBottom: 12 }}>
+          <div className="section-heading">
+            <h2>候选赛事</h2>
+            <Space>
+              {can('review_ai_candidates') && (
+                <>
+                  <Button
+                    size="small"
+                    icon={<ApartmentOutlined />}
+                    loading={workflowLoading}
+                    onClick={openDuplicateGroups}
+                  >
+                    疑似重复组
+                  </Button>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<CheckSquareOutlined />}
+                    disabled={!selectedCandidateIds.length}
+                    loading={workflowLoading}
+                    onClick={previewBulkAccept}
+                  >
+                    预览采纳 ({selectedCandidateIds.length})
+                  </Button>
+                </>
+              )}
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                onClick={() => void Promise.all([loadCandidates(), loadCandidateStats()])}
+              >
+                刷新
+              </Button>
+            </Space>
+          </div>
+          <div className="ai-stat-strip">
+            <Statistic title="待审核" value={candidateStats.pending} />
+            <Statistic title="高优先级" value={candidateStats.urgent} />
+            <Statistic title="缺少官方入口" value={candidateStats.missingOfficialUrl} />
+            <Statistic title="疑似重复" value={candidateStats.duplicates} />
+          </div>
+          <Space wrap className="ai-source-filters">
             <Select
               aria-label="候选来源"
               style={{ width: 220 }}
               value={candidateSourceId}
-              onChange={setCandidateSourceId}
+              onChange={(value) => {
+                setCandidateSourceId(value);
+                setCandidatePage(1);
+              }}
               options={[
                 { value: '', label: '全部来源' },
                 ...sources.map((source) => ({ value: source.id, label: source.name })),
@@ -394,7 +740,10 @@ export function AiSourcesPage() {
               aria-label="候选状态"
               style={{ width: 150 }}
               value={candidateStatus}
-              onChange={setCandidateStatus}
+              onChange={(value) => {
+                setCandidateStatus(value);
+                setCandidatePage(1);
+              }}
               options={[
                 { value: '', label: '全部状态' },
                 ...Object.entries(candidateStatusLabels).map(([value, label]) => ({
@@ -403,12 +752,84 @@ export function AiSourcesPage() {
                 })),
               ]}
             />
+            <Select
+              aria-label="候选问题"
+              style={{ width: 180 }}
+              value={candidateIssue}
+              onChange={(value) => {
+                setCandidateIssue(value);
+                setCandidatePage(1);
+              }}
+              options={[
+                { value: '', label: '全部问题' },
+                ...(
+                  [
+                    'missing_event_date',
+                    'missing_official_url',
+                    'missing_source_url',
+                    'duplicate_event',
+                    'source_date_conflict',
+                  ] as CandidateReviewIssue[]
+                ).map((value) => ({ value, label: candidateIssueLabel(value) })),
+              ]}
+            />
+            <Select
+              aria-label="候选可采纳性"
+              style={{ width: 150 }}
+              value={candidateReadiness}
+              onChange={(value) => {
+                setCandidateReadiness(value);
+                setCandidatePage(1);
+                setSelectedCandidateIds([]);
+              }}
+              options={[
+                { value: '', label: '全部可采纳性' },
+                { value: 'ready', label: '可采纳' },
+                { value: 'blocked', label: '待补充' },
+              ]}
+            />
+            <Select
+              aria-label="候选排序"
+              style={{ width: 150 }}
+              value={candidateSort}
+              onChange={(value) => {
+                setCandidateSort(value);
+                setCandidatePage(1);
+              }}
+              options={[
+                { value: 'priority', label: '优先级排序' },
+                { value: 'newest', label: '最新创建' },
+              ]}
+            />
           </Space>
           <Table<EventCandidateItem>
             rowKey="id"
             loading={candidatesLoading}
             dataSource={candidates}
-            scroll={{ x: 1320 }}
+            rowSelection={
+              can('review_ai_candidates')
+                ? {
+                    selectedRowKeys: selectedCandidateIds,
+                    preserveSelectedRowKeys: true,
+                    onChange: (keys) => setSelectedCandidateIds(keys.map(String).slice(0, 20)),
+                    getCheckboxProps: (record) => ({
+                      disabled: !['new', 'needs_review'].includes(record.status),
+                    }),
+                  }
+                : undefined
+            }
+            pagination={{
+              current: candidatePage,
+              pageSize: candidatePageSize,
+              total: candidateTotal,
+              showSizeChanger: true,
+              showTotal: (total) => `共 ${total} 条`,
+              onChange: (page, pageSize) => {
+                setCandidatePage(pageSize === candidatePageSize ? page : 1);
+                setCandidatePageSize(pageSize);
+              },
+            }}
+            scroll={{ x: 1580 }}
             columns={[
               { title: '赛事', dataIndex: 'eventName', width: 210, fixed: 'left' },
               {
@@ -417,6 +838,16 @@ export function AiSourcesPage() {
                 render: (_, record) => record.source?.name || '-',
               },
               { title: '城市', dataIndex: 'city', width: 100 },
+              {
+                title: '优先级',
+                dataIndex: 'priorityScore',
+                width: 90,
+                render: (value: number) => (
+                  <Tag color={value >= 100 ? 'red' : value >= 80 ? 'orange' : 'default'}>
+                    {value}
+                  </Tag>
+                ),
+              },
               {
                 title: '日期',
                 dataIndex: 'eventDate',
@@ -432,6 +863,23 @@ export function AiSourcesPage() {
                     {candidateStatusLabels[value] || value}
                   </Tag>
                 ),
+              },
+              {
+                title: '待补充',
+                dataIndex: 'reviewIssues',
+                width: 240,
+                render: (issues: CandidateReviewIssue[]) =>
+                  issues.length ? (
+                    <Space size={[0, 4]} wrap>
+                      {issues.map((issue) => (
+                        <Tag key={issue} color={issue === 'duplicate_event' ? 'red' : 'orange'}>
+                          {candidateIssueLabel(issue)}
+                        </Tag>
+                      ))}
+                    </Space>
+                  ) : (
+                    <Tag color="green">信息完整</Tag>
+                  ),
               },
               {
                 title: '官方入口',
@@ -486,17 +934,107 @@ export function AiSourcesPage() {
       </Space>
 
       <Modal
-        title="新增赛事源"
+        title="疑似重复候选"
+        open={duplicateModalOpen}
+        width={920}
+        footer={null}
+        onCancel={() => setDuplicateModalOpen(false)}
+      >
+        {duplicateGroups.length ? (
+          duplicateGroups.map((group, index) => (
+            <div key={group.groupKey}>
+              {index > 0 && <Divider />}
+              <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                <Space wrap>
+                  <Typography.Text strong>选择主候选</Typography.Text>
+                  <Select
+                    style={{ width: 360 }}
+                    value={duplicatePrimaries[group.groupKey] || group.suggestedPrimaryId}
+                    options={group.items.map((item) => ({
+                      value: item.id,
+                      label: `${item.eventName} · ${item.source?.name || '未知来源'}`,
+                    }))}
+                    onChange={(value) =>
+                      setDuplicatePrimaries((current) => ({
+                        ...current,
+                        [group.groupKey]: value,
+                      }))
+                    }
+                  />
+                  <Button
+                    type="primary"
+                    loading={workflowLoading}
+                    onClick={() => mergeDuplicateGroup(group)}
+                  >
+                    确认归并
+                  </Button>
+                </Space>
+                <Table<EventCandidateItem>
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  dataSource={group.items}
+                  scroll={{ x: 760 }}
+                  columns={[
+                    { title: '赛事', dataIndex: 'eventName', width: 210 },
+                    { title: '来源', width: 180, render: (_, item) => item.source?.name || '-' },
+                    {
+                      title: '等级',
+                      width: 90,
+                      render: (_, item) => item.source?.sourceLevel || 'unknown',
+                    },
+                    {
+                      title: '日期',
+                      dataIndex: 'eventDate',
+                      width: 110,
+                      render: (value: string) => formatDateInput(value),
+                    },
+                    {
+                      title: '距离',
+                      width: 150,
+                      render: (_, item) =>
+                        readStringArray(item.extractedData, 'distanceItems').join(' / '),
+                    },
+                    {
+                      title: '官方入口',
+                      width: 180,
+                      render: (_, item) => renderUrl(item.officialUrl),
+                    },
+                  ]}
+                />
+              </Space>
+            </div>
+          ))
+        ) : (
+          <Empty description="当前没有待归并的疑似重复候选" />
+        )}
+      </Modal>
+
+      <Modal
+        title={editingSource ? '编辑赛事源' : '新增赛事源'}
         open={sourceModalOpen}
-        onOk={createSource}
+        onOk={saveSource}
         confirmLoading={savingSource}
         onCancel={() => {
           setSourceModalOpen(false);
+          setEditingSource(null);
           sourceForm.resetFields();
         }}
         destroyOnHidden
       >
-        <Form form={sourceForm} layout="vertical" initialValues={{ sourceType: 'page_url' }}>
+        <Form
+          form={sourceForm}
+          layout="vertical"
+          initialValues={{
+            sourceType: 'page_url',
+            sourceLevel: 'unknown',
+            status: 'active',
+            scheduleEnabled: false,
+            scheduleIntervalHours: 24,
+            pageSize: 20,
+            maxPagesPerRun: 1,
+          }}
+        >
           <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
             <Input placeholder="例如：广州马拉松官网公告" />
           </Form.Item>
@@ -507,13 +1045,13 @@ export function AiSourcesPage() {
           >
             <Select options={sourceTypeOptions} />
           </Form.Item>
-          {selectedSourceType === 'chinaath_api' ? (
+          {selectedSourceType !== 'page_url' ? (
             <Alert
               showIcon
               type="info"
               style={{ marginBottom: 16 }}
-              message="固定读取中国田协公开赛事目录"
-              description="每次最多读取 20 条候选；官方报名入口和报名状态仍需人工补充。"
+              message={fixedSourceHelp(selectedSourceType).message}
+              description={fixedSourceHelp(selectedSourceType).description}
             />
           ) : (
             <>
@@ -533,14 +1071,163 @@ export function AiSourcesPage() {
               </Form.Item>
             </>
           )}
-          <Form.Item label="城市提示" name="cityHints" extra="多个城市用逗号或换行分隔">
-            <Input placeholder="广州, 深圳, 佛山" />
+          <Form.Item
+            label="目标城市"
+            name="cityHints"
+            extra={
+              selectedSourceType === 'chinaath_api'
+                ? '必须且只能填写一个大湾区内地城市'
+                : '仅可填写大湾区城市；固定来源会由服务端设置目标城市'
+            }
+          >
+            <Input
+              placeholder={selectedSourceType === 'chinaath_api' ? '广州' : '广州, 深圳, 佛山'}
+              disabled={
+                selectedSourceType === 'world_athletics' ||
+                selectedSourceType === 'chinamarathon_sitemap'
+              }
+            />
           </Form.Item>
+          <Form.Item label="来源等级" name="sourceLevel" rules={[{ required: true }]}>
+            <Select options={sourceLevelOptions} disabled={selectedSourceType !== 'page_url'} />
+          </Form.Item>
+          <div className="form-grid compact-form-grid">
+            <Form.Item label="状态" name="status">
+              <Select
+                options={[
+                  { value: 'active', label: '启用' },
+                  { value: 'paused', label: '暂停' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item label="自动运行" name="scheduleEnabled" valuePropName="checked">
+              <Switch checkedChildren="开启" unCheckedChildren="关闭" />
+            </Form.Item>
+            <Form.Item
+              label="运行间隔（小时）"
+              name="scheduleIntervalHours"
+              rules={[{ required: true, message: '请输入运行间隔' }]}
+            >
+              <InputNumber
+                min={1}
+                max={168}
+                disabled={!scheduleEnabled}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+            {selectedSourceType !== 'page_url' && (
+              <>
+                <Form.Item label="每页条数" name="pageSize">
+                  <InputNumber min={1} max={20} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label="每次最多页数" name="maxPagesPerRun">
+                  <InputNumber min={1} max={2} style={{ width: '100%' }} />
+                </Form.Item>
+              </>
+            )}
+          </div>
           <Form.Item label="备注" name="notes">
             <Input.TextArea rows={3} placeholder="只记录后台核验需要的备注" />
           </Form.Item>
         </Form>
       </Modal>
+
+      <Drawer
+        title={historySource ? `${historySource.name} · 运行历史` : '运行历史'}
+        open={Boolean(historySource)}
+        width="min(940px, 100vw)"
+        onClose={() => setHistorySource(null)}
+      >
+        <Table<EventSourceRunItem>
+          rowKey="id"
+          size="small"
+          loading={sourceRunsLoading}
+          dataSource={sourceRuns}
+          scroll={{ x: 920 }}
+          pagination={{
+            current: sourceRunPage,
+            pageSize: 10,
+            total: sourceRunTotal,
+            showSizeChanger: false,
+            onChange: (page) => {
+              if (!historySource) return;
+              setSourceRunPage(page);
+              void loadSourceRuns(historySource, page);
+            },
+          }}
+          columns={[
+            {
+              title: '开始时间',
+              dataIndex: 'startedAt',
+              width: 145,
+              render: formatDateTime,
+            },
+            {
+              title: '触发方式',
+              dataIndex: 'trigger',
+              width: 90,
+              render: (value: EventSourceRunItem['trigger']) =>
+                value === 'manual' ? '手动' : '自动',
+            },
+            {
+              title: '状态',
+              dataIndex: 'status',
+              width: 90,
+              render: (value: EventSourceRunItem['status']) => (
+                <Tag color={value === 'succeeded' ? 'green' : value === 'failed' ? 'red' : 'blue'}>
+                  {runStatusLabel(value)}
+                </Tag>
+              ),
+            },
+            {
+              title: '页码',
+              width: 100,
+              render: (_, record) => formatRunPageRange(record),
+            },
+            {
+              title: '结果',
+              width: 410,
+              render: (_, record) =>
+                `读取 ${record.fetched}，新增 ${record.created}，更新 ${record.updated}，新变更 ${record.changeAlertsCreated}，已存在变更 ${record.changeAlertsExisting}，过期 ${record.skippedExpired}，区域外 ${record.skippedOutsideRegion}`,
+            },
+            {
+              title: '耗时',
+              width: 90,
+              render: (_, record) => formatRunDuration(record.startedAt, record.finishedAt),
+            },
+            {
+              title: '错误',
+              dataIndex: 'errorMessage',
+              width: 220,
+              render: (value: string | null) => (
+                <Typography.Text
+                  type={value ? 'danger' : 'secondary'}
+                  ellipsis={{ tooltip: value }}
+                >
+                  {value || '-'}
+                </Typography.Text>
+              ),
+            },
+            {
+              title: '操作',
+              width: 90,
+              render: (_, record) =>
+                record.status === 'failed' && historySource && can('manage_ai_sources') ? (
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    loading={runningSourceId === historySource.id}
+                    onClick={() => runSource(historySource)}
+                  >
+                    重试
+                  </Button>
+                ) : (
+                  '-'
+                ),
+            },
+          ]}
+        />
+      </Drawer>
 
       <Modal
         title="编辑候选赛事"
@@ -697,12 +1384,6 @@ function buildExtractedData(candidate: EventCandidateItem, values: CandidateForm
   };
 }
 
-function renderSourceEntry(source: EventSourceItem) {
-  if (source.entryUrl) return renderUrl(source.entryUrl);
-  if (source.searchQuery) return <span>{source.searchQuery}</span>;
-  return '-';
-}
-
 function renderUrl(url?: string | null) {
   if (!url) return '-';
   return (
@@ -710,6 +1391,44 @@ function renderUrl(url?: string | null) {
       {url}
     </Typography.Link>
   );
+}
+
+function renderWorkflowPreview(items: BulkAcceptResult['items']) {
+  return (
+    <Space direction="vertical" size={8} style={{ width: '100%', marginTop: 12 }}>
+      {items.map((item) => (
+        <Space key={item.id} wrap>
+          <Tag color={item.ready ? 'green' : 'orange'}>{item.ready ? '可采纳' : '待补充'}</Tag>
+          <Typography.Text>{item.eventName || item.id}</Typography.Text>
+          {!item.ready && (
+            <Typography.Text type="secondary">
+              {item.issues.map(workflowIssueLabel).join('、')}
+            </Typography.Text>
+          )}
+        </Space>
+      ))}
+    </Space>
+  );
+}
+
+function workflowIssueLabel(issue: string) {
+  const labels: Record<string, string> = {
+    candidate_not_found: '候选不存在',
+    candidate_not_pending: '不在待审核状态',
+    invalid_candidate_data: '候选数据格式异常',
+    missing_event_date: '缺少比赛日期',
+    expired_event_date: '比赛日期已过期',
+    outside_greater_bay_area: '不在大湾区',
+    missing_distance_items: '缺少距离项目',
+    missing_official_url: '缺少官方依据',
+    missing_source_url: '缺少来源链接',
+    community_without_official_evidence: '社区来源缺少官方依据',
+    source_date_conflict: '来源日期冲突',
+    unmerged_duplicate_group: '需先归并疑似重复组',
+    duplicate_event: '已存在对应赛事',
+    preview_snapshot_changed: '记录在预览后已更新',
+  };
+  return labels[issue] || issue;
 }
 
 function renderEvidence(items: EventCandidateItem['evidence']) {

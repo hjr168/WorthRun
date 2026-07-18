@@ -8,6 +8,7 @@ import {
   removeFavorite,
 } from '../../utils/api';
 import { getUserKey } from '../../utils/user';
+import { groupHomeEvents } from '../../utils/home';
 
 Page({
   data: {
@@ -16,8 +17,9 @@ Page({
     userKey: '',
     preference: null as Preference | null,
     preferenceText: '',
-    events: [] as EventSummary[],
+    priorityEvents: [] as EventSummary[],
     closingEvents: [] as EventSummary[],
+    recentEvents: [] as EventSummary[],
     fallbackNotice: '',
   },
   onShow() {
@@ -30,7 +32,7 @@ Page({
       const preference = await getPreference(userKey).catch(() => null);
       const params = {
         page: 1,
-        pageSize: 8,
+        pageSize: 10,
         city: preference?.cities[0] || '',
         distance: preference?.distances[0] || '',
       };
@@ -46,9 +48,9 @@ Page({
       const preferenceText = preference
         ? `${preference.cities.join('、') || '城市不限'} · ${preference.distances.join('、') || '距离不限'}`
         : '';
+      const groups = groupHomeEvents(events);
       this.setData({
-        events: events.slice(0, 4),
-        closingEvents: events.filter((item) => item.signupStatus === 'closing_soon').slice(0, 3),
+        ...groups,
         fallbackNotice: eventRes.usedFallback ? '暂未找到完全匹配偏好的赛事，先看看近期赛事。' : '',
         preference,
         preferenceText,
@@ -91,9 +93,6 @@ Page({
   },
   openEvents() {
     wx.switchTab({ url: '/pages/events/index' });
-  },
-  openTools() {
-    wx.navigateTo({ url: '/pages/tools/index' });
   },
   openEvent(event: WechatMiniprogram.CustomEvent) {
     wx.navigateTo({ url: `/pages/event-detail/index?id=${event.detail.id}` });

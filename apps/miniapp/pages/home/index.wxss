@@ -4,73 +4,62 @@
   padding-bottom: calc(64rpx + env(safe-area-inset-bottom));
 }
 
-.hero {
-  overflow: hidden;
-  border: 1rpx solid #17353b;
-  border-radius: 18rpx;
-  background: #122b32;
-  padding: 34rpx 28rpx 32rpx;
-  box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.14);
-}
-
-.hero-kicker {
-  color: #91d8cf;
-  font-size: 24rpx;
-  font-weight: 700;
-}
-
-.hero-title {
-  margin-top: 12rpx;
-  color: #ffffff;
-  font-size: 40rpx;
-  font-weight: 800;
-  line-height: 1.28;
-}
-
-.hero-sub {
-  margin-top: 12rpx;
-  color: #cbd5e1;
-  font-size: 26rpx;
-}
-
-.preference-card {
-  margin-top: 24rpx;
-  overflow: hidden;
-  border-color: #e5edf0;
+.preference-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-top: 20rpx;
+  border: 1rpx solid #dbe7e5;
   border-radius: 16rpx;
-  box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
+  background: #ffffff;
+  padding: 18rpx 20rpx;
+}
+
+.preference-empty {
+  display: block;
 }
 
 .preference-title {
   margin-bottom: 14rpx;
   color: #111827;
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 700;
   line-height: 1.4;
 }
 
 .preference-action {
-  margin-top: 16rpx;
+  flex: 0 0 auto;
   color: #2a9d8f;
   font-size: 24rpx;
   font-weight: 700;
 }
 
-.actions,
-.tool-grid {
+.preference-label {
+  color: #64748b;
+  font-size: 23rpx;
+}
+
+.preference-value {
+  margin-top: 6rpx;
+  color: #1e293b;
+  font-size: 27rpx;
+  line-height: 1.4;
+}
+
+.actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16rpx;
 }
 
-.actions button,
-.tool-grid button {
+.actions button {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   min-width: 0;
-  min-height: 72rpx;
+  min-height: 88rpx;
   padding: 0 12rpx;
   font-size: 26rpx;
   line-height: 1.2;
@@ -79,8 +68,19 @@
   white-space: nowrap;
 }
 
+.all-events-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 88rpx;
+  margin-top: 24rpx;
+  line-height: 1.2;
+}
+
 .card-gap {
   display: block;
+  margin-top: 0;
   margin-bottom: 16rpx;
 }
 

@@ -40,6 +40,7 @@ enum SignupStatus {
 enum SourceLevel {
   official
   trusted
+  community
   secondary
   unknown
 }
@@ -66,6 +67,8 @@ enum AdminStatus {
 enum EventSourceType {
   page_url
   chinaath_api
+  world_athletics
+  chinamarathon_sitemap
   search_query
   rss
 }
@@ -83,40 +86,95 @@ enum EventCandidateStatus {
   merged
 }
 
-model Event {
-  id               String               @id @default(cuid())
-  eventName        String               @map("event_name")
-  city             String
-  eventDate        DateTime             @map("event_date") @db.Date
-  distanceItems    String[]             @map("distance_items")
-  startPoint       String?              @map("start_point")
-  endPoint         String?              @map("end_point")
-  signupStatus     SignupStatus         @default(unknown) @map("signup_status")
-  signupStartAt    DateTime?            @map("signup_start_at")
-  signupDeadline   DateTime?            @map("signup_deadline")
-  officialUrl      String               @map("official_url")
-  sourceName       String               @map("source_name")
-  sourceUrl        String?              @map("source_url")
-  sourceLevel      SourceLevel          @default(unknown) @map("source_level")
-  publishStatus    PublishStatus        @default(draft) @map("publish_status")
-  infoStatus       InfoStatus           @default(pending_verify) @map("info_status")
-  runJudgement     RunJudgement         @default(unverified) @map("run_judgement")
-  judgementSummary String?              @map("judgement_summary")
-  judgementReasons String[]             @default([]) @map("judgement_reasons")
-  suitableFor      String[]             @default([]) @map("suitable_for")
-  notSuitableFor   String[]             @default([]) @map("not_suitable_for")
-  tags             String[]             @default([])
-  fieldConfidence  Json?                @map("field_confidence")
-  createdAt        DateTime             @default(now()) @map("created_at")
-  updatedAt        DateTime             @updatedAt @map("updated_at")
-  publishedAt      DateTime?            @map("published_at")
-  archivedAt       DateTime?            @map("archived_at")
+enum EventSourceRunTrigger {
+  manual
+  scheduled
+}
 
-  checklistItems EventChecklistItem[]
-  eventTags      EventTag[]
-  favorites      UserFavorite[]
-  feedback       Feedback[]
-  shareRecords   ShareRecord[]
+enum EventSourceRunStatus {
+  running
+  succeeded
+  failed
+}
+
+enum EventChangeAlertStatus {
+  open
+  applied
+  dismissed
+  archived_event
+  superseded
+}
+
+enum EventChangeSeverity {
+  normal
+  important
+  critical
+}
+
+enum EventInteractionAction {
+  event_detail_view
+  official_link_copy
+  source_summary_open
+  source_summary_view
+  source_original_link_copy
+}
+
+enum EventChoiceType {
+  interested
+  considering
+  registered
+}
+
+enum SourceSummaryStatus {
+  draft
+  published
+  superseded
+}
+
+enum SourceSummaryBasis {
+  page_text
+  stored_source_record
+}
+
+model Event {
+  id               String        @id @default(cuid())
+  eventName        String        @map("event_name")
+  city             String
+  eventDate        DateTime      @map("event_date") @db.Date
+  distanceItems    String[]      @map("distance_items")
+  startPoint       String?       @map("start_point")
+  endPoint         String?       @map("end_point")
+  signupStatus     SignupStatus  @default(unknown) @map("signup_status")
+  signupStartAt    DateTime?     @map("signup_start_at")
+  signupDeadline   DateTime?     @map("signup_deadline")
+  officialUrl      String        @map("official_url")
+  sourceName       String        @map("source_name")
+  sourceUrl        String?       @map("source_url")
+  sourceLevel      SourceLevel   @default(unknown) @map("source_level")
+  publishStatus    PublishStatus @default(draft) @map("publish_status")
+  infoStatus       InfoStatus    @default(pending_verify) @map("info_status")
+  runJudgement     RunJudgement  @default(unverified) @map("run_judgement")
+  judgementSummary String?       @map("judgement_summary")
+  judgementReasons String[]      @default([]) @map("judgement_reasons")
+  suitableFor      String[]      @default([]) @map("suitable_for")
+  notSuitableFor   String[]      @default([]) @map("not_suitable_for")
+  tags             String[]      @default([])
+  fieldConfidence  Json?         @map("field_confidence")
+  sourceCheckedAt  DateTime?     @map("source_checked_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  publishedAt      DateTime?     @map("published_at")
+  archivedAt       DateTime?     @map("archived_at")
+
+  checklistItems  EventChecklistItem[]
+  eventTags       EventTag[]
+  favorites       UserFavorite[]
+  feedback        Feedback[]
+  shareRecords    ShareRecord[]
+  interactions    EventInteraction[]
+  changeAlerts    EventChangeAlert[]
+  userChoices     UserEventChoice[]
+  sourceSummaries EventSourceSummary[]
 
   @@index([city])
   @@index([eventDate])
@@ -158,9 +216,9 @@ model EventTag {
 model UserPreference {
   id        String   @id @default(cuid())
   userKey   String   @unique @map("user_key")
-  cities    String[]  @default([])
-  distances String[]  @default([])
-  focusTags String[]  @default([]) @map("focus_tags")
+  cities    String[] @default([])
+  distances String[] @default([])
+  focusTags String[] @default([]) @map("focus_tags")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -180,6 +238,54 @@ model UserFavorite {
   @@map("user_favorites")
 }
 
+model UserEventChoice {
+  id        String          @id @default(cuid())
+  userKey   String          @map("user_key")
+  eventId   String          @map("event_id")
+  choice    EventChoiceType
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userKey, eventId])
+  @@index([userKey, choice, updatedAt])
+  @@index([eventId, choice])
+  @@index([createdAt])
+  @@map("user_event_choices")
+}
+
+model EventSourceSummary {
+  id            String              @id @default(cuid())
+  eventId       String              @map("event_id")
+  status        SourceSummaryStatus @default(draft)
+  basis         SourceSummaryBasis
+  sourceName    String              @map("source_name")
+  sourceUrl     String              @map("source_url")
+  sourceTitle   String?             @map("source_title")
+  summary       String
+  keyPoints     String[]            @map("key_points")
+  limitations   String?
+  contentHash   String              @map("content_hash")
+  aiProvider    String              @map("ai_provider")
+  aiModel       String              @map("ai_model")
+  promptVersion String              @map("prompt_version")
+  fetchedAt     DateTime            @map("fetched_at")
+  generatedAt   DateTime            @default(now()) @map("generated_at")
+  publishedAt   DateTime?           @map("published_at")
+  staleAt       DateTime?           @map("stale_at")
+  reviewedBy    String?             @map("reviewed_by")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, contentHash, promptVersion])
+  @@index([eventId, status, updatedAt])
+  @@index([status, staleAt])
+  @@map("event_source_summaries")
+}
+
 model Feedback {
   id           String         @id @default(cuid())
   eventId      String?        @map("event_id")
@@ -195,7 +301,7 @@ model Feedback {
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
-  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  event             Event?               @relation(fields: [eventId], references: [id], onDelete: SetNull)
   fingerprintRecord FeedbackFingerprint?
 
   @@index([status])
@@ -226,6 +332,17 @@ model FeedbackRateLimit {
   @@id([scope, keyHash, windowStart])
   @@index([windowStart])
   @@map("feedback_rate_limits")
+}
+
+model FeedbackAbuseMetric {
+  day       DateTime @db.Date
+  reason    String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([day, reason])
+  @@index([day])
+  @@map("feedback_abuse_metrics")
 }
 
 model AdminUser {
@@ -273,58 +390,141 @@ model SystemConfig {
 }
 
 model EventSource {
-  id             String            @id @default(cuid())
-  name           String
-  sourceType     EventSourceType   @default(page_url) @map("source_type")
-  entryUrl       String?           @map("entry_url")
-  searchQuery    String?           @map("search_query")
-  allowedDomains String[]          @default([]) @map("allowed_domains")
-  cityHints      String[]          @default([]) @map("city_hints")
-  status         EventSourceStatus @default(active)
-  lastRunAt      DateTime?         @map("last_run_at")
-  lastRunStatus  String?           @map("last_run_status")
-  notes          String?
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
+  id                    String            @id @default(cuid())
+  name                  String
+  sourceType            EventSourceType   @default(page_url) @map("source_type")
+  entryUrl              String?           @map("entry_url")
+  searchQuery           String?           @map("search_query")
+  allowedDomains        String[]          @default([]) @map("allowed_domains")
+  cityHints             String[]          @default([]) @map("city_hints")
+  sourceLevel           SourceLevel       @default(unknown) @map("source_level")
+  status                EventSourceStatus @default(active)
+  scheduleEnabled       Boolean           @default(false) @map("schedule_enabled")
+  scheduleIntervalHours Int               @default(24) @map("schedule_interval_hours")
+  pageSize              Int               @default(20) @map("page_size")
+  maxPagesPerRun        Int               @default(1) @map("max_pages_per_run")
+  nextPage              Int               @default(1) @map("next_page")
+  nextRunAt             DateTime?         @map("next_run_at")
+  lastRunAt             DateTime?         @map("last_run_at")
+  lastRunStatus         String?           @map("last_run_status")
+  lastSuccessAt         DateTime?         @map("last_success_at")
+  consecutiveFailures   Int               @default(0) @map("consecutive_failures")
+  runLockToken          String?           @map("run_lock_token")
+  runLockExpiresAt      DateTime?         @map("run_lock_expires_at")
+  notes                 String?
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
 
-  candidates EventCandidate[]
+  candidates   EventCandidate[]
+  runs         EventSourceRun[]
+  changeAlerts EventChangeAlert[]
 
   @@index([status])
+  @@index([status, scheduleEnabled, nextRunAt])
   @@map("event_sources")
 }
 
 model EventCandidate {
-  id               String               @id @default(cuid())
-  sourceId         String?              @map("source_id")
-  status           EventCandidateStatus @default(new)
-  eventName        String               @map("event_name")
-  city             String
-  eventDate        DateTime?            @map("event_date") @db.Date
-  sourceUrl        String?              @map("source_url")
-  officialUrl      String?              @map("official_url")
-  extractedData    Json                 @map("extracted_data")
-  evidence         Json
-  confidence       Json?
-  duplicateEventId String?              @map("duplicate_event_id")
-  acceptedEventId  String?              @map("accepted_event_id")
-  aiModel          String?              @map("ai_model")
-  aiPromptVersion  String?              @map("ai_prompt_version")
-  sourceExternalId String?              @map("source_external_id")
-  rawPayload       Json?                @map("raw_payload")
-  extractorVersion String?              @map("extractor_version")
-  reviewedBy       String?              @map("reviewed_by")
-  reviewedAt       DateTime?            @map("reviewed_at")
-  rejectReason     String?              @map("reject_reason")
-  createdAt        DateTime             @default(now()) @map("created_at")
-  updatedAt        DateTime             @updatedAt @map("updated_at")
+  id                    String               @id @default(cuid())
+  sourceId              String?              @map("source_id")
+  status                EventCandidateStatus @default(new)
+  eventName             String               @map("event_name")
+  city                  String
+  eventDate             DateTime?            @map("event_date") @db.Date
+  sourceUrl             String?              @map("source_url")
+  officialUrl           String?              @map("official_url")
+  extractedData         Json                 @map("extracted_data")
+  evidence              Json
+  confidence            Json?
+  duplicateEventId      String?              @map("duplicate_event_id")
+  acceptedEventId       String?              @map("accepted_event_id")
+  mergedIntoCandidateId String?              @map("merged_into_candidate_id")
+  aiModel               String?              @map("ai_model")
+  aiPromptVersion       String?              @map("ai_prompt_version")
+  sourceExternalId      String?              @map("source_external_id")
+  rawPayload            Json?                @map("raw_payload")
+  extractorVersion      String?              @map("extractor_version")
+  priorityScore         Int                  @default(0) @map("priority_score")
+  reviewIssues          String[]             @default([]) @map("review_issues")
+  reviewedBy            String?              @map("reviewed_by")
+  reviewedAt            DateTime?            @map("reviewed_at")
+  rejectReason          String?              @map("reject_reason")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
 
-  source EventSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  source           EventSource?       @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  mergedInto       EventCandidate?    @relation("EventCandidateMerges", fields: [mergedIntoCandidateId], references: [id], onDelete: SetNull)
+  mergedCandidates EventCandidate[]   @relation("EventCandidateMerges")
+  changeAlerts     EventChangeAlert[]
 
   @@unique([sourceId, sourceExternalId])
   @@index([status])
   @@index([sourceId])
+  @@index([mergedIntoCandidateId])
   @@index([eventName, city, eventDate])
   @@map("event_candidates")
+}
+
+model EventSourceRun {
+  id                   String                @id @default(cuid())
+  sourceId             String                @map("source_id")
+  trigger              EventSourceRunTrigger
+  status               EventSourceRunStatus  @default(running)
+  startedAt            DateTime              @default(now()) @map("started_at")
+  finishedAt           DateTime?             @map("finished_at")
+  startPage            Int?                  @map("start_page")
+  endPage              Int?                  @map("end_page")
+  pageCount            Int                   @default(0) @map("page_count")
+  totalAvailable       Int?                  @map("total_available")
+  fetched              Int                   @default(0)
+  created              Int                   @default(0)
+  updated              Int                   @default(0)
+  skippedReviewed      Int                   @default(0) @map("skipped_reviewed")
+  skippedExpired       Int                   @default(0) @map("skipped_expired")
+  skippedOutsideRegion Int                   @default(0) @map("skipped_outside_region")
+  duplicateEvents      Int                   @default(0) @map("duplicate_events")
+  changeAlertsCreated  Int                   @default(0) @map("change_alerts_created")
+  changeAlertsExisting Int                   @default(0) @map("change_alerts_existing")
+  errorMessage         String?               @map("error_message")
+  createdAt            DateTime              @default(now()) @map("created_at")
+
+  source       EventSource        @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  changeAlerts EventChangeAlert[]
+
+  @@index([sourceId, startedAt])
+  @@index([status, startedAt])
+  @@map("event_source_runs")
+}
+
+model EventChangeAlert {
+  id                String                 @id @default(cuid())
+  eventId           String                 @map("event_id")
+  sourceId          String                 @map("source_id")
+  sourceRunId       String?                @map("source_run_id")
+  sourceCandidateId String?                @map("source_candidate_id")
+  status            EventChangeAlertStatus @default(open)
+  severity          EventChangeSeverity
+  changedFields     String[]               @map("changed_fields")
+  beforeValue       Json                   @map("before_value")
+  afterValue        Json                   @map("after_value")
+  evidence          Json
+  sourceUrl         String?                @map("source_url")
+  fingerprint       String
+  reviewedBy        String?                @map("reviewed_by")
+  reviewedAt        DateTime?              @map("reviewed_at")
+  reviewNote        String?                @map("review_note")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  event           Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  source          EventSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  sourceRun       EventSourceRun? @relation(fields: [sourceRunId], references: [id], onDelete: SetNull)
+  sourceCandidate EventCandidate? @relation(fields: [sourceCandidateId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, sourceId, fingerprint])
+  @@index([status, severity, createdAt])
+  @@index([eventId, status])
+  @@map("event_change_alerts")
 }
 
 model ShareRecord {
@@ -340,4 +540,20 @@ model ShareRecord {
   @@index([eventId])
   @@index([createdAt])
   @@map("share_records")
+}
+
+model EventInteraction {
+  id           String                 @id @default(cuid())
+  userKeyHash  String                 @map("user_key_hash")
+  eventId      String                 @map("event_id")
+  action       EventInteractionAction
+  occurredDate DateTime               @map("occurred_date") @db.Date
+  createdAt    DateTime               @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userKeyHash, eventId, action, occurredDate])
+  @@index([eventId, action, occurredDate])
+  @@index([action, occurredDate])
+  @@map("event_interactions")
 }

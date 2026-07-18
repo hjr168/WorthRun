@@ -9,8 +9,15 @@ exports.getPreference = getPreference;
 exports.getFavorites = getFavorites;
 exports.addFavorite = addFavorite;
 exports.removeFavorite = removeFavorite;
+exports.getEventChoice = getEventChoice;
+exports.getEventChoices = getEventChoices;
+exports.setEventChoice = setEventChoice;
+exports.removeEventChoice = removeEventChoice;
+exports.getSourceSummary = getSourceSummary;
 exports.submitFeedback = submitFeedback;
 exports.getChecklistTemplates = getChecklistTemplates;
+exports.recordShare = recordShare;
+exports.recordInteraction = recordInteraction;
 const index_1 = require("../config/index");
 class ApiError extends Error {
     constructor(message, statusCode, retryAfterSeconds) {
@@ -45,6 +52,7 @@ function request(path, options = {}) {
             data: isGet ? undefined : options.data,
             header: { 'content-type': 'application/json' },
             success(res) {
+                var _a, _b;
                 const data = res.data;
                 if (res.statusCode >= 200 && res.statusCode < 300) {
                     resolve(res.data);
@@ -53,7 +61,7 @@ function request(path, options = {}) {
                 const message = (data === null || data === void 0 ? void 0 : data.message) || '请求失败';
                 if (!options.silent)
                     wx.showToast({ title: message, icon: 'none' });
-                const retryAfterHeader = (res.header === null || res.header === void 0 ? void 0 : res.header['Retry-After']) || (res.header === null || res.header === void 0 ? void 0 : res.header['retry-after']);
+                const retryAfterHeader = ((_a = res.header) === null || _a === void 0 ? void 0 : _a['Retry-After']) || ((_b = res.header) === null || _b === void 0 ? void 0 : _b['retry-after']);
                 const retryAfterSeconds = Number(retryAfterHeader);
                 reject(new ApiError(message, res.statusCode, Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined));
             },
@@ -105,14 +113,52 @@ function removeFavorite(userKey, eventId) {
         loadingText: '处理中',
     });
 }
+function getEventChoice(userKey, eventId) {
+    return request(`/api/event-choices/${eventId}`, {
+        data: { userKey },
+        silent: true,
+    });
+}
+function getEventChoices(userKey, choice) {
+    return request('/api/event-choices', {
+        data: { userKey, choice },
+        silent: true,
+    });
+}
+function setEventChoice(userKey, eventId, choice) {
+    return request('/api/event-choices', {
+        method: 'PUT',
+        data: { userKey, eventId, choice },
+        silent: true,
+    });
+}
+function removeEventChoice(userKey, eventId) {
+    return request(`/api/event-choices/${eventId}?userKey=${encodeURIComponent(userKey)}`, { method: 'DELETE', silent: true });
+}
+function getSourceSummary(eventId) {
+    return request(`/api/events/${eventId}/source-summary`, { silent: true });
+}
 function submitFeedback(data) {
-    return request('/api/feedback', { method: 'POST', data, loadingText: '提交中', silent: true });
+    return request('/api/feedback', {
+        method: 'POST',
+        data,
+        loadingText: '提交中',
+        silent: true,
+    });
 }
 function getChecklistTemplates(type) {
-    var query = type ? "?type=" + encodeURIComponent(type) : '';
-    return request('/api/checklist/templates' + query, { silent: true });
+    const query = type ? `?type=${encodeURIComponent(type)}` : '';
+    return request(`/api/checklist/templates${query}`, {
+        silent: true,
+    });
 }
 function recordShare(data) {
-    return request('/api/share-records', { method: 'POST', data: data, silent: true });
+    return request('/api/share-records', { method: 'POST', data, silent: true });
 }
-exports.recordShare = recordShare;
+function recordInteraction(data) {
+    return request('/api/interactions', {
+        method: 'POST',
+        data,
+        silent: true,
+    });
+}

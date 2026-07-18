@@ -4,37 +4,15 @@
   padding-bottom: calc(64rpx + env(safe-area-inset-bottom));
 }
 
-.list-head {
-  border: 1rpx solid #17353b;
-  border-radius: 18rpx;
-  background: #122b32;
-  padding: 30rpx 28rpx;
-  box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.12);
-}
-
-.list-title {
-  color: #ffffff;
-  font-size: 38rpx;
-  font-weight: 800;
-  line-height: 1.3;
-}
-
-.list-subtitle {
-  margin-top: 10rpx;
-  color: #c6d7d5;
-  font-size: 25rpx;
-  line-height: 1.5;
-}
-
 .filters {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
-  margin: 24rpx 0;
+  margin: 20rpx 0;
   border: 1rpx solid #e5edf0;
   border-radius: 16rpx;
   background: #ffffff;
-  padding: 18rpx;
+  padding: 16rpx;
   box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
 }
 
@@ -47,7 +25,7 @@
 .search {
   flex: 1;
   min-width: 0;
-  min-height: 76rpx;
+  min-height: 88rpx;
   border: 1rpx solid #e2e8f0;
   border-radius: 12rpx;
   background: #f8fafc;
@@ -59,8 +37,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 132rpx;
-  min-height: 76rpx;
+  flex: 0 0 128rpx;
+  min-height: 88rpx;
   padding: 0;
   font-size: 27rpx;
   line-height: 1.2;
@@ -73,11 +51,14 @@
 }
 
 .filter-item {
-  min-height: 72rpx;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 88rpx;
   border: 1rpx solid #e2e8f0;
   border-radius: 12rpx;
   background: #f8fafc;
-  padding: 18rpx;
+  padding: 16rpx;
   color: #1e293b;
   font-size: 26rpx;
   line-height: 36rpx;
@@ -91,12 +72,37 @@
   justify-content: flex-end;
 }
 
+.result-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-bottom: 18rpx;
+}
+
+.result-count {
+  flex: 0 0 auto;
+  color: #1e293b;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.active-filter {
+  min-width: 0;
+  color: #64748b;
+  font-size: 24rpx;
+  line-height: 1.4;
+  text-align: right;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
 .reset-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 176rpx;
-  min-height: 64rpx;
+  width: 184rpx;
+  min-height: 88rpx;
   padding: 0;
   color: #475569;
   font-size: 25rpx;
@@ -105,6 +111,7 @@
 
 .card-gap {
   display: block;
+  margin-top: 0;
   margin-bottom: 16rpx;
 }
 
@@ -113,4 +120,14 @@
   color: #64748b;
   font-size: 24rpx;
   text-align: center;
+}
+
+.empty-reset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 220rpx;
+  min-height: 88rpx;
+  margin: 18rpx auto 0;
+  line-height: 1.2;
 }

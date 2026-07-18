@@ -4,9 +4,9 @@ export const officialActionText = '前往官方确认';
 export const signupStatusLabels: Record<string, string> = {
   signup_open: '报名中',
   closing_soon: '即将截止',
-  closed: '已截止',
-  not_started: '未开始',
-  unknown: '待核实',
+  closed: '报名已截止',
+  not_started: '即将开放',
+  unknown: '待确认',
 };
 
 export const runJudgementLabels: Record<string, string> = {
@@ -18,7 +18,7 @@ export const runJudgementLabels: Record<string, string> = {
 export const infoStatusLabels: Record<string, string> = {
   ai_generated: 'AI 整理',
   pending_verify: '待核实',
-  verified: '已识别',
+  verified: '已核实',
   user_flagged: '用户反馈异常',
   source_error: '来源异常',
 };

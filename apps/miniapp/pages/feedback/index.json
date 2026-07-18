@@ -1,3 +1,7 @@
 {
-  "navigationBarTitleText": "反馈纠错"
+  "navigationBarTitleText": "反馈纠错",
+  "usingComponents": {
+    "loading-state": "../../components/loading-state/index",
+    "page-header": "../../components/page-header/index"
+  }
 }

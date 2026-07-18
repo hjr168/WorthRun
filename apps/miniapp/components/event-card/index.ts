@@ -3,7 +3,6 @@ import {
   formatDistance,
   labelOf,
   runJudgementLabels,
-  signupStatusLabels,
 } from '../../utils/format';
 
 Component({
@@ -22,7 +21,6 @@ Component({
       this.setData({
         dateText: formatDate(value?.eventDate),
         distanceText: formatDistance(value?.distanceItems),
-        signupText: labelOf(signupStatusLabels, value?.signupStatus),
         judgementText: labelOf(runJudgementLabels, value?.runJudgement),
         reasons: (value?.judgementReasons || []).slice(0, 2),
         tags: (value?.tags || []).slice(0, 3),
@@ -32,7 +30,6 @@ Component({
   data: {
     dateText: '',
     distanceText: '',
-    signupText: '',
     judgementText: '',
     reasons: [] as string[],
     tags: [] as string[],

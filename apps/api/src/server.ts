@@ -2,7 +2,7 @@ import { createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypt
 import cors from 'cors';
 import type { CorsOptions } from 'cors';
 import express, { NextFunction, Request, Response } from 'express';
-import { EventCandidateStatus, Prisma, prisma } from '@worth-running/database';
+import { Prisma, prisma } from '@worth-running/database';
 import {
   AdminRole,
   feedbackStatusValues,
@@ -23,17 +23,85 @@ import type {
 import { z, ZodError } from 'zod';
 import { aiEventCandidateSchema } from './ai/eventCandidateSchema.js';
 import { eventSourceSchema } from './ai/eventSourceConfig.js';
+import { classifyCandidate } from './ai/eventSourceOperations.js';
+import {
+  buildCandidateOrderBy,
+  buildCandidateWhere,
+  eventCandidateQuerySchema,
+  eventSourceRunQuerySchema,
+  nextRunAtForSourceConfig,
+} from './ai/eventSourceQueries.js';
 import { AiIngestError, runEventSource } from './ai/runEventSource.js';
 import {
+  classifyFeedbackRisk,
   createFeedbackFingerprint,
   feedbackRateLimits,
   getRetryAfterSeconds,
   getWindowStart,
   hmacDigest,
+  isLowInformationFeedback,
   normalizeFeedbackContent,
   publicFeedbackTypes,
 } from './feedbackAbuse.js';
+import { recordBlockedFeedback } from './feedbackMaintenance.js';
 import { getMiniProgramCode } from './wxacode.js';
+import { buildPublicEventWhere } from './dataPolicy.js';
+import {
+  DataCleanupConflictError,
+  dataCleanupActions,
+  getDataQualitySummary,
+  runDataCleanup,
+} from './dataGovernance.js';
+import {
+  getInteractionStats,
+  interactionActions,
+  recordEventInteraction,
+} from './interactionAnalytics.js';
+import {
+  buildCandidateDuplicateGroups,
+  getCandidateDuplicateGroups,
+  mergeEventCandidates,
+  candidateAcceptIssues,
+} from './candidateWorkflow.js';
+import { previewBulkAccept, runBulkAccept } from './candidateAcceptWorkflow.js';
+import { eventPublishIssues, previewBulkPublish, runBulkPublish } from './eventPublishWorkflow.js';
+import { buildFeedbackSummary, feedbackDisposition, runFeedbackBulk } from './feedbackWorkflow.js';
+import { chinaDay } from './feedbackMaintenance.js';
+import {
+  EventChangeConflictError,
+  EventChangeNotFoundError,
+  EventChangeResolutionError,
+  eventChangeFields,
+  eventChangeSignalFields,
+  getEventChangeAlertSummary,
+  listEventChangeAlerts,
+  previewEventChangeResolution,
+  resolveEventChangeAlert,
+} from './eventChangeWorkflow.js';
+import {
+  EventChoiceNotFoundError,
+  eventChoiceValues,
+  getEventChoiceCounts,
+  getViewerEventChoice,
+  listViewerEventChoices,
+  removeEventChoice,
+  setEventChoice,
+} from './eventChoiceWorkflow.js';
+import {
+  eventChoiceStatsSortValues,
+  getAdminEventChoiceStats,
+} from './eventChoiceStats.js';
+import { SourceSummaryGenerationError } from './sourceSummaryGeneration.js';
+import {
+  SourceSummaryConflictError,
+  SourceSummaryNotFoundError,
+  SourceSummaryValidationError,
+  createSourceSummaryDraft,
+  getPublicSourceSummary,
+  listSourceSummaries,
+  publishSourceSummary,
+  updateSourceSummaryDraft,
+} from './sourceSummaryWorkflow.js';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -50,6 +118,11 @@ if (isProduction && !process.env.FEEDBACK_ABUSE_SECRET) {
 
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'worth-running-dev-secret';
 const feedbackAbuseSecret = process.env.FEEDBACK_ABUSE_SECRET || tokenSecret;
+const eventChoiceRateLimit = {
+  scope: 'event-choice-user',
+  windowMs: 60_000,
+  limit: 30,
+};
 const corsOrigins = (process.env.CORS_ORIGINS ?? '')
   .split(',')
   .map((origin) => origin.trim())
@@ -57,7 +130,10 @@ const corsOrigins = (process.env.CORS_ORIGINS ?? '')
 
 function isPrivateIpv4Host(hostname: string) {
   const parts = hostname.split('.').map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
     return false;
   }
   const [first, second] = parts;
@@ -108,7 +184,6 @@ app.use(express.json({ limit: '1mb' }));
 
 const complianceNotice = 'AI 整理，仅供参考，报名以官方为准。';
 const officialActionText = '前往官方确认';
-const dangerousKeywords = ['取消', '延期', '疑似', '网传', '非官方'];
 const defaultAdmin = { id: 'seed-admin', role: 'super_admin' as AdminRole };
 
 class HttpError extends Error {
@@ -127,6 +202,18 @@ class RateLimitError extends HttpError {
   ) {
     super(429, message);
   }
+}
+
+function sourceSummaryHttpError(error: unknown): never {
+  if (error instanceof SourceSummaryNotFoundError) throw new HttpError(404, error.message);
+  if (error instanceof SourceSummaryConflictError) throw new HttpError(409, error.message);
+  if (
+    error instanceof SourceSummaryValidationError ||
+    error instanceof SourceSummaryGenerationError
+  ) {
+    throw new HttpError(400, error.message);
+  }
+  throw error;
 }
 
 type AdminContext = { id: string; role: AdminRole };
@@ -212,14 +299,6 @@ const systemConfigSchema = z.object({
   description: z.string().trim().max(500).optional().nullable(),
 });
 
-const eventCandidateStatusSchema = z.enum([
-  'new',
-  'needs_review',
-  'accepted',
-  'rejected',
-  'merged',
-]);
-
 const candidateReviewSchema = z.object({
   action: z.enum(['accept', 'reject']),
   rejectReason: z.string().trim().max(500).optional(),
@@ -227,6 +306,34 @@ const candidateReviewSchema = z.object({
 
 const candidatePatchSchema = z.object({
   extractedData: aiEventCandidateSchema,
+});
+
+const workflowSnapshotSchema = z.object({
+  id: z.string().trim().min(1),
+  updatedAt: z.string().datetime(),
+});
+
+const candidateMergeSchema = z.object({
+  primaryId: z.string().trim().min(1),
+  mergedIds: z.array(z.string().trim().min(1)).min(1).max(19),
+});
+
+const bulkAcceptSchema = z.object({
+  candidateIds: z.array(z.string().trim().min(1)).min(1).max(20),
+  dryRun: z.boolean().default(true),
+  expected: z.array(workflowSnapshotSchema).max(20).optional(),
+});
+
+const bulkPublishSchema = z.object({
+  eventIds: z.array(z.string().trim().min(1)).min(1).max(20),
+  dryRun: z.boolean().default(true),
+  expected: z.array(workflowSnapshotSchema).max(20).optional(),
+});
+
+const dataCleanupSchema = z.object({
+  actions: z.array(z.enum(dataCleanupActions)).min(1, '请至少选择一项治理动作'),
+  dryRun: z.boolean().default(true),
+  expected: z.record(z.enum(dataCleanupActions), z.number().int().min(0)).optional(),
 });
 
 const adminUserCreateSchema = z.object({
@@ -255,24 +362,67 @@ const favoriteSchema = z.object({
   eventId: z.string().trim().min(1, 'eventId 不能为空'),
 });
 
-const publicFeedbackSchema = z.object({
+const eventChoiceSchema = z.object({
+  userKey: z.string().trim().min(1, 'userKey 不能为空').max(100, 'userKey 无效'),
   eventId: z.string().trim().min(1, 'eventId 不能为空'),
-  userKey: z.string().trim().min(1, 'userKey 不能为空'),
-  requestId: z
-    .string()
-    .trim()
-    .min(16, 'requestId 无效')
-    .max(128, 'requestId 无效')
-    .regex(/^[A-Za-z0-9_-]+$/, 'requestId 无效'),
-  feedbackType: z.enum(publicFeedbackTypes, { required_error: '反馈类型无效' }),
-  content: z.string().trim().min(1, '反馈内容不能为空').max(2000, '反馈内容过长'),
+  choice: z.enum(eventChoiceValues),
 });
+
+const eventChoiceQuerySchema = z.object({
+  userKey: z.string().trim().min(1, 'userKey 不能为空').max(100, 'userKey 无效'),
+  choice: z.enum(eventChoiceValues).optional(),
+});
+
+const sourceSummaryUpdateSchema = z.object({
+  summary: z.string().trim().min(80, '摘要至少 80 字').max(400, '摘要不能超过 400 字'),
+  keyPoints: z.array(z.string().trim().min(1).max(120)).min(2).max(6),
+  limitations: z.string().trim().max(200).optional().nullable(),
+  expectedUpdatedAt: z.string().datetime(),
+});
+
+const sourceSummaryPublishSchema = z.object({
+  expectedUpdatedAt: z.string().datetime(),
+  note: z.string().trim().min(4, '发布备注至少 4 字').max(500),
+});
+
+const publicFeedbackSchema = z
+  .object({
+    eventId: z.string().trim().min(1, 'eventId 不能为空'),
+    userKey: z.string().trim().min(1, 'userKey 不能为空').max(100, 'userKey 无效'),
+    requestId: z
+      .string()
+      .trim()
+      .min(16, 'requestId 无效')
+      .max(128, 'requestId 无效')
+      .regex(/^[A-Za-z0-9_-]+$/, 'requestId 无效'),
+    feedbackType: z.enum(publicFeedbackTypes, { required_error: '反馈类型无效' }),
+    content: z
+      .string()
+      .trim()
+      .min(6, '补充说明至少需要 6 个字')
+      .max(500, '反馈内容不能超过 500 个字'),
+  })
+  .superRefine((input, context) => {
+    if (isLowInformationFeedback(input.feedbackType, input.content)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message: '请补充具体变化或信息出处',
+      });
+    }
+  });
 
 const shareRecordSchema = z.object({
   userKey: z.string().trim().min(1, 'userKey 不能为空').max(100),
   eventId: z.string().trim().min(1).optional(),
   shareType: z.enum(['page_share', 'image_generate']),
   scene: z.enum(['event_detail', 'after_favorite', 'home', 'events', 'share_card']),
+});
+
+const interactionSchema = z.object({
+  userKey: z.string().trim().min(1, 'userKey 不能为空').max(100),
+  eventId: z.string().trim().min(1, 'eventId 不能为空'),
+  action: z.enum(interactionActions),
 });
 
 const queryStringSchema = z.preprocess((value) => {
@@ -306,14 +456,42 @@ const adminEventsQuerySchema = paginationQuerySchema.extend({
   publishStatus: z.enum(publishStatusValues).optional(),
   infoStatus: z.enum(infoStatusValues).optional(),
   runJudgement: z.enum(runJudgementValues).optional(),
+  sourceReviewPending: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
 });
+
+const eventChoiceStatsQuerySchema = paginationQuerySchema
+  .extend({
+    search: queryStringSchema,
+    publishStatus: z.enum(publishStatusValues).optional(),
+    eventDateFrom: dateOnlySchema.optional(),
+    eventDateTo: dateOnlySchema.optional(),
+    sort: z.enum(eventChoiceStatsSortValues).default('total_desc'),
+  })
+  .refine(
+    (value) =>
+      !value.eventDateFrom ||
+      !value.eventDateTo ||
+      value.eventDateFrom <= value.eventDateTo,
+    { message: '比赛日期起始值不能晚于结束值', path: ['eventDateFrom'] },
+  );
 
 const adminFeedbackQuerySchema = paginationQuerySchema.extend({
   status: z.enum(feedbackStatusValues).optional(),
+  feedbackType: z.enum(publicFeedbackTypes).optional(),
+  eventScope: z.enum(['public', 'unpublished']).optional(),
+  search: queryStringSchema,
 });
 
 const adminFeedbackDuplicateQuerySchema = z.object({
-  hours: z.coerce.number().int().min(1).max(24 * 30).default(24),
+  hours: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .default(24),
 });
 
 const feedbackDuplicateResolveSchema = z.object({
@@ -321,11 +499,50 @@ const feedbackDuplicateResolveSchema = z.object({
   duplicateIds: z.array(z.string().trim().min(1)).min(1).max(100),
 });
 
+const feedbackBulkHandleSchema = z.object({
+  feedbackIds: z.array(z.string().trim().min(1)).min(1).max(50),
+  status: z.enum(['resolved', 'rejected']),
+  adminNote: z.string().trim().min(1, '请填写处理备注').max(1000),
+  dryRun: z.boolean().default(true),
+  expected: z.array(workflowSnapshotSchema).max(50).optional(),
+});
+
 const operationLogsQuerySchema = paginationQuerySchema.extend({
   targetType: queryStringSchema,
   targetId: queryStringSchema,
   action: queryStringSchema,
 });
+
+const eventChangeAlertQuerySchema = paginationQuerySchema.extend({
+  pageSize: z.coerce.number().int().min(1).max(50).default(20),
+  status: z.enum(['open', 'applied', 'dismissed', 'archived_event', 'superseded']).optional(),
+  severity: z.enum(['normal', 'important', 'critical']).optional(),
+  changedField: z.enum([...eventChangeFields, ...eventChangeSignalFields]).optional(),
+  search: queryStringSchema,
+});
+
+const eventChangeResolveSchema = z
+  .object({
+    dryRun: z.boolean().default(true),
+    action: z.enum(['apply_fields', 'dismiss', 'archive_event']),
+    fields: z.array(z.enum(eventChangeFields)).max(eventChangeFields.length).optional(),
+    note: z.string().trim().min(4, '处理备注至少 4 个字').max(500),
+    expected: z
+      .object({
+        alertUpdatedAt: z.string().datetime(),
+        eventUpdatedAt: z.string().datetime(),
+      })
+      .optional(),
+  })
+  .superRefine((input, context) => {
+    if (!input.dryRun && !input.expected) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expected'],
+        message: '应用处理必须携带预览快照',
+      });
+    }
+  });
 
 type PublicEventsQuery = {
   page: number;
@@ -346,12 +563,16 @@ type AdminEventsQuery = {
   publishStatus?: PublishStatus;
   infoStatus?: InfoStatus;
   runJudgement?: RunJudgement;
+  sourceReviewPending?: boolean;
 };
 
 type AdminFeedbackQuery = {
   page: number;
   pageSize: number;
   status?: FeedbackStatus;
+  feedbackType?: (typeof publicFeedbackTypes)[number];
+  eventScope?: 'public' | 'unpublished';
+  search?: string;
 };
 
 type OperationLogsQuery = {
@@ -477,35 +698,9 @@ function verifyPassword(password: string, storedHash: string) {
   return timingSafeEqual(Buffer.from(candidate), Buffer.from(hash));
 }
 
-function validatePublish(event: Awaited<ReturnType<typeof prisma.event.findUnique>>) {
-  if (!event) throw new HttpError(404, '赛事不存在');
-
-  const missing: string[] = [];
-  if (!event.eventName) missing.push('赛事名称');
-  if (!event.city) missing.push('城市');
-  if (!event.eventDate) missing.push('比赛日期');
-  if (!event.distanceItems.length) missing.push('距离项目');
-  if (!event.signupStatus) missing.push('报名状态');
-  if (!event.officialUrl) missing.push('官方入口');
-  if (!event.sourceName) missing.push('来源名称');
-  if (!event.sourceLevel) missing.push('来源等级');
-  if (!event.runJudgement) missing.push('跑前判断');
-  if (missing.length > 0) throw new HttpError(400, `发布前必填缺失：${missing.join('、')}`);
-
-  const text = [
-    event.eventName,
-    event.judgementSummary,
-    event.officialUrl,
-    event.sourceName,
-    event.sourceUrl,
-  ]
-    .filter(Boolean)
-    .join(' ');
-  const matchedKeyword = dangerousKeywords.find((keyword) => text.includes(keyword));
-  if (matchedKeyword) throw new HttpError(400, `命中禁止发布关键词：${matchedKeyword}`);
-  if (event.infoStatus === 'user_flagged') {
-    throw new HttpError(400, '信息状态为用户反馈异常，处理前不能发布');
-  }
+function validatePublish(event: Parameters<typeof eventPublishIssues>[0]) {
+  const issues = eventPublishIssues(event);
+  if (issues.length) throw new HttpError(400, `发布前检查未通过：${issues.join('、')}`);
 }
 
 async function writeOperationLog(params: {
@@ -536,7 +731,7 @@ function getClientIp(req: Request) {
 
 async function consumeFeedbackRateLimit(
   tx: Prisma.TransactionClient,
-  config: (typeof feedbackRateLimits)[keyof typeof feedbackRateLimits],
+  config: { scope: string; windowMs: number; limit: number },
   value: string,
   now: Date,
 ) {
@@ -550,7 +745,10 @@ async function consumeFeedbackRateLimit(
     update: { count: { increment: 1 } },
   });
   if (result.count > config.limit) {
-    throw new RateLimitError('提交过于频繁，请稍后再试', getRetryAfterSeconds(now, config.windowMs));
+    throw new RateLimitError(
+      '提交过于频繁，请稍后再试',
+      getRetryAfterSeconds(now, config.windowMs),
+    );
   }
 }
 
@@ -586,9 +784,7 @@ app.get(
       await prisma.$queryRaw`SELECT 1`;
       res.json({ ok: true, database: 'ok', timestamp: new Date().toISOString() });
     } catch {
-      res
-        .status(503)
-        .json({ ok: false, database: 'error', timestamp: new Date().toISOString() });
+      res.status(503).json({ ok: false, database: 'error', timestamp: new Date().toISOString() });
     }
   }),
 );
@@ -639,16 +835,105 @@ app.get(
   '/api/admin/dashboard',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
-    const [totalEvents, publishedEvents, pendingVerifyEvents, pendingFeedback, recentLogs] =
-      await Promise.all([
-        prisma.event.count(),
-        prisma.event.count({ where: { publishStatus: 'published' } }),
-        prisma.event.count({ where: { infoStatus: 'pending_verify' } }),
-        prisma.feedback.count({ where: { status: 'pending' } }),
-        prisma.adminOperationLog.findMany({ orderBy: { createdAt: 'desc' }, take: 8 }),
-      ]);
+    const [
+      totalEvents,
+      publishedEvents,
+      pendingVerifyEvents,
+      pendingFeedback,
+      recentLogs,
+      missingSourceSummaries,
+      staleSourceSummaries,
+    ] = await Promise.all([
+      prisma.event.count(),
+      prisma.event.count({ where: { publishStatus: 'published' } }),
+      prisma.event.count({ where: { infoStatus: 'pending_verify' } }),
+      prisma.feedback.count({ where: { status: 'pending' } }),
+      prisma.adminOperationLog.findMany({ orderBy: { createdAt: 'desc' }, take: 8 }),
+      prisma.event.count({
+        where: {
+          ...buildPublicEventWhere(),
+          sourceSummaries: { none: { status: 'published' } },
+        },
+      }),
+      prisma.eventSourceSummary.count({
+        where: { status: 'published', staleAt: { not: null }, event: buildPublicEventWhere() },
+      }),
+    ]);
 
-    res.json({ totalEvents, publishedEvents, pendingVerifyEvents, pendingFeedback, recentLogs });
+    res.json({
+      totalEvents,
+      publishedEvents,
+      pendingVerifyEvents,
+      pendingFeedback,
+      recentLogs,
+      missingSourceSummaries,
+      staleSourceSummaries,
+    });
+  }),
+);
+
+app.get(
+  '/api/admin/data-quality/summary',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    res.json(await getDataQualitySummary());
+  }),
+);
+
+app.get(
+  '/api/admin/workflow-stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const [pendingCandidates, draftEvents] = await Promise.all([
+      prisma.eventCandidate.findMany({
+        where: { status: { in: ['new', 'needs_review'] } },
+        include: { source: true },
+        orderBy: { createdAt: 'asc' },
+        take: 200,
+      }),
+      prisma.event.findMany({
+        where: { publishStatus: 'draft' },
+        include: { checklistItems: true },
+        take: 200,
+      }),
+    ]);
+    const duplicateGroups = buildCandidateDuplicateGroups(pendingCandidates);
+    const duplicateIds = new Set(
+      duplicateGroups.flatMap((group) => group.items.map((item) => item.id)),
+    );
+    res.json({
+      duplicateGroups: duplicateGroups.length,
+      readyCandidates: pendingCandidates.filter(
+        (item) => candidateAcceptIssues(item).length === 0 && !duplicateIds.has(item.id),
+      ).length,
+      publishableDrafts: draftEvents.filter((event) => eventPublishIssues(event).length === 0)
+        .length,
+      missingOfficialEvidence: pendingCandidates.filter((item) => !item.officialUrl).length,
+    });
+  }),
+);
+
+app.post(
+  '/api/admin/data-quality/cleanup',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, [
+      'super_admin',
+      'event_operator',
+      'content_reviewer',
+      'readonly',
+    ]);
+    const input = validateBody(dataCleanupSchema, req.body);
+    if (!input.dryRun && admin.role !== 'super_admin') {
+      throw new HttpError(403, '只有超级管理员可以应用数据治理');
+    }
+    try {
+      res.json(
+        await runDataCleanup({ ...input, dryRun: input.dryRun ?? true, adminUserId: admin.id }),
+      );
+    } catch (error) {
+      if (error instanceof DataCleanupConflictError) throw new HttpError(409, error.message);
+      throw error;
+    }
   }),
 );
 
@@ -656,7 +941,7 @@ app.get(
   '/api/admin/events',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
-    const query = validateQuery(adminEventsQuerySchema, req.query) as AdminEventsQuery;
+    const query = adminEventsQuerySchema.parse(req.query) as AdminEventsQuery;
     const { page, pageSize } = query;
     const where: Prisma.EventWhereInput = {};
 
@@ -666,11 +951,20 @@ app.get(
     if (query.publishStatus) where.publishStatus = query.publishStatus;
     if (query.infoStatus) where.infoStatus = query.infoStatus;
     if (query.runJudgement) where.runJudgement = query.runJudgement;
+    if (query.sourceReviewPending !== undefined) {
+      where.changeAlerts = query.sourceReviewPending
+        ? { some: { status: 'open' } }
+        : { none: { status: 'open' } };
+    }
 
     const [items, total] = await Promise.all([
       prisma.event.findMany({
         where,
-        include: { checklistItems: { orderBy: { sortOrder: 'asc' } }, eventTags: true },
+        include: {
+          checklistItems: { orderBy: { sortOrder: 'asc' } },
+          eventTags: true,
+          changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
+        },
         orderBy: [{ updatedAt: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -678,7 +972,77 @@ app.get(
       prisma.event.count({ where }),
     ]);
 
-    res.json({ items, total, page, pageSize });
+    res.json({
+      items: items.map(({ changeAlerts, ...item }) => ({
+        ...item,
+        sourceReviewPending: changeAlerts.length > 0,
+      })),
+      total,
+      page,
+      pageSize,
+    });
+  }),
+);
+
+app.post(
+  '/api/admin/events/:id/source-summaries/generate',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    try {
+      res.status(201).json(await createSourceSummaryDraft(req.params.id, admin.id));
+    } catch (error) {
+      sourceSummaryHttpError(error);
+    }
+  }),
+);
+
+app.get(
+  '/api/admin/events/:id/source-summaries',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    res.json({ items: await listSourceSummaries(req.params.id) });
+  }),
+);
+
+app.put(
+  '/api/admin/source-summaries/:id',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(sourceSummaryUpdateSchema, req.body);
+    try {
+      res.json(await updateSourceSummaryDraft(req.params.id, { ...input, adminUserId: admin.id }));
+    } catch (error) {
+      sourceSummaryHttpError(error);
+    }
+  }),
+);
+
+app.post(
+  '/api/admin/source-summaries/:id/publish',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(sourceSummaryPublishSchema, req.body);
+    try {
+      res.json(await publishSourceSummary(req.params.id, { ...input, adminUserId: admin.id }));
+    } catch (error) {
+      sourceSummaryHttpError(error);
+    }
+  }),
+);
+
+app.post(
+  '/api/admin/events/bulk-publish',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator']);
+    const input = validateBody(bulkPublishSchema, req.body);
+    if (input.dryRun) {
+      const items = await previewBulkPublish(input.eventIds);
+      res.json({ dryRun: true, items, published: [], failed: [] });
+      return;
+    }
+    res.json(
+      await runBulkPublish({ ...input, dryRun: input.dryRun ?? true, adminUserId: admin.id }),
+    );
   }),
 );
 
@@ -687,6 +1051,13 @@ app.post(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
     const input = validateBody(eventSchema, req.body);
+    if (input.publishStatus === 'published') {
+      validatePublish({
+        ...input,
+        sourceUrl: input.sourceUrl as string | null,
+        updatedAt: new Date(),
+      });
+    }
     const event = await prisma.event.create({
       data: {
         ...eventDataFromInput(input),
@@ -740,6 +1111,13 @@ app.put(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
     const input = validateBody(eventSchema, req.body);
+    if (input.publishStatus === 'published') {
+      validatePublish({
+        ...input,
+        sourceUrl: input.sourceUrl as string | null,
+        updatedAt: new Date(),
+      });
+    }
     const before = await prisma.event.findUnique({
       where: { id: req.params.id },
       include: { checklistItems: true, eventTags: true },
@@ -795,7 +1173,10 @@ async function changePublishStatus(
 ) {
   const admin = requireRole(req, ['super_admin', 'event_operator']);
   const input = validateBody(statusChangeSchema, req.body || {});
-  const before = await prisma.event.findUnique({ where: { id: req.params.id } });
+  const before = await prisma.event.findUnique({
+    where: { id: req.params.id },
+    include: { checklistItems: true },
+  });
   if (!before) throw new HttpError(404, '赛事不存在');
   if (status === 'published') validatePublish(before);
 
@@ -846,18 +1227,105 @@ app.get(
     const { page, pageSize, status } = query;
     const where: Prisma.FeedbackWhereInput = {};
     if (status) where.status = status;
+    if (query.feedbackType) where.feedbackType = query.feedbackType;
+    const clauses: Prisma.FeedbackWhereInput[] = [];
+    if (query.eventScope === 'public') {
+      clauses.push({ event: { is: buildPublicEventWhere() } });
+    } else if (query.eventScope === 'unpublished') {
+      clauses.push({
+        OR: [{ eventId: null }, { event: { isNot: buildPublicEventWhere() } }],
+      });
+    }
+    if (query.search) {
+      clauses.push({
+        OR: [
+          { content: { contains: query.search, mode: 'insensitive' } },
+          { event: { is: { eventName: { contains: query.search, mode: 'insensitive' } } } },
+        ],
+      });
+    }
+    if (clauses.length) where.AND = clauses;
 
     const [items, total] = await Promise.all([
       prisma.feedback.findMany({
         where,
-        include: { event: { select: { id: true, eventName: true, city: true } } },
+        include: {
+          event: {
+            select: {
+              id: true,
+              eventName: true,
+              city: true,
+              eventDate: true,
+              publishStatus: true,
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       prisma.feedback.count({ where }),
     ]);
-    res.json({ items, total, page, pageSize });
+    res.json({
+      items: items.map((item) => ({ ...item, ...feedbackDisposition(item) })),
+      total,
+      page,
+      pageSize,
+    });
+  }),
+);
+
+app.get(
+  '/api/admin/feedback/summary',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const now = new Date();
+    const day = chinaDay(now);
+    const sevenDaysAgo = new Date(day.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(day.getTime() - 29 * 24 * 60 * 60 * 1000);
+    const [records, blocked7d, blocked30d] = await Promise.all([
+      prisma.feedback.findMany({
+        where: { status: { in: ['pending', 'handling'] } },
+        include: {
+          event: {
+            select: {
+              id: true,
+              eventName: true,
+              city: true,
+              eventDate: true,
+              publishStatus: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 2001,
+      }),
+      prisma.feedbackAbuseMetric.aggregate({
+        where: { day: { gte: sevenDaysAgo } },
+        _sum: { count: true },
+      }),
+      prisma.feedbackAbuseMetric.aggregate({
+        where: { day: { gte: thirtyDaysAgo } },
+        _sum: { count: true },
+      }),
+    ]);
+    const truncated = records.length > 2000;
+    const items = records.slice(0, 2000);
+    res.json({
+      ...buildFeedbackSummary(items, blocked7d._sum.count || 0, blocked30d._sum.count || 0, now),
+      truncated,
+    });
+  }),
+);
+
+app.post(
+  '/api/admin/feedback/bulk-handle',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(feedbackBulkHandleSchema, req.body);
+    res.json(
+      await runFeedbackBulk({ ...input, dryRun: input.dryRun ?? true, adminUserId: admin.id }),
+    );
   }),
 );
 
@@ -883,7 +1351,10 @@ app.get(
       const clusters: Array<typeof bucket> = [];
       for (const item of bucket) {
         const current = clusters.at(-1);
-        if (!current || item.createdAt.getTime() - current[0].createdAt.getTime() > 24 * 60 * 60 * 1000) {
+        if (
+          !current ||
+          item.createdAt.getTime() - current[0].createdAt.getTime() > 24 * 60 * 60 * 1000
+        ) {
           clusters.push([item]);
         } else {
           current.push(item);
@@ -891,7 +1362,11 @@ app.get(
       }
       return clusters
         .filter((cluster) => cluster.length > 1)
-        .map((cluster) => ({ primary: cluster[0], duplicates: cluster.slice(1), count: cluster.length }));
+        .map((cluster) => ({
+          primary: cluster[0],
+          duplicates: cluster.slice(1),
+          count: cluster.length,
+        }));
     });
     res.json({ groups });
   }),
@@ -910,7 +1385,8 @@ app.post(
     });
     const primary = records.find((item) => item.id === input.primaryId);
     const duplicates = records.filter((item) => duplicateIds.includes(item.id));
-    if (!primary || duplicates.length !== duplicateIds.length) throw new HttpError(404, '反馈不存在');
+    if (!primary || duplicates.length !== duplicateIds.length)
+      throw new HttpError(404, '反馈不存在');
     if (duplicates.some((item) => !['pending', 'handling'].includes(item.status))) {
       throw new HttpError(409, '只能批量驳回待处理或处理中反馈');
     }
@@ -1112,6 +1588,60 @@ app.patch(
 );
 
 app.get(
+  '/api/admin/event-change-alerts/summary',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    res.json(await getEventChangeAlertSummary());
+  }),
+);
+
+app.get(
+  '/api/admin/event-change-alerts',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = eventChangeAlertQuerySchema.parse(req.query);
+    res.json(await listEventChangeAlerts(query));
+  }),
+);
+
+app.post(
+  '/api/admin/event-change-alerts/:id/resolve',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = eventChangeResolveSchema.parse(req.body);
+    if (
+      input.action !== 'dismiss' &&
+      admin.role !== 'super_admin' &&
+      admin.role !== 'event_operator'
+    ) {
+      throw new HttpError(403, '当前角色只能忽略变更告警');
+    }
+    try {
+      if (input.dryRun) {
+        res.json({
+          dryRun: true,
+          preview: await previewEventChangeResolution(req.params.id, input),
+        });
+        return;
+      }
+      res.json({
+        dryRun: false,
+        result: await resolveEventChangeAlert(req.params.id, {
+          ...input,
+          expected: input.expected!,
+          adminUserId: admin.id,
+        }),
+      });
+    } catch (error) {
+      if (error instanceof EventChangeNotFoundError) throw new HttpError(404, error.message);
+      if (error instanceof EventChangeConflictError) throw new HttpError(409, error.message);
+      if (error instanceof EventChangeResolutionError) throw new HttpError(400, error.message);
+      throw error;
+    }
+  }),
+);
+
+app.get(
   '/api/admin/event-sources',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
@@ -1124,8 +1654,13 @@ app.post(
   '/api/admin/event-sources',
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
-    const input = validateBody(eventSourceSchema, req.body);
-    const created = await prisma.eventSource.create({ data: input });
+    const input = eventSourceSchema.parse(req.body);
+    const created = await prisma.eventSource.create({
+      data: {
+        ...input,
+        nextRunAt: nextRunAtForSourceConfig(input, null, new Date()),
+      },
+    });
     await writeOperationLog({
       adminUserId: admin.id,
       action: 'event_source.create',
@@ -1142,12 +1677,15 @@ app.put(
   '/api/admin/event-sources/:id',
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
-    const input = validateBody(eventSourceSchema, req.body);
+    const input = eventSourceSchema.parse(req.body);
     const before = await prisma.eventSource.findUnique({ where: { id: req.params.id } });
     if (!before) throw new HttpError(404, '赛事源不存在');
     const updated = await prisma.eventSource.update({
       where: { id: before.id },
-      data: input,
+      data: {
+        ...input,
+        nextRunAt: nextRunAtForSourceConfig(input, before.nextRunAt, new Date()),
+      },
     });
     await writeOperationLog({
       adminUserId: admin.id,
@@ -1167,14 +1705,14 @@ app.post(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
     try {
-      const summary = await runEventSource(req.params.id);
+      const summary = await runEventSource(req.params.id, { trigger: 'manual' });
       await writeOperationLog({
         adminUserId: admin.id,
         action: 'event_source.run',
         targetType: 'event_sources',
         targetId: req.params.id,
         afterValue: summary,
-        note: `手动抓取赛事源：新增 ${summary.created}，更新 ${summary.updated}，跳过 ${summary.skippedReviewed}`,
+        note: `手动抓取赛事源：新增 ${summary.created}，更新 ${summary.updated}，跳过已审核 ${summary.skippedReviewed}，新变更 ${summary.changeAlertsCreated}，已存在变更 ${summary.changeAlertsExisting}，过滤过期 ${summary.skippedExpired}，过滤区域外 ${summary.skippedOutsideRegion}`,
       });
       res.status(201).json(summary);
     } catch (error) {
@@ -1194,25 +1732,139 @@ app.post(
 );
 
 app.get(
+  '/api/admin/event-source-runs',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = eventSourceRunQuerySchema.parse(req.query);
+    const where: Prisma.EventSourceRunWhereInput = {};
+    if (query.sourceId) where.sourceId = query.sourceId;
+    if (query.status) where.status = query.status;
+    const [items, total] = await Promise.all([
+      prisma.eventSourceRun.findMany({
+        where,
+        include: { source: { select: { id: true, name: true, sourceType: true } } },
+        orderBy: { startedAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      prisma.eventSourceRun.count({ where }),
+    ]);
+    res.json({ items, total, page: query.page, pageSize: query.pageSize });
+  }),
+);
+
+app.get(
+  '/api/admin/event-candidate-stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const sourceId = typeof req.query.sourceId === 'string' ? req.query.sourceId.trim() : '';
+    const sourceWhere: Prisma.EventCandidateWhereInput = sourceId ? { sourceId } : {};
+    const pendingWhere: Prisma.EventCandidateWhereInput = {
+      ...sourceWhere,
+      status: { in: ['new', 'needs_review'] },
+    };
+    const [pending, urgent, missingOfficialUrl, duplicates] = await Promise.all([
+      prisma.eventCandidate.count({ where: pendingWhere }),
+      prisma.eventCandidate.count({ where: { ...pendingWhere, priorityScore: 100 } }),
+      prisma.eventCandidate.count({
+        where: { ...pendingWhere, reviewIssues: { has: 'missing_official_url' } },
+      }),
+      prisma.eventCandidate.count({
+        where: { ...pendingWhere, reviewIssues: { has: 'duplicate_event' } },
+      }),
+    ]);
+    res.json({ pending, urgent, missingOfficialUrl, duplicates });
+  }),
+);
+
+app.get(
+  '/api/admin/event-candidate-duplicate-groups',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const groups = await getCandidateDuplicateGroups();
+    res.json({ groups, total: groups.length });
+  }),
+);
+
+app.post(
+  '/api/admin/event-candidates/merge',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(candidateMergeSchema, req.body);
+    try {
+      res.json(await mergeEventCandidates({ ...input, adminUserId: admin.id }));
+    } catch (error) {
+      throw new HttpError(400, error instanceof Error ? error.message : '候选合并失败');
+    }
+  }),
+);
+
+app.post(
+  '/api/admin/event-candidates/bulk-accept',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(bulkAcceptSchema, req.body);
+    if (input.dryRun) {
+      const items = await previewBulkAccept(input.candidateIds);
+      res.json({ dryRun: true, items, accepted: [], failed: [] });
+      return;
+    }
+    res.json(
+      await runBulkAccept({ ...input, dryRun: input.dryRun ?? true, adminUserId: admin.id }),
+    );
+  }),
+);
+
+app.get(
   '/api/admin/event-candidates',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
-    const where: Prisma.EventCandidateWhereInput = {};
-    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-    if (status) {
-      const parsedStatus = eventCandidateStatusSchema.safeParse(status);
-      if (!parsedStatus.success) throw new HttpError(400, '候选状态无效');
-      where.status = parsedStatus.data as EventCandidateStatus;
+    const query = eventCandidateQuerySchema.parse(req.query);
+    const where = buildCandidateWhere(query);
+    if (query.readiness) {
+      const [pendingItems, duplicatePool] = await Promise.all([
+        prisma.eventCandidate.findMany({
+          where: { ...where, status: { in: ['new', 'needs_review'] } },
+          include: { source: true },
+          orderBy: buildCandidateOrderBy(query.sort),
+          take: 200,
+        }),
+        prisma.eventCandidate.findMany({
+          where: { status: { in: ['new', 'needs_review'] }, eventDate: { not: null } },
+          include: { source: true },
+          orderBy: { createdAt: 'asc' },
+          take: 200,
+        }),
+      ]);
+      const duplicateIds = new Set(
+        buildCandidateDuplicateGroups(duplicatePool).flatMap((group) =>
+          group.items.map((item) => item.id),
+        ),
+      );
+      const filtered = pendingItems.filter((item) => {
+        const ready = candidateAcceptIssues(item).length === 0 && !duplicateIds.has(item.id);
+        return query.readiness === 'ready' ? ready : !ready;
+      });
+      const offset = (query.page - 1) * query.pageSize;
+      res.json({
+        items: filtered.slice(offset, offset + query.pageSize),
+        total: filtered.length,
+        page: query.page,
+        pageSize: query.pageSize,
+      });
+      return;
     }
-    const sourceId = typeof req.query.sourceId === 'string' ? req.query.sourceId.trim() : '';
-    if (sourceId) where.sourceId = sourceId;
-    const items = await prisma.eventCandidate.findMany({
-      where,
-      include: { source: true },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-    res.json({ items });
+    const [items, total] = await Promise.all([
+      prisma.eventCandidate.findMany({
+        where,
+        include: { source: true },
+        orderBy: buildCandidateOrderBy(query.sort),
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      prisma.eventCandidate.count({ where }),
+    ]);
+    res.json({ items, total, page: query.page, pageSize: query.pageSize });
   }),
 );
 
@@ -1226,6 +1878,11 @@ app.put(
     if (!['new', 'needs_review'].includes(before.status)) {
       throw new HttpError(400, '仅待复核候选可以编辑');
     }
+    const classification = classifyCandidate(
+      input.extractedData,
+      new Date(),
+      before.duplicateEventId,
+    );
 
     const updated = await prisma.eventCandidate.update({
       where: { id: before.id },
@@ -1240,6 +1897,8 @@ app.put(
         extractedData: input.extractedData as Prisma.InputJsonObject,
         evidence: input.extractedData.evidence as Prisma.InputJsonArray,
         confidence: input.extractedData.confidence as Prisma.InputJsonObject,
+        priorityScore: classification.priorityScore,
+        reviewIssues: classification.reviewIssues,
         status: 'needs_review',
       },
     });
@@ -1287,75 +1946,24 @@ app.post(
       return;
     }
 
-    const data = aiEventCandidateSchema.parse(candidate.extractedData);
-    if (!data.officialUrl) {
-      throw new HttpError(400, '候选赛事缺少官方入口，请先人工补充 officialUrl 后再采纳');
-    }
-    if (!data.sourceUrl) {
-      throw new HttpError(400, '候选赛事缺少来源链接，请先人工补充 sourceUrl 后再采纳');
-    }
-    if (!data.eventDate) {
-      throw new HttpError(400, '候选赛事缺少比赛日期，请先人工补充 eventDate 后再采纳');
-    }
-    const officialUrl = data.officialUrl;
-    const sourceUrl = data.sourceUrl;
-    const eventDate = data.eventDate;
-
-    const result = await prisma.$transaction(async (tx) => {
-      const event = await tx.event.create({
-        data: {
-          eventName: data.eventName,
-          city: data.city,
-          eventDate: parseEventDate(eventDate),
-          distanceItems: data.distanceItems,
-          signupStatus: data.signupStatus as SignupStatus,
-          signupDeadline: data.signupDeadline ? new Date(data.signupDeadline) : null,
-          officialUrl,
-          sourceName: data.sourceName || 'AI 辅助抽取',
-          sourceUrl,
-          sourceLevel: data.sourceLevel as SourceLevel,
-          publishStatus: 'draft',
-          infoStatus: 'ai_generated',
-          runJudgement: data.runJudgement as RunJudgement,
-          judgementSummary: data.judgementSummary || null,
-          judgementReasons: data.judgementReasons,
-          suitableFor: data.suitableFor,
-          notSuitableFor: data.notSuitableFor,
-          tags: data.tags,
-          fieldConfidence: {
-            ...data.confidence,
-            aiCandidateId: candidate.id,
-          } as Prisma.InputJsonObject,
-          eventTags: {
-            create: data.tags.map((tagName) => ({ tagName, tagType: 'experience' })),
-          },
-        },
-      });
-
-      const accepted = await tx.eventCandidate.update({
-        where: { id: candidate.id },
-        data: {
-          status: 'accepted',
-          acceptedEventId: event.id,
-          reviewedBy: admin.id,
-          reviewedAt: new Date(),
-        },
-      });
-
-      return { event, candidate: accepted };
-    });
-
-    await writeOperationLog({
+    const preview = await previewBulkAccept([candidate.id]);
+    const result = await runBulkAccept({
+      candidateIds: [candidate.id],
+      dryRun: false,
+      expected: preview.flatMap((item) =>
+        item.updatedAt ? [{ id: item.id, updatedAt: item.updatedAt }] : [],
+      ),
       adminUserId: admin.id,
-      action: 'event_candidate.accept',
-      targetType: 'event_candidates',
-      targetId: candidate.id,
-      beforeValue: candidate,
-      afterValue: { eventId: result.event.id, candidateId: result.candidate.id },
-      note: 'AI 候选赛事采纳为人工待补充草稿',
     });
-
-    res.status(201).json(result);
+    if (!result.accepted.length) {
+      throw new HttpError(400, result.failed[0]?.issues.join('、') || '候选赛事无法采纳');
+    }
+    const accepted = result.accepted[0];
+    const event = await prisma.event.findUnique({ where: { id: accepted.eventId } });
+    const updatedCandidate = await prisma.eventCandidate.findUnique({
+      where: { id: candidate.id },
+    });
+    res.status(201).json({ event, candidate: updatedCandidate });
   }),
 );
 
@@ -1450,11 +2058,43 @@ app.get(
 );
 
 app.get(
+  '/api/admin/interaction-stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const days = Number(req.query.days) === 7 ? 7 : 30;
+    res.json(await getInteractionStats(days));
+  }),
+);
+
+app.get(
+  '/api/admin/event-choice-stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = validateQuery(eventChoiceStatsQuerySchema, req.query);
+    res.json(
+      await getAdminEventChoiceStats({
+        page: query.page ?? 1,
+        pageSize: query.pageSize ?? 20,
+        search: typeof query.search === 'string' ? query.search : undefined,
+        publishStatus: query.publishStatus,
+        sort: query.sort ?? 'total_desc',
+        eventDateFrom: query.eventDateFrom
+          ? new Date(`${query.eventDateFrom}T00:00:00.000Z`)
+          : undefined,
+        eventDateTo: query.eventDateTo
+          ? new Date(`${query.eventDateTo}T00:00:00.000Z`)
+          : undefined,
+      }),
+    );
+  }),
+);
+
+app.get(
   '/api/events',
   asyncHandler(async (req, res) => {
     const query = validateQuery(publicEventsQuerySchema, req.query) as PublicEventsQuery;
     const { page, pageSize } = query;
-    const where: Prisma.EventWhereInput = { publishStatus: 'published' };
+    const where: Prisma.EventWhereInput = buildPublicEventWhere();
     if (query.city) where.city = query.city;
     if (query.distance) where.distanceItems = { has: query.distance };
     if (query.signupStatus) where.signupStatus = query.signupStatus;
@@ -1477,6 +2117,14 @@ app.get(
           judgementReasons: true,
           tags: true,
           updatedAt: true,
+          sourceCheckedAt: true,
+          changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
+          sourceSummaries: {
+            where: { status: 'published' },
+            select: { staleAt: true },
+            orderBy: { publishedAt: 'desc' },
+            take: 1,
+          },
         },
         orderBy: [{ eventDate: 'asc' }],
         skip: (page - 1) * pageSize,
@@ -1484,7 +2132,19 @@ app.get(
       }),
       prisma.event.count({ where }),
     ]);
-    res.json({ items, total, page, pageSize, complianceNotice, officialActionText });
+    res.json({
+      items: items.map(({ changeAlerts, sourceSummaries, ...event }) => ({
+        ...event,
+        sourceReviewPending: changeAlerts.length > 0,
+        hasSourceSummary: sourceSummaries.length > 0,
+        sourceSummaryStale: Boolean(sourceSummaries[0]?.staleAt),
+      })),
+      total,
+      page,
+      pageSize,
+      complianceNotice,
+      officialActionText,
+    });
   }),
 );
 
@@ -1492,11 +2152,84 @@ app.get(
   '/api/events/:id',
   asyncHandler(async (req, res) => {
     const event = await prisma.event.findFirst({
-      where: { id: req.params.id, publishStatus: 'published' },
-      include: { checklistItems: { orderBy: { sortOrder: 'asc' } }, eventTags: true },
+      where: { id: req.params.id, ...buildPublicEventWhere() },
+      include: {
+        checklistItems: { orderBy: { sortOrder: 'asc' } },
+        eventTags: true,
+        changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
+        sourceSummaries: {
+          where: { status: 'published' },
+          select: { staleAt: true },
+          orderBy: { publishedAt: 'desc' },
+          take: 1,
+        },
+      },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
-    res.json({ event, complianceNotice, officialActionText });
+    const { changeAlerts, sourceSummaries, ...publicEvent } = event;
+    const choiceCounts = await getEventChoiceCounts(event.id);
+    res.json({
+      event: {
+        ...publicEvent,
+        sourceReviewPending: changeAlerts.length > 0,
+        hasSourceSummary: sourceSummaries.length > 0,
+        sourceSummaryStale: Boolean(sourceSummaries[0]?.staleAt),
+        choiceCounts,
+      },
+      complianceNotice,
+      officialActionText,
+    });
+  }),
+);
+
+app.get(
+  '/api/events/:id/source-summary',
+  asyncHandler(async (req, res) => {
+    try {
+      res.json(await getPublicSourceSummary(req.params.id));
+    } catch (error) {
+      sourceSummaryHttpError(error);
+    }
+  }),
+);
+
+app.put(
+  '/api/event-choices',
+  asyncHandler(async (req, res) => {
+    const input = validateBody(eventChoiceSchema, req.body);
+    try {
+      await prisma.$transaction((tx) =>
+        consumeFeedbackRateLimit(tx, eventChoiceRateLimit, input.userKey, new Date()),
+      );
+      res.json(await setEventChoice(input));
+    } catch (error) {
+      if (error instanceof EventChoiceNotFoundError) throw new HttpError(404, error.message);
+      throw error;
+    }
+  }),
+);
+
+app.get(
+  '/api/event-choices',
+  asyncHandler(async (req, res) => {
+    const query = validateQuery(eventChoiceQuerySchema, req.query);
+    res.json(await listViewerEventChoices(query));
+  }),
+);
+
+app.get(
+  '/api/event-choices/:eventId',
+  asyncHandler(async (req, res) => {
+    const query = validateQuery(eventChoiceQuerySchema.pick({ userKey: true }), req.query);
+    res.json(await getViewerEventChoice({ userKey: query.userKey, eventId: req.params.eventId }));
+  }),
+);
+
+app.delete(
+  '/api/event-choices/:eventId',
+  asyncHandler(async (req, res) => {
+    const query = validateQuery(eventChoiceQuerySchema.pick({ userKey: true }), req.query);
+    res.json(await removeEventChoice({ userKey: query.userKey, eventId: req.params.eventId }));
   }),
 );
 
@@ -1530,7 +2263,7 @@ app.post(
   asyncHandler(async (req, res) => {
     const input = validateBody(favoriteSchema, req.body);
     const event = await prisma.event.findFirst({
-      where: { id: input.eventId, publishStatus: 'published' },
+      where: { id: input.eventId, ...buildPublicEventWhere() },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
     const favorite = await prisma.userFavorite.upsert({
@@ -1558,11 +2291,25 @@ app.get(
     const userKey = String(req.query.userKey || '');
     if (!userKey) throw new HttpError(400, 'userKey 不能为空');
     const items = await prisma.userFavorite.findMany({
-      where: { userKey, event: { publishStatus: 'published' } },
-      include: { event: true },
+      where: { userKey, event: buildPublicEventWhere() },
+      include: {
+        event: {
+          include: {
+            changeAlerts: { where: { status: 'open' }, select: { id: true }, take: 1 },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
-    res.json({ items });
+    res.json({
+      items: items.map(({ event, ...favorite }) => {
+        const { changeAlerts, ...publicEvent } = event;
+        return {
+          ...favorite,
+          event: { ...publicEvent, sourceReviewPending: changeAlerts.length > 0 },
+        };
+      }),
+    });
   }),
 );
 
@@ -1570,11 +2317,20 @@ app.post(
   '/api/feedback',
   asyncHandler(async (req, res) => {
     const input = validateBody(publicFeedbackSchema, req.body);
+    const content = normalizeFeedbackContent(input.content);
+    const risk = classifyFeedbackRisk(content);
+    if (risk.suspicious) {
+      try {
+        await recordBlockedFeedback(risk.reason);
+      } catch (error) {
+        console.error('记录反馈拦截指标失败', error instanceof Error ? error.name : 'unknown');
+      }
+      throw new HttpError(400, '反馈内容格式异常，请修改后重试');
+    }
     const event = await prisma.event.findFirst({
-      where: { id: input.eventId, publishStatus: 'published' },
+      where: { id: input.eventId, ...buildPublicEventWhere() },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
-    const content = normalizeFeedbackContent(input.content);
     const fingerprint = createFeedbackFingerprint(feedbackAbuseSecret, {
       eventId: input.eventId,
       feedbackType: input.feedbackType,
@@ -1591,7 +2347,9 @@ app.post(
     try {
       const feedback = await prisma.$transaction(async (tx) => {
         // 先占用指纹，再写限流计数；并发相同提交会在唯一约束处回滚为一条记录。
-        await tx.feedbackFingerprint.deleteMany({ where: { fingerprint, expiresAt: { lte: now } } });
+        await tx.feedbackFingerprint.deleteMany({
+          where: { fingerprint, expiresAt: { lte: now } },
+        });
         const created = await tx.feedback.create({
           data: {
             eventId: input.eventId,
@@ -1650,16 +2408,39 @@ app.post(
   }),
 );
 
+app.post(
+  '/api/interactions',
+  asyncHandler(async (req, res) => {
+    const input = validateBody(interactionSchema, req.body);
+    const event = await prisma.event.findFirst({
+      where: { id: input.eventId, ...buildPublicEventWhere() },
+      select: { id: true },
+    });
+    if (!event) throw new HttpError(404, '赛事不存在或未发布');
+    await recordEventInteraction({ ...input, secret: feedbackAbuseSecret });
+    res.status(201).json({ recorded: true });
+  }),
+);
+
 app.get(
   '/api/wxacode',
   asyncHandler(async (req, res) => {
     const eventId = String(req.query.eventId || '');
     if (!eventId) throw new HttpError(400, 'eventId 不能为空');
+    const envVersion = z
+      .enum(['develop', 'trial', 'release'])
+      .default('release')
+      .parse(req.query.envVersion);
     // scene 值需 <=32 字符且为安全字符集。cuid 约 24 字符，id= 前缀共 27 字符，符合限制。
-    const buffer = await getMiniProgramCode(`id=${eventId}`, 'pages/event-detail/index');
+    const buffer = await getMiniProgramCode(
+      `id=${eventId}`,
+      'pages/event-detail/index',
+      envVersion,
+    );
     if (!buffer) throw new HttpError(503, '小程序码服务暂不可用');
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Vary', 'Accept-Encoding');
     res.send(buffer);
   }),
 );
@@ -1669,35 +2450,140 @@ const defaultChecklistTemplates: Record<
   Array<{ groupName: string; itemName: string; itemStatus: string; sortOrder: number }>
 > = {
   general: [
-    { groupName: '报名信息', itemName: '报名截止与是否抽签', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '领物安排', itemName: '领物时间、地点、证件要求', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '交通安排', itemName: '起终点交通、存包和接驳', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '装备', itemName: '号码布、芯片、跑鞋、补给', itemStatus: 'pending_verify', sortOrder: 4 },
-    { groupName: '风险提示', itemName: '天气变化和赛事变更公告', itemStatus: 'pending_verify', sortOrder: 5 },
+    {
+      groupName: '报名信息',
+      itemName: '报名截止与是否抽签',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '领物安排',
+      itemName: '领物时间、地点、证件要求',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '交通安排',
+      itemName: '起终点交通、存包和接驳',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '装备',
+      itemName: '号码布、芯片、跑鞋、补给',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
+    {
+      groupName: '风险提示',
+      itemName: '天气变化和赛事变更公告',
+      itemStatus: 'pending_verify',
+      sortOrder: 5,
+    },
   ],
   '5K': [
-    { groupName: '完赛目标', itemName: '确认起跑时间和关门时间', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '装备', itemName: '轻便跑鞋和基础补水', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '新手提醒', itemName: '赛前不临时更换新装备', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '交通安排', itemName: '提前确认短距离项目检录口', itemStatus: 'pending_verify', sortOrder: 4 },
+    {
+      groupName: '完赛目标',
+      itemName: '确认起跑时间和关门时间',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '装备',
+      itemName: '轻便跑鞋和基础补水',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '新手提醒',
+      itemName: '赛前不临时更换新装备',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '交通安排',
+      itemName: '提前确认短距离项目检录口',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
   ],
   '10K': [
-    { groupName: '配速计划', itemName: '确认目标配速和补给点位置', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '装备', itemName: '跑鞋、能量胶或随身补给', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '赛事规则', itemName: '确认分区、检录和关门时间', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '恢复安排', itemName: '赛后换衣、拉伸和返程路线', itemStatus: 'pending_verify', sortOrder: 4 },
+    {
+      groupName: '配速计划',
+      itemName: '确认目标配速和补给点位置',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '装备',
+      itemName: '跑鞋、能量胶或随身补给',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '赛事规则',
+      itemName: '确认分区、检录和关门时间',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '恢复安排',
+      itemName: '赛后换衣、拉伸和返程路线',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
   ],
   half: [
-    { groupName: '训练状态', itemName: '确认最近长距离训练和身体状态', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '补给策略', itemName: '确认能量胶、水站和盐丸安排', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '赛事规则', itemName: '确认半马关门时间和医疗点', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '装备', itemName: '比赛鞋、袜子、防磨和号码布固定', itemStatus: 'pending_verify', sortOrder: 4 },
+    {
+      groupName: '训练状态',
+      itemName: '确认最近长距离训练和身体状态',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '补给策略',
+      itemName: '确认能量胶、水站和盐丸安排',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '赛事规则',
+      itemName: '确认半马关门时间和医疗点',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '装备',
+      itemName: '比赛鞋、袜子、防磨和号码布固定',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
   ],
   full: [
-    { groupName: '身体状态', itemName: '确认无伤病、睡眠和赛前减量', itemStatus: 'pending_verify', sortOrder: 1 },
-    { groupName: '补给策略', itemName: '确认全程补给节奏和备用方案', itemStatus: 'pending_verify', sortOrder: 2 },
-    { groupName: '赛事规则', itemName: '确认分段关门时间、医疗点和退赛车', itemStatus: 'pending_verify', sortOrder: 3 },
-    { groupName: '赛后安排', itemName: '确认完赛后保暖、换衣和返程', itemStatus: 'pending_verify', sortOrder: 4 },
+    {
+      groupName: '身体状态',
+      itemName: '确认无伤病、睡眠和赛前减量',
+      itemStatus: 'pending_verify',
+      sortOrder: 1,
+    },
+    {
+      groupName: '补给策略',
+      itemName: '确认全程补给节奏和备用方案',
+      itemStatus: 'pending_verify',
+      sortOrder: 2,
+    },
+    {
+      groupName: '赛事规则',
+      itemName: '确认分段关门时间、医疗点和退赛车',
+      itemStatus: 'pending_verify',
+      sortOrder: 3,
+    },
+    {
+      groupName: '赛后安排',
+      itemName: '确认完赛后保暖、换衣和返程',
+      itemStatus: 'pending_verify',
+      sortOrder: 4,
+    },
   ],
 };
 
@@ -1706,13 +2592,18 @@ app.get(
   asyncHandler(async (req, res) => {
     const type = String(req.query.type || 'general');
     // 优先读 system_config checklist_templates（与后台内容配置页联动），fallback 到内置默认。
-    let items: Array<{ groupName: string; itemName: string; itemStatus: string; sortOrder: number }> =
-      defaultChecklistTemplates.general;
+    let items: Array<{
+      groupName: string;
+      itemName: string;
+      itemStatus: string;
+      sortOrder: number;
+    }> = defaultChecklistTemplates.general;
     try {
       const config = await prisma.systemConfig.findUnique({
         where: { configKey: 'checklist_templates' },
       });
-      const templates = (config?.configValue as Record<string, unknown>) || defaultChecklistTemplates;
+      const templates =
+        (config?.configValue as Record<string, unknown>) || defaultChecklistTemplates;
       const candidate = templates[type] || templates.general || defaultChecklistTemplates.general;
       if (Array.isArray(candidate)) {
         items = candidate as typeof items;

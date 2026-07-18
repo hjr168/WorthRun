@@ -1,10 +1,7 @@
 <view class="page preferences-page">
   <loading-state wx:if="{{loading}}" text="正在读取偏好" />
   <block wx:else>
-    <view class="preference-head">
-      <view class="preference-head-title">跑赛偏好</view>
-      <view class="preference-head-subtitle">用几个标签帮首页优先展示更接近你的赛事。</view>
-    </view>
+    <page-header title="跑赛偏好" subtitle="用几个标签帮首页优先展示更接近你的赛事。" />
 
     <view wx:if="{{error}}" class="error-tip">{{error}}</view>
     <view class="form-card">
@@ -15,6 +12,7 @@
             wx:for="{{cityChips}}"
             wx:key="label"
             class="chip {{item.selected ? 'selected' : ''}}"
+            aria-label="{{item.label}}{{item.selected ? '，已选择' : '，未选择'}}"
             data-group="cities"
             data-value="{{item.label}}"
             bindtap="toggleChip"
@@ -30,6 +28,7 @@
             wx:for="{{distanceChips}}"
             wx:key="label"
             class="chip {{item.selected ? 'selected' : ''}}"
+            aria-label="{{item.label}}{{item.selected ? '，已选择' : '，未选择'}}"
             data-group="distances"
             data-value="{{item.label}}"
             bindtap="toggleChip"
@@ -45,6 +44,7 @@
             wx:for="{{focusChips}}"
             wx:key="label"
             class="chip {{item.selected ? 'selected' : ''}}"
+            aria-label="{{item.label}}{{item.selected ? '，已选择' : '，未选择'}}"
             data-group="focusTags"
             data-value="{{item.label}}"
             bindtap="toggleChip"
@@ -56,8 +56,10 @@
     </view>
     <view class="actions">
       <button class="primary-button" bindtap="save">保存偏好</button>
-      <button class="secondary-button" bindtap="reset">重置</button>
-      <button class="plain-button" bindtap="skip">跳过</button>
+      <view class="secondary-actions">
+        <button class="secondary-button" bindtap="reset">重置</button>
+        <button class="plain-button" bindtap="skip">跳过</button>
+      </view>
     </view>
   </block>
 </view>

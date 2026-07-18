@@ -1,30 +1,80 @@
-import { Button, Card, Input, Modal, Select, Space, Table, message } from 'antd';
+import { Button, Input, Modal, Select, Space, Statistic, Table, Tag, message } from 'antd';
+import type { Key } from 'react';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet, apiSend } from '../api';
-import { FeedbackDuplicateGroup, FeedbackItem } from '../types';
+import type { FeedbackBulkResult, FeedbackItem, FeedbackSummary } from '../types';
 import { feedbackStatusOptions } from '../constants';
 import { showError } from '../utils/helpers';
 import { useAdmin } from '../context/AdminContext';
+import { boundedSelection, buildFeedbackQuery } from '../utils/feedback';
+
+const feedbackTypeOptions = [
+  '日期有误',
+  '报名状态有误',
+  '官方链接失效',
+  '赛事取消 / 延期',
+  '信息重复',
+  '其他',
+].map((value) => ({ value, label: value }));
+
+const riskLabels: Record<string, string> = {
+  sql_probe: '疑似自动探测',
+  jndi_probe: '疑似自动探测',
+  script_probe: '疑似自动探测',
+  path_probe: '疑似自动探测',
+  control_character: '异常控制字符',
+};
 
 export function QualityPage() {
   const navigate = useNavigate();
   const { can } = useAdmin();
   const [items, setItems] = useState<FeedbackItem[]>([]);
-  const [duplicateGroups, setDuplicateGroups] = useState<FeedbackDuplicateGroup[]>([]);
+  const [summary, setSummary] = useState<FeedbackSummary>();
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [status, setStatus] = useState<string>();
+  const [feedbackType, setFeedbackType] = useState<string>();
+  const [eventScope, setEventScope] = useState<string>();
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
 
-  const load = () => {
-    apiGet<{ items: FeedbackItem[] }>(`/api/admin/feedback${status ? `?status=${status}` : ''}`)
-      .then((result) => setItems(result.items))
-      .catch(showError);
-    apiGet<{ groups: FeedbackDuplicateGroup[] }>('/api/admin/feedback/duplicates?hours=720')
-      .then((result) => setDuplicateGroups(result.groups))
-      .catch(showError);
+  const load = async () => {
+    try {
+      setLoading(true);
+      const query = buildFeedbackQuery({
+        page,
+        pageSize,
+        status,
+        feedbackType,
+        eventScope,
+        search,
+      });
+      const [list, nextSummary] = await Promise.all([
+        apiGet<{ items: FeedbackItem[]; total: number }>(`/api/admin/feedback?${query}`),
+        apiGet<FeedbackSummary>('/api/admin/feedback/summary'),
+      ]);
+      setItems(list.items);
+      setTotal(list.total);
+      setSummary(nextSummary);
+    } catch (error) {
+      showError(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(load, [status]);
+  useEffect(() => void load(), [page, pageSize, status, feedbackType, eventScope, search]);
+  useEffect(() => setSelectedRowKeys([]), [page, pageSize, status, feedbackType, eventScope, search]);
+
+  const changeFilter = (setter: (value: string | undefined) => void, value?: string) => {
+    setter(value);
+    setPage(1);
+  };
 
   const handleFeedback = (feedback: FeedbackItem, nextStatus: 'resolved' | 'rejected') => {
     let note = '';
@@ -45,48 +95,208 @@ export function QualityPage() {
           adminNote: note,
         });
         message.success('反馈已更新');
-        load();
+        await load();
       },
     });
   };
 
-  const rejectDuplicates = (group: FeedbackDuplicateGroup) => {
+  const openBulkPreview = () => {
+    let nextStatus: 'resolved' | 'rejected' = 'rejected';
+    let note = '';
     Modal.confirm({
-      title: `批量驳回 ${group.duplicates.length} 条重复反馈？`,
-      content: '将保留最早的一条反馈，其余待处理记录会标记为“系统判定：重复提交”。',
-      okText: '批量驳回',
-      okButtonProps: { danger: true },
+      title: `批量处理 ${selectedRowKeys.length} 条反馈`,
+      okText: '生成预览',
+      content: (
+        <Space direction="vertical" size={12} style={{ width: '100%', marginTop: 12 }}>
+          <Select
+            defaultValue="rejected"
+            style={{ width: '100%' }}
+            options={[
+              { value: 'rejected', label: '标记驳回' },
+              { value: 'resolved', label: '标记已处理' },
+            ]}
+            onChange={(value) => {
+              nextStatus = value as 'resolved' | 'rejected';
+            }}
+          />
+          <Input.TextArea
+            rows={4}
+            placeholder="必填：处理备注"
+            maxLength={1000}
+            onChange={(event) => {
+              note = event.target.value;
+            }}
+          />
+        </Space>
+      ),
       onOk: async () => {
-        await apiSend('POST', '/api/admin/feedback/duplicates/reject', {
-          primaryId: group.primary.id,
-          duplicateIds: group.duplicates.map((item) => item.id),
+        if (!note.trim()) {
+          message.error('请填写处理备注');
+          return Promise.reject();
+        }
+        const preview = await apiSend<FeedbackBulkResult>(
+          'POST',
+          '/api/admin/feedback/bulk-handle',
+          {
+            feedbackIds: selectedRowKeys.map(String),
+            status: nextStatus,
+            adminNote: note.trim(),
+            dryRun: true,
+          },
+        );
+        const ready = preview.items.filter((item) => item.ready);
+        const unavailable = preview.items.length - ready.length;
+        Modal.confirm({
+          title: '确认应用批量处理？',
+          okText: `处理 ${ready.length} 条`,
+          okButtonProps: { danger: nextStatus === 'rejected', disabled: ready.length === 0 },
+          content: (
+            <Space direction="vertical" size={4} style={{ marginTop: 12 }}>
+              <span>可处理：{ready.length} 条</span>
+              <span>不可处理或已变化：{unavailable} 条</span>
+              <span>状态：{nextStatus === 'rejected' ? '驳回' : '已处理'}</span>
+              <span>备注：{note.trim()}</span>
+            </Space>
+          ),
+          onOk: async () => {
+            const result = await apiSend<FeedbackBulkResult>(
+              'POST',
+              '/api/admin/feedback/bulk-handle',
+              {
+                feedbackIds: selectedRowKeys.map(String),
+                status: nextStatus,
+                adminNote: note.trim(),
+                dryRun: false,
+                expected: preview.items.flatMap((item) =>
+                  item.updatedAt ? [{ id: item.id, updatedAt: item.updatedAt }] : [],
+                ),
+              },
+            );
+            message.success(`已处理 ${result.handled.length} 条，失败 ${result.failed.length} 条`);
+            setSelectedRowKeys(result.failed.map((item) => item.id));
+            await load();
+          },
         });
-        message.success('重复反馈已批量驳回');
-        load();
       },
     });
   };
 
   return (
     <main className="page">
-      <div className="page-header">
+      <div className="page-header quality-header">
         <div>
           <h1 className="page-title">质量与反馈</h1>
-          <div className="page-subtitle">处理用户纠错反馈，关键处理动作会写入操作日志</div>
+          <div className="page-subtitle">筛出有效纠错，异常内容和治理动作均保留审计记录</div>
         </div>
+        {can('handle_feedback') && (
+          <Button type="primary" disabled={!selectedRowKeys.length} onClick={openBulkPreview}>
+            批量处理{selectedRowKeys.length ? `（${selectedRowKeys.length}）` : ''}
+          </Button>
+        )}
+      </div>
+
+      <div className="quality-stats">
+        <Statistic title="待处理" value={summary?.pending ?? 0} />
+        <Statistic title="可人工处理" value={summary?.actionable ?? 0} />
+        <Statistic title="异常探测" value={summary?.suspicious ?? 0} />
+        <Statistic title="低信息" value={summary?.lowInformation ?? 0} />
+        <Statistic title="非公开赛事" value={summary?.unpublishedEvent ?? 0} />
+        <Statistic title="近 7 天拦截" value={summary?.blocked7d ?? 0} />
+      </div>
+
+      <div className="quality-filters">
+        <Input.Search
+          allowClear
+          value={searchInput}
+          placeholder="搜索反馈内容或赛事"
+          style={{ width: 260 }}
+          onChange={(event) => setSearchInput(event.target.value)}
+          onSearch={(value) => {
+            setSearch(value.trim());
+            setPage(1);
+          }}
+        />
         <Select
           allowClear
           placeholder="反馈状态"
-          style={{ width: 180 }}
+          style={{ width: 150 }}
           options={feedbackStatusOptions}
-          onChange={setStatus}
+          value={status}
+          onChange={(value) => changeFilter(setStatus, value)}
+        />
+        <Select
+          allowClear
+          placeholder="反馈类型"
+          style={{ width: 170 }}
+          options={feedbackTypeOptions}
+          value={feedbackType}
+          onChange={(value) => changeFilter(setFeedbackType, value)}
+        />
+        <Select
+          allowClear
+          placeholder="赛事范围"
+          style={{ width: 170 }}
+          options={[
+            { value: 'public', label: '当前公开赛事' },
+            { value: 'unpublished', label: '当前非公开赛事' },
+          ]}
+          value={eventScope}
+          onChange={(value) => changeFilter(setEventScope, value)}
         />
       </div>
+
       <Table
         rowKey="id"
+        loading={loading}
         dataSource={items}
+        scroll={{ x: 1480 }}
+        rowSelection={
+          can('handle_feedback')
+            ? {
+                selectedRowKeys,
+                getCheckboxProps: (record) => ({
+                  disabled: !['pending', 'handling'].includes(record.status),
+                }),
+                onChange: (keys) => {
+                  const selection = boundedSelection(keys);
+                  if (!selection.accepted) {
+                    message.warning('每次最多选择 50 条反馈');
+                    return;
+                  }
+                  setSelectedRowKeys(selection.keys);
+                },
+              }
+            : undefined
+        }
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          showSizeChanger: true,
+          showTotal: (value) => `共 ${value} 条`,
+          onChange: (nextPage, nextPageSize) => {
+            setPage(nextPageSize === pageSize ? nextPage : 1);
+            setPageSize(nextPageSize);
+          },
+        }}
         columns={[
-          { title: '反馈类型', dataIndex: 'feedbackType', width: 130 },
+          {
+            title: '反馈类型',
+            dataIndex: 'feedbackType',
+            width: 140,
+            render: (value, record) => (record.invalidType ? '异常类型已隐藏' : value),
+          },
+          {
+            title: '质量标记',
+            width: 150,
+            render: (_, record) => {
+              if (record.invalidType) return <Tag color="red">非法反馈类型</Tag>;
+              if (record.riskReason) return <Tag color="red">{riskLabels[record.riskReason]}</Tag>;
+              if (record.lowInformation) return <Tag color="orange">缺少具体说明</Tag>;
+              if (record.eventScope === 'unpublished') return <Tag>赛事当前不公开</Tag>;
+              return <Tag color="green">可人工处理</Tag>;
+            },
+          },
           {
             title: '状态',
             dataIndex: 'status',
@@ -107,8 +317,14 @@ export function QualityPage() {
                 '-'
               ),
           },
-          { title: '反馈内容', dataIndex: 'content' },
-          { title: '处理备注', dataIndex: 'adminNote' },
+          {
+            title: '反馈内容',
+            dataIndex: 'content',
+            width: 320,
+            ellipsis: true,
+            render: (value, record) => (record.riskReason ? '异常内容已隐藏' : value),
+          },
+          { title: '处理备注', dataIndex: 'adminNote', width: 200, ellipsis: true },
           {
             title: '提交时间',
             dataIndex: 'createdAt',
@@ -117,9 +333,10 @@ export function QualityPage() {
           },
           {
             title: '操作',
-            width: 180,
+            fixed: 'right',
+            width: 170,
             render: (_, record) =>
-              can('handle_feedback') ? (
+              can('handle_feedback') && ['pending', 'handling'].includes(record.status) ? (
                 <Space>
                   <Button size="small" onClick={() => handleFeedback(record, 'resolved')}>
                     已处理
@@ -134,27 +351,6 @@ export function QualityPage() {
           },
         ]}
       />
-      {duplicateGroups.length > 0 && (
-        <Card title={`重复提交待处理（${duplicateGroups.length} 组）`} style={{ marginTop: 24 }}>
-          {duplicateGroups.map((group) => (
-            <div
-              key={group.primary.id}
-              style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}
-            >
-              <div style={{ flex: 1 }}>
-                <strong>{group.primary.event?.eventName || '未关联赛事'}</strong>
-                <span> · {group.primary.feedbackType} · {group.primary.content}</span>
-                <span>（{group.count} 条）</span>
-              </div>
-              {can('handle_feedback') && (
-                <Button danger size="small" onClick={() => rejectDuplicates(group)}>
-                  批量驳回重复项
-                </Button>
-              )}
-            </div>
-          ))}
-        </Card>
-      )}
     </main>
   );
 }
