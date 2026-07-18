@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 
-export const publicFeedbackTypes = [
+export const eventCorrectionTypes = [
   '日期有误',
   '报名状态有误',
   '官方链接失效',
@@ -8,6 +8,34 @@ export const publicFeedbackTypes = [
   '信息重复',
   '其他',
 ] as const;
+
+export const publicFeedbackTypes = eventCorrectionTypes;
+
+export const productFeedbackTypes = [
+  '功能建议',
+  '使用问题',
+  '页面异常',
+  '内容体验',
+  '其他',
+] as const;
+
+export const feedbackScopes = ['event_correction', 'product_feedback'] as const;
+
+export const productFeedbackContextPages = [
+  'home',
+  'events',
+  'event_detail',
+  'source_summary',
+  'favorites',
+  'choices',
+  'mine',
+] as const;
+
+export function isValidFeedbackType(scope: string | undefined, feedbackType: string) {
+  return scope === 'product_feedback'
+    ? productFeedbackTypes.includes(feedbackType as (typeof productFeedbackTypes)[number])
+    : eventCorrectionTypes.includes(feedbackType as (typeof eventCorrectionTypes)[number]);
+}
 
 export const feedbackRiskReasons = [
   'sql_probe',
@@ -24,6 +52,7 @@ export type FeedbackRisk =
 
 export const feedbackRateLimits = {
   userEvent: { scope: 'user_event_10m', windowMs: 10 * 60 * 1000, limit: 1 },
+  userProduct: { scope: 'user_product_30m', windowMs: 30 * 60 * 1000, limit: 3 },
   ipShort: { scope: 'ip_10m', windowMs: 10 * 60 * 1000, limit: 5 },
   ipDaily: { scope: 'ip_24h', windowMs: 24 * 60 * 60 * 1000, limit: 20 },
 } as const;
@@ -67,11 +96,16 @@ export function hmacDigest(secret: string, value: string) {
 
 export function createFeedbackFingerprint(
   secret: string,
-  input: { eventId: string; feedbackType: string; content: string },
+  input: {
+    scope?: (typeof feedbackScopes)[number];
+    eventId?: string | null;
+    feedbackType: string;
+    content: string;
+  },
 ) {
   return hmacDigest(
     secret,
-    `${input.eventId}\n${input.feedbackType}\n${normalizeFeedbackContent(input.content)}`,
+    `${input.scope || 'event_correction'}\n${input.eventId || ''}\n${input.feedbackType}\n${normalizeFeedbackContent(input.content)}`,
   );
 }
 

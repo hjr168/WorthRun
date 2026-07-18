@@ -17,5 +17,6 @@ describe('feedback maintenance', () => {
     expect(cutoffs.fingerprintExpiresAt).toEqual(now);
     expect(cutoffs.rateLimitBefore.toISOString()).toBe('2026-07-14T10:30:00.000Z');
     expect(cutoffs.metricBefore.toISOString()).toBe('2026-04-17T00:00:00.000Z');
+    expect(cutoffs.apiMetricBefore.toISOString()).toBe('2026-06-16T10:30:00.000Z');
   });
 });

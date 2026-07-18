@@ -22,6 +22,7 @@ describe('feedback workflow', () => {
   it('classifies public, stale, low-information and suspicious feedback', () => {
     expect(feedbackDisposition({ ...base, id: 'safe', content: '比赛日期应为八月二日' }, now)).toEqual({
       invalidType: false,
+      feedbackScope: 'event_correction',
       riskReason: null,
       lowInformation: false,
       eventScope: 'public',
@@ -49,6 +50,27 @@ describe('feedback workflow', () => {
         now,
       ).invalidType,
     ).toBe(true);
+  });
+
+  it('treats product feedback as actionable without an event', () => {
+    expect(
+      feedbackDisposition(
+        {
+          ...base,
+          id: 'product',
+          scope: 'product_feedback',
+          eventId: null,
+          feedbackType: '功能建议',
+          content: '希望增加更清晰的页面提示',
+          event: null,
+        },
+        now,
+      ),
+    ).toMatchObject({
+      invalidType: false,
+      feedbackScope: 'product_feedback',
+      eventScope: 'not_applicable',
+    });
   });
 
   it('builds mutually exclusive queue counts and exact duplicate counts', () => {

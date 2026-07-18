@@ -14,6 +14,7 @@ export function buildFeedbackMaintenanceCutoffs(now: Date) {
     fingerprintExpiresAt: now,
     rateLimitBefore: new Date(now.getTime() - 48 * HOUR_MS),
     metricBefore: new Date(chinaDay(now).getTime() - 90 * DAY_MS),
+    apiMetricBefore: new Date(now.getTime() - 30 * DAY_MS),
   };
 }
 
@@ -27,7 +28,7 @@ export async function recordBlockedFeedback(reason: FeedbackRiskReason, now: Dat
 
 export async function runFeedbackMaintenance(now: Date = new Date()) {
   const cutoffs = buildFeedbackMaintenanceCutoffs(now);
-  const [fingerprints, rateLimits, metrics] = await prisma.$transaction([
+  const [fingerprints, rateLimits, metrics, apiMetrics] = await prisma.$transaction([
     prisma.feedbackFingerprint.deleteMany({
       where: { expiresAt: { lte: cutoffs.fingerprintExpiresAt } },
     }),
@@ -37,10 +38,14 @@ export async function runFeedbackMaintenance(now: Date = new Date()) {
     prisma.feedbackAbuseMetric.deleteMany({
       where: { day: { lt: cutoffs.metricBefore } },
     }),
+    prisma.apiErrorMetric.deleteMany({
+      where: { bucketStart: { lt: cutoffs.apiMetricBefore } },
+    }),
   ]);
   return {
     deletedFingerprints: fingerprints.count,
     deletedRateLimits: rateLimits.count,
     deletedMetrics: metrics.count,
+    deletedApiErrorMetrics: apiMetrics.count,
   };
 }
