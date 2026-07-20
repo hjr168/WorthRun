@@ -206,8 +206,8 @@ export function QualityPage() {
     <main className="page">
       <div className="page-header quality-header">
         <div>
-          <h1 className="page-title">质量与反馈</h1>
-          <div className="page-subtitle">筛出有效纠错，异常内容和治理动作均保留审计记录</div>
+          <h1 className="page-title">反馈管理</h1>
+          <div className="page-subtitle">分别处理赛事纠错与产品反馈，所有处理动作均保留审计记录</div>
         </div>
         {can('handle_feedback') && (
           <Button type="primary" disabled={!selectedRowKeys.length} onClick={openBulkPreview}>

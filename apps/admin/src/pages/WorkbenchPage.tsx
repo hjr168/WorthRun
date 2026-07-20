@@ -163,6 +163,7 @@ export function WorkbenchPage() {
           </Card>
           <Card>
             <Statistic title="待处理反馈数" value={data?.pendingFeedback ?? 0} />
+            <Link to="/quality">进入反馈管理</Link>
           </Card>
         </div>
         <section className="form-section">

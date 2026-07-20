@@ -5,7 +5,7 @@ import {
   DatabaseOutlined,
   FileTextOutlined,
   LogoutOutlined,
-  ProfileOutlined,
+  CommentOutlined,
   RobotOutlined,
   SettingOutlined,
   ShareAltOutlined,
@@ -132,8 +132,8 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             },
             {
               key: '/quality',
-              icon: <ProfileOutlined />,
-              label: <Link to="/quality">质量反馈</Link>,
+              icon: <CommentOutlined />,
+              label: <Link to="/quality">反馈管理</Link>,
             },
             {
               key: '/share-stats',
