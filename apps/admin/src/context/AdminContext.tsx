@@ -14,6 +14,8 @@ export type AdminAction =
   | 'publish_event' // 发布/隐藏/下架/归档
   | 'handle_feedback'
   | 'manage_settings' // 系统设置写、内容配置写、管理员管理
+  | 'edit_release_notes'
+  | 'publish_release_notes'
   | 'manage_ai_sources'
   | 'review_ai_candidates'
   | 'review_event_changes'
@@ -27,6 +29,8 @@ const ROLE_MATRIX: Record<AdminAction, string[]> = {
   publish_event: ['event_operator'],
   handle_feedback: ['event_operator', 'content_reviewer'],
   manage_settings: [],
+  edit_release_notes: ['event_operator', 'content_reviewer'],
+  publish_release_notes: ['event_operator'],
   manage_ai_sources: ['event_operator'],
   review_ai_candidates: ['event_operator', 'content_reviewer'],
   review_event_changes: ['event_operator', 'content_reviewer'],

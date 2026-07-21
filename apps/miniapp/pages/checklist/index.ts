@@ -1,4 +1,5 @@
 import { ChecklistItem, getChecklistTemplates } from '../../utils/api';
+import { enablePublicShare, getSharePayload, trackShare } from '../../utils/share';
 
 const groups = ['通用清单', '5K', '10K', '半马', '全马'];
 
@@ -33,7 +34,11 @@ const fallbackChecklist: Record<string, ChecklistItem[]> = {
     { groupName: '恢复安排', itemName: '赛后换衣、拉伸和返程路线', itemStatus: 'pending_verify' },
   ],
   半马: [
-    { groupName: '训练状态', itemName: '确认最近长距离训练和身体状态', itemStatus: 'pending_verify' },
+    {
+      groupName: '训练状态',
+      itemName: '确认最近长距离训练和身体状态',
+      itemStatus: 'pending_verify',
+    },
     { groupName: '补给策略', itemName: '确认能量胶、水站和盐丸安排', itemStatus: 'pending_verify' },
     { groupName: '赛事规则', itemName: '确认半马关门时间和医疗点', itemStatus: 'pending_verify' },
     { groupName: '装备', itemName: '比赛鞋、袜子、防磨和号码布固定', itemStatus: 'pending_verify' },
@@ -41,7 +46,11 @@ const fallbackChecklist: Record<string, ChecklistItem[]> = {
   全马: [
     { groupName: '身体状态', itemName: '确认无伤病、睡眠和赛前减量', itemStatus: 'pending_verify' },
     { groupName: '补给策略', itemName: '确认全程补给节奏和备用方案', itemStatus: 'pending_verify' },
-    { groupName: '赛事规则', itemName: '确认分段关门时间、医疗点和退赛车', itemStatus: 'pending_verify' },
+    {
+      groupName: '赛事规则',
+      itemName: '确认分段关门时间、医疗点和退赛车',
+      itemStatus: 'pending_verify',
+    },
     { groupName: '赛后安排', itemName: '确认完赛后保暖、换衣和返程', itemStatus: 'pending_verify' },
   ],
 };
@@ -55,6 +64,7 @@ Page({
     items: fallbackChecklist[groups[0]],
   },
   onLoad() {
+    enablePublicShare();
     this.loadItems();
   },
   loadItems() {
@@ -80,5 +90,14 @@ Page({
     const groupIndex = Number(event.detail.value);
     this.setData({ groupIndex });
     this.loadItems();
+  },
+  onShareAppMessage() {
+    trackShare('page_share', 'tools');
+    return getSharePayload('tools', '/pages/checklist/index');
+  },
+  onShareTimeline() {
+    trackShare('timeline_share', 'tools');
+    const payload = getSharePayload('tools', '/pages/checklist/index');
+    return { title: payload.title, imageUrl: payload.imageUrl };
   },
 });

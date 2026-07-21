@@ -6,6 +6,7 @@ const format_1 = require("../../utils/format");
 const event_detail_1 = require("../../utils/event-detail");
 const user_1 = require("../../utils/user");
 const launch_1 = require("../../utils/launch");
+const share_1 = require("../../utils/share");
 const CANVAS_W = 375;
 const CANVAS_H = 667;
 function getCanvasDisplaySize() {
@@ -81,6 +82,7 @@ Page({
     },
     canvasNode: null,
     onLoad(query) {
+        (0, share_1.enableProductShareOnly)();
         this.setData({ id: query.id || '', userKey: (0, user_1.getUserKey)() });
         this.updateCanvasDisplaySize();
         this.load();
@@ -139,7 +141,9 @@ Page({
                 ctx.scale(dpr, dpr);
                 // 先渲染布局，再异步绘制（等小程序码图片加载）
                 wx.nextTick(() => {
-                    this.drawShareCard(ctx).then(resolve).catch(() => resolve());
+                    this.drawShareCard(ctx)
+                        .then(resolve)
+                        .catch(() => resolve());
                 });
             })
                 .exec();
@@ -172,7 +176,11 @@ Page({
         ctx.font = 'bold 20px sans-serif';
         let y = wrapText(ctx, event.eventName || '赛事名称待确认', 20, 100, W - 40, 28, 2);
         // 4. 赛事元信息：城市 · 日期 · 距离
-        const metaParts = [event.city, (0, format_1.formatDate)(event.eventDate), (0, format_1.formatDistance)(event.distanceItems)].filter((part) => part && part !== '待确认' && part !== '距离待确认');
+        const metaParts = [
+            event.city,
+            (0, format_1.formatDate)(event.eventDate),
+            (0, format_1.formatDistance)(event.distanceItems),
+        ].filter((part) => part && part !== '待确认' && part !== '距离待确认');
         const metaText = metaParts.length > 0 ? metaParts.join(' · ') : '信息待确认';
         ctx.fillStyle = '#64748B';
         ctx.font = '14px sans-serif';
@@ -392,11 +400,17 @@ Page({
         }
     },
     onShareAppMessage() {
+        var _a;
         const event = this.data.event;
-        return {
-            title: event ? `这场值得跑吗？${event.eventName}` : '哪场值得跑',
-            path: event ? `/pages/event-detail/index?id=${event.id}` : '/pages/home/index',
-            imageUrl: this.data.tempFilePath || undefined,
-        };
+        (0, share_1.trackShare)('page_share', 'event_detail', event === null || event === void 0 ? void 0 : event.id);
+        if (!event)
+            return (0, share_1.getSharePayload)('home', '/pages/home/index');
+        return (0, share_1.getSharePayload)('event_detail', `/pages/event-detail/index?id=${event.id}`, {
+            eventName: event.eventName,
+            city: event.city,
+            eventDate: event.eventDate,
+            distance: event.distanceItems.join('、'),
+            judgement: event.runJudgement,
+        }, Object.assign(Object.assign({}, event.resolvedShare), { imageUrl: this.data.tempFilePath || ((_a = event.resolvedShare) === null || _a === void 0 ? void 0 : _a.imageUrl) }));
     },
 });

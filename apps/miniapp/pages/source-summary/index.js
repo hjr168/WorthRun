@@ -4,6 +4,7 @@ const api_1 = require("../../utils/api");
 const format_1 = require("../../utils/format");
 const user_1 = require("../../utils/user");
 const product_feedback_1 = require("../../utils/product-feedback");
+const share_1 = require("../../utils/share");
 Page({
     data: {
         eventId: '',
@@ -18,6 +19,7 @@ Page({
         complianceNotice: format_1.complianceNotice,
     },
     onLoad(query) {
+        (0, share_1.enablePublicShare)();
         this.setData({ eventId: query.eventId || '', userKey: (0, user_1.getUserKey)() });
         this.load();
     },
@@ -84,5 +86,24 @@ Page({
         wx.navigateBack({
             fail: () => wx.redirectTo({ url: `/pages/event-detail/index?id=${this.data.eventId}` }),
         });
+    },
+    onShareAppMessage() {
+        var _a;
+        const event = (_a = this.data.item) === null || _a === void 0 ? void 0 : _a.event;
+        (0, share_1.trackShare)('page_share', 'source_summary', this.data.eventId || undefined);
+        return (0, share_1.getSharePayload)('source_summary', `/pages/source-summary/index?eventId=${this.data.eventId}`, { eventName: event === null || event === void 0 ? void 0 : event.eventName });
+    },
+    onShareTimeline() {
+        var _a;
+        const event = (_a = this.data.item) === null || _a === void 0 ? void 0 : _a.event;
+        (0, share_1.trackShare)('timeline_share', 'source_summary', this.data.eventId || undefined);
+        const payload = (0, share_1.getSharePayload)('source_summary', '/pages/source-summary/index', {
+            eventName: event === null || event === void 0 ? void 0 : event.eventName,
+        });
+        return {
+            title: payload.title,
+            query: `eventId=${this.data.eventId}`,
+            imageUrl: payload.imageUrl,
+        };
     },
 });

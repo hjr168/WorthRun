@@ -13,7 +13,8 @@
     "pages/tools/index",
     "pages/pace/index",
     "pages/checklist/index",
-    "pages/share-card/index"
+    "pages/share-card/index",
+    "pages/release-notes/index"
   ],
   "window": {
     "navigationBarTitleText": "哪场值得跑",

@@ -8,6 +8,7 @@ import {
 } from '../../utils/api';
 import { getUserKey } from '../../utils/user';
 import { openProductFeedback } from '../../utils/product-feedback';
+import { enablePublicShare, getSharePayload, trackShare } from '../../utils/share';
 
 const cities = [
   '全部',
@@ -65,6 +66,7 @@ Page({
     resultText: '',
   },
   onLoad() {
+    enablePublicShare();
     this.load(true);
   },
   onShow() {
@@ -195,5 +197,14 @@ Page({
     } catch {
       wx.showToast({ title: isFavorite ? '取消收藏失败' : '收藏失败', icon: 'none' });
     }
+  },
+  onShareAppMessage() {
+    trackShare('page_share', 'events');
+    return getSharePayload('events', '/pages/events/index');
+  },
+  onShareTimeline() {
+    trackShare('timeline_share', 'events');
+    const payload = getSharePayload('events', '/pages/events/index');
+    return { title: payload.title, imageUrl: payload.imageUrl };
   },
 });

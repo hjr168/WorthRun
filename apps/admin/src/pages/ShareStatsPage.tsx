@@ -14,6 +14,7 @@ interface TopEvent {
 interface DailyStat {
   day: string;
   pageShare: number;
+  timelineShare: number;
   imageGenerate: number;
   total: number;
 }
@@ -21,12 +22,13 @@ interface DailyStat {
 interface ShareStats {
   total: number;
   pageShares: number;
+  timelineShares: number;
   imageGenerates: number;
   topEvents: TopEvent[];
   daily: DailyStat[];
 }
 
-export function ShareStatsPage() {
+export function ShareStatsPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ShareStats>();
@@ -43,11 +45,11 @@ export function ShareStatsPage() {
   useEffect(load, [load]);
 
   return (
-    <main className="page">
+    <main className={embedded ? undefined : 'page'}>
       <div className="page-header">
         <div>
-          <h1 className="page-title">分享数据</h1>
-          <div className="page-subtitle">观察赛事决策卡的分享传播效果</div>
+          <h1 className="page-title">分享发起数据</h1>
+          <div className="page-subtitle">观察分享发起与赛事决策卡生成趋势</div>
         </div>
         <Space>
           {[
@@ -71,11 +73,11 @@ export function ShareStatsPage() {
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <div className="stat-grid">
           <Card>
-            <Statistic title="累计分享总数" value={stats?.total ?? 0} />
+            <Statistic title="累计发起总数" value={stats?.total ?? 0} />
           </Card>
           <Card>
             <Statistic
-              title="页面分享次数"
+              title="好友分享发起"
               value={stats?.pageShares ?? 0}
               valueStyle={{ color: '#2A9D8F' }}
             />
@@ -85,6 +87,13 @@ export function ShareStatsPage() {
               title="分享图生成次数"
               value={stats?.imageGenerates ?? 0}
               valueStyle={{ color: '#E76F51' }}
+            />
+          </Card>
+          <Card>
+            <Statistic
+              title="朋友圈分享发起"
+              value={stats?.timelineShares ?? 0}
+              valueStyle={{ color: '#2563EB' }}
             />
           </Card>
         </div>
@@ -157,6 +166,12 @@ export function ShareStatsPage() {
                 dataIndex: 'imageGenerate',
                 width: 110,
                 render: (value) => (value > 0 ? <Tag color="orange">{value}</Tag> : value || 0),
+              },
+              {
+                title: '朋友圈分享',
+                dataIndex: 'timelineShare',
+                width: 120,
+                render: (value) => (value > 0 ? <Tag color="blue">{value}</Tag> : value || 0),
               },
               {
                 title: '当日合计',

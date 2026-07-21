@@ -1,7 +1,14 @@
-import { ApiError, EventChoice, EventChoiceItem, getEventChoices, removeEventChoice } from '../../utils/api';
+import {
+  ApiError,
+  EventChoice,
+  EventChoiceItem,
+  getEventChoices,
+  removeEventChoice,
+} from '../../utils/api';
 import { formatDate, formatDistance } from '../../utils/format';
 import { getUserKey } from '../../utils/user';
 import { openProductFeedback } from '../../utils/product-feedback';
+import { enableProductShareOnly, getProductHomeShare } from '../../utils/share';
 
 const choiceLabels: Record<EventChoice, string> = {
   interested: '想跑',
@@ -27,6 +34,7 @@ Page({
     >,
   },
   onShow() {
+    enableProductShareOnly();
     this.load();
   },
   async load() {
@@ -86,5 +94,8 @@ Page({
   },
   openEvents() {
     wx.switchTab({ url: '/pages/events/index' });
+  },
+  onShareAppMessage() {
+    return getProductHomeShare();
   },
 });

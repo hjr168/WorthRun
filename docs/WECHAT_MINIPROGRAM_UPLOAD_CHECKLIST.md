@@ -7,6 +7,7 @@
 - [ ] `apps/miniapp/config/test.ts` 的 API 为 `https://run-api.huangjiarong.top`。
 - [ ] 页面和请求工具中没有硬编码 API 地址。
 - [ ] 微信公众平台 request 合法域名已配置 `https://run-api.huangjiarong.top`。
+- [ ] 如分享设置使用外部图片，图片主机名已同时加入 `SHARE_IMAGE_ALLOWED_HOSTS` 和微信 `downloadFile` 合法域名。
 - [ ] `apps/miniapp/project.config.json` 中 `setting.urlCheck` 为 `true`。
 - [ ] 微信开发者工具上传体验版前，关闭“不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书”。
 - [ ] 体验版不使用 `localhost`、局域网 IP、HTTP 或 `example.com`。
@@ -18,5 +19,8 @@
 - [ ] 线上 API 设置强随机 `ADMIN_TOKEN_SECRET`。
 - [ ] 线上 API 未设置 `ALLOW_DEV_ADMIN=true`。
 - [ ] 后台默认密码已重置。
+- [ ] 首页、赛事列表、赛事详情、工具、来源摘要、版本更新的好友分享与朋友圈分享均已真机检查。
+- [ ] “我的”、收藏、选择和偏好的分享不包含个人状态，落地页统一为首页。
+- [ ] 新日志发布后“我的”Tab 显示“新”，打开更新时间线后清除。
 
 `urlCheck=false` 只允许本地开发调试使用，不能用于体验版上传、提审或正式发布。

@@ -45,6 +45,18 @@ Authorization: Bearer <token>
 - `GET /api/admin/system-configs`
 - `PUT /api/admin/system-configs/:key`
 
+## 分享中心与版本更新
+
+- `GET /api/admin/share-settings`：读取强类型全局分享模板和允许的图片域名。
+- `PUT /api/admin/share-settings`：超级管理员更新全局场景模板。
+- `GET /api/admin/event-share-overrides`：分页查看赛事的分享继承/覆盖状态。
+- `PUT /api/admin/events/:id/share-override`：覆盖单赛事标题或图片。
+- `DELETE /api/admin/events/:id/share-override`：恢复继承全局模板。
+- `GET /api/admin/release-notes`、`POST /api/admin/release-notes`、`PUT /api/admin/release-notes/:id`：管理更新日志草稿。
+- `PATCH /api/admin/release-notes/:id/status`：执行 `publish` 或 `offline`；已发布正文需先下线才能编辑。
+
+分享标题支持 `{eventName}`、`{city}`、`{eventDate}`、`{distance}`、`{judgement}`、`{latestVersion}`；未知变量会被拒绝，解析后超过 40 字自动省略。外部图片必须是 `SHARE_IMAGE_ALLOWED_HOSTS` 中的 HTTPS 地址。
+
 ## AI 辅助赛事源
 
 - `GET /api/admin/event-sources`
@@ -203,8 +215,14 @@ dry-run 返回 `preview.expected.alertUpdatedAt` 和 `preview.expected.eventUpda
 - `POST /api/feedback`
 - `POST /api/interactions`
 - `GET /api/checklist/templates`
+- `GET /api/share-settings`
+- `GET /api/release-notes?limit=10&cursor=<optional>`
+- `GET /api/release-notes/latest`
+- `POST /api/share-records`
 
 公开赛事接口只返回 `publishStatus = published`、比赛日期晚于北京时间当天且城市属于粤港澳大湾区的赛事，不返回 hidden / offline / archived。
+
+更新日志公开接口只返回 `published`，按业务更新时间倒序分页；`latest` 按首次发布时间返回最新可见记录，用于本机未读红点。
 
 `GET /api/events`、`GET /api/events/:id` 和收藏列表额外返回 `sourceCheckedAt` 与布尔值 `sourceReviewPending`。公开接口不返回告警差异、证据原文、管理员备注、内部严重度或处理状态。
 

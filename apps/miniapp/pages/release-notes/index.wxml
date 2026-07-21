@@ -1,0 +1,39 @@
+<view class="page release-page">
+  <view class="release-hero">
+    <view class="hero-kicker">WHAT'S NEW</view>
+    <view class="hero-title">让每一次更新都看得见</view>
+    <view class="hero-desc">记录功能、体验和问题修复，时间以实际版本更新为准。</view>
+  </view>
+
+  <loading-state wx:if="{{loading}}" text="正在加载更新日志" />
+  <block wx:elif="{{error}}">
+    <empty-state title="加载失败" description="{{error}}" />
+    <button class="secondary-button" bindtap="reload">重新加载</button>
+    <button class="plain-button" bindtap="reportProblem">反馈问题</button>
+  </block>
+  <empty-state wx:elif="{{!items.length}}" title="暂无更新记录" description="新版本发布后会在这里记录。" />
+  <view wx:else class="timeline">
+    <view wx:for="{{items}}" wx:key="id" class="timeline-item">
+      <view class="timeline-rail">
+        <view class="timeline-dot {{index === 0 ? 'latest' : ''}}"></view>
+        <view wx:if="{{index < items.length - 1}}" class="timeline-line"></view>
+      </view>
+      <view class="release-card">
+        <view class="release-meta">
+          <view><text class="release-version">{{item.version}}</text><text wx:if="{{index === 0}}" class="latest-badge">最新</text></view>
+          <text class="release-date">{{item.releasedAtText}}</text>
+        </view>
+        <view class="release-title">{{item.title}}</view>
+        <view wx:if="{{item.summary}}" class="release-summary">{{item.summary}}</view>
+        <view class="change-list">
+          <view wx:for="{{item.displayChanges}}" wx:for-item="change" wx:key="description" class="change-row">
+            <text class="change-category category-{{change.category}}">{{change.categoryLabel}}</text>
+            <text class="change-description">{{change.description}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+    <button wx:if="{{hasMore}}" class="secondary-button more-button" loading="{{loadingMore}}" bindtap="loadMore">加载更多</button>
+    <view wx:else class="timeline-end">已经看完全部更新</view>
+  </view>
+</view>

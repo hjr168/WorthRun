@@ -1,7 +1,13 @@
-import { ApiError, getSourceSummary, PublicSourceSummary, recordInteraction } from '../../utils/api';
+import {
+  ApiError,
+  getSourceSummary,
+  PublicSourceSummary,
+  recordInteraction,
+} from '../../utils/api';
 import { complianceNotice, formatDate, formatDateTime } from '../../utils/format';
 import { getUserKey } from '../../utils/user';
 import { openProductFeedback } from '../../utils/product-feedback';
+import { enablePublicShare, getSharePayload, trackShare } from '../../utils/share';
 
 Page({
   data: {
@@ -17,6 +23,7 @@ Page({
     complianceNotice,
   },
   onLoad(query: { eventId?: string }) {
+    enablePublicShare();
     this.setData({ eventId: query.eventId || '', userKey: getUserKey() });
     this.load();
   },
@@ -80,5 +87,26 @@ Page({
     wx.navigateBack({
       fail: () => wx.redirectTo({ url: `/pages/event-detail/index?id=${this.data.eventId}` }),
     });
+  },
+  onShareAppMessage() {
+    const event = this.data.item?.event;
+    trackShare('page_share', 'source_summary', this.data.eventId || undefined);
+    return getSharePayload(
+      'source_summary',
+      `/pages/source-summary/index?eventId=${this.data.eventId}`,
+      { eventName: event?.eventName },
+    );
+  },
+  onShareTimeline() {
+    const event = this.data.item?.event;
+    trackShare('timeline_share', 'source_summary', this.data.eventId || undefined);
+    const payload = getSharePayload('source_summary', '/pages/source-summary/index', {
+      eventName: event?.eventName,
+    });
+    return {
+      title: payload.title,
+      query: `eventId=${this.data.eventId}`,
+      imageUrl: payload.imageUrl,
+    };
   },
 });

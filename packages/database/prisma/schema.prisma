@@ -141,6 +141,12 @@ enum SourceSummaryBasis {
   stored_source_record
 }
 
+enum ReleaseNoteStatus {
+  draft
+  published
+  offline
+}
+
 model Event {
   id               String        @id @default(cuid())
   eventName        String        @map("event_name")
@@ -180,6 +186,7 @@ model Event {
   changeAlerts    EventChangeAlert[]
   userChoices     UserEventChoice[]
   sourceSummaries EventSourceSummary[]
+  shareOverride   EventShareOverride?
 
   @@index([city])
   @@index([eventDate])
@@ -410,6 +417,36 @@ model SystemConfig {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("system_configs")
+}
+
+model EventShareOverride {
+  id            String   @id @default(cuid())
+  eventId       String   @unique @map("event_id")
+  titleTemplate String?  @map("title_template")
+  imageUrl      String?  @map("image_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("event_share_overrides")
+}
+
+model ReleaseNote {
+  id          String            @id @default(cuid())
+  version     String            @unique
+  title       String
+  summary     String?
+  changes     Json
+  status      ReleaseNoteStatus @default(draft)
+  releasedAt  DateTime          @map("released_at")
+  publishedAt DateTime?         @map("published_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@index([status, releasedAt])
+  @@index([status, publishedAt])
+  @@map("release_notes")
 }
 
 model EventSource {

@@ -1,3 +1,5 @@
+import { enablePublicShare, getSharePayload, trackShare } from '../../utils/share';
+
 Page({
   data: {
     distance: '10',
@@ -8,6 +10,7 @@ Page({
     splits: [] as string[],
   },
   onLoad() {
+    enablePublicShare();
     this.calculate();
   },
   onDistance(event: WechatMiniprogram.Input) {
@@ -65,5 +68,14 @@ Page({
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.round(seconds % 60);
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  },
+  onShareAppMessage() {
+    trackShare('page_share', 'tools');
+    return getSharePayload('tools', '/pages/pace/index');
+  },
+  onShareTimeline() {
+    trackShare('timeline_share', 'tools');
+    const payload = getSharePayload('tools', '/pages/pace/index');
+    return { title: payload.title, imageUrl: payload.imageUrl };
   },
 });

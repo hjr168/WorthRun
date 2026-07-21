@@ -211,3 +211,5 @@ export function isFutureChinaDate(eventDate: string | null | undefined, now: Dat
   if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return true;
   return eventDate > chinaDateOnly(now);
 }
+
+export * from './share.js';

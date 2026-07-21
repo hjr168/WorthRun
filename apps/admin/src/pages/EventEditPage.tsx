@@ -291,6 +291,25 @@ export function EventEditPage() {
                       children: <SourceSummaryPanel eventId={id} />,
                     },
                     {
+                      key: 'share',
+                      label: '分享配置',
+                      children: (
+                        <Section title="赛事分享覆盖">
+                          <Alert
+                            type="info"
+                            showIcon
+                            message="默认继承分享中心的赛事详情模板，重点赛事可单独覆盖标题或图片。"
+                          />
+                          <Button
+                            style={{ marginTop: 16 }}
+                            onClick={() => navigate('/share?tab=events')}
+                          >
+                            前往分享中心管理
+                          </Button>
+                        </Section>
+                      ),
+                    },
+                    {
                       key: 'logs',
                       label: '操作日志',
                       children: <OperationLogTable logs={logs} />,

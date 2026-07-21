@@ -13,7 +13,8 @@
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "db:import-events": "dotenv -e ../../.env -- tsx scripts/import-events-from-csv.ts",
     "cleanup-feedback-rate-limits": "dotenv -e ../../.env -- tsx scripts/cleanup-feedback-rate-limits.ts",
-    "reset-admin-password": "dotenv -e ../../.env -- tsx scripts/reset-admin-password.ts"
+    "reset-admin-password": "dotenv -e ../../.env -- tsx scripts/reset-admin-password.ts",
+    "release-notes:bootstrap": "dotenv -e ../../.env -- tsx scripts/bootstrap-release-notes.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

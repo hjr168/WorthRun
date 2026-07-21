@@ -11,6 +11,7 @@ import {
   ShareAltOutlined,
   ToolOutlined,
   WarningOutlined,
+  RocketOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import {
@@ -33,11 +34,12 @@ import { AiSourcesPage } from './pages/AiSourcesPage';
 import { QualityPage } from './pages/QualityPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ContentPage } from './pages/ContentPage';
-import { ShareStatsPage } from './pages/ShareStatsPage';
 import { LogsPage } from './pages/LogsPage';
 import { AdminProvider } from './context/AdminContext';
 import { EventChangesPage } from './pages/EventChangesPage';
 import { ChoiceStatsPage } from './pages/ChoiceStatsPage';
+import { ShareCenterPage } from './pages/ShareCenterPage';
+import { ReleaseNotesPage } from './pages/ReleaseNotesPage';
 
 const { Content, Sider } = Layout;
 
@@ -86,20 +88,24 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
     : location.pathname.startsWith('/event-changes')
       ? '/event-changes'
       : location.pathname.startsWith('/ai-sources')
-      ? '/ai-sources'
-      : location.pathname.startsWith('/content')
-        ? '/content'
-        : location.pathname.startsWith('/settings')
-          ? '/settings'
-          : location.pathname.startsWith('/quality')
-            ? '/quality'
-            : location.pathname.startsWith('/share-stats')
-              ? '/share-stats'
-              : location.pathname.startsWith('/choice-stats')
-                ? '/choice-stats'
-              : location.pathname.startsWith('/logs')
-                ? '/logs'
-                : '/workbench';
+        ? '/ai-sources'
+        : location.pathname.startsWith('/content')
+          ? '/content'
+          : location.pathname.startsWith('/settings')
+            ? '/settings'
+            : location.pathname.startsWith('/quality')
+              ? '/quality'
+              : location.pathname.startsWith('/share-stats')
+                ? '/share'
+                : location.pathname.startsWith('/share')
+                  ? '/share'
+                  : location.pathname.startsWith('/release-notes')
+                    ? '/release-notes'
+                    : location.pathname.startsWith('/choice-stats')
+                      ? '/choice-stats'
+                      : location.pathname.startsWith('/logs')
+                        ? '/logs'
+                        : '/workbench';
 
   return (
     <Layout className="app-shell">
@@ -136,9 +142,14 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               label: <Link to="/quality">反馈管理</Link>,
             },
             {
-              key: '/share-stats',
+              key: '/share',
               icon: <ShareAltOutlined />,
-              label: <Link to="/share-stats">分享数据</Link>,
+              label: <Link to="/share">分享中心</Link>,
+            },
+            {
+              key: '/release-notes',
+              icon: <RocketOutlined />,
+              label: <Link to="/release-notes">版本更新</Link>,
             },
             {
               key: '/choice-stats',
@@ -180,7 +191,9 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/ai-sources" element={<AiSourcesPage />} />
             <Route path="/event-changes" element={<EventChangesPage />} />
             <Route path="/quality" element={<QualityPage />} />
-            <Route path="/share-stats" element={<ShareStatsPage />} />
+            <Route path="/share" element={<ShareCenterPage />} />
+            <Route path="/share-stats" element={<Navigate to="/share?tab=stats" replace />} />
+            <Route path="/release-notes" element={<ReleaseNotesPage />} />
             <Route path="/choice-stats" element={<ChoiceStatsPage />} />
             <Route path="/content" element={<ContentPage />} />
             <Route path="/settings" element={<SettingsPage />} />

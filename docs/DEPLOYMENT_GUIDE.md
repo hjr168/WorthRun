@@ -14,6 +14,7 @@
   - `ADMIN_TOKEN_SECRET`：后台登录 token 签名密钥，正式环境必须使用高强度随机值。
   - `FEEDBACK_ABUSE_SECRET`：反馈防刷与 IP 摘要使用的独立 HMAC 密钥，正式环境必须配置高强度随机值，不能写入代码或日志。
   - `CORS_ORIGINS`：后台管理站点浏览器跨域白名单，多个域名用英文逗号分隔。
+  - `SHARE_IMAGE_ALLOWED_HOSTS`：后台可填写的外部分享图 HTTPS 主机名白名单，多个值用英文逗号分隔；同一域名还必须加入微信小程序 `downloadFile` 合法域名。
   - `AI_INGEST_PROVIDER`：后台 AI 赛事源抽取模型提供方，支持 `glm`、`deepseek` 和 `openai`；推荐先用 `glm`，也可切到 `deepseek` 测试。
   - `ZHIPUAI_API_KEY` / `GLM_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=glm` 时调用 GLM 抽取所需；不配置时不影响普通赛事 API，但手动抓取会失败。
   - `DEEPSEEK_API_KEY` / `AI_INGEST_API_KEY`：`AI_INGEST_PROVIDER=deepseek` 时调用 DeepSeek 抽取所需；默认模型为 `deepseek-v4-flash`，DeepSeek 官方说明旧模型名 `deepseek-chat` / `deepseek-reasoner` 将于 2026-07-24 废弃，不建议新接入使用。
@@ -38,6 +39,9 @@
 pnpm install
 pnpm db:generate
 pnpm db:migrate
+pnpm release-notes:bootstrap
+# 核对 dry-run 后再创建 V0.5.0 / V0.5.1 草稿
+pnpm release-notes:bootstrap -- --apply
 pnpm --filter @worth-running/api build
 pnpm --filter @worth-running/api start
 ```

@@ -12,6 +12,8 @@ import { complianceNotice, formatDate, formatDateTime } from '../../utils/format
 import { clearUserKey, getUserKey } from '../../utils/user';
 import { feedbackReceiptStorageKey, getFeedbackReceipts } from '../../utils/feedback';
 import { openProductFeedback } from '../../utils/product-feedback';
+import { refreshReleaseBadge } from '../../utils/release-notes';
+import { enableProductShareOnly, getProductHomeShare } from '../../utils/share';
 
 Page({
   data: {
@@ -33,9 +35,14 @@ Page({
       feedbackType: string;
       createdAtText: string;
     }>,
+    hasNewRelease: false,
   },
   onShow() {
+    enableProductShareOnly();
     this.load();
+    refreshReleaseBadge()
+      .then((result) => this.setData({ hasNewRelease: result.hasNew }))
+      .catch(() => {});
   },
   async load() {
     const userKey = getUserKey();
@@ -68,8 +75,7 @@ Page({
         : '尚未设置偏好';
       const feedbackReceipts = getFeedbackReceipts().map((item) => ({
         ...item,
-        displayTitle:
-          item.scope === 'product_feedback' ? '产品反馈' : item.eventName || '赛事纠错',
+        displayTitle: item.scope === 'product_feedback' ? '产品反馈' : item.eventName || '赛事纠错',
         createdAtText: formatDateTime(item.createdAt),
       }));
       this.setData({
@@ -120,6 +126,9 @@ Page({
   openTools() {
     wx.navigateTo({ url: '/pages/tools/index' });
   },
+  openReleaseNotes() {
+    wx.navigateTo({ url: '/pages/release-notes/index' });
+  },
   openNextEvent() {
     if (!this.data.nextEvent) return;
     wx.navigateTo({ url: `/pages/event-detail/index?id=${this.data.nextEvent.id}` });
@@ -137,5 +146,8 @@ Page({
         this.load();
       },
     });
+  },
+  onShareAppMessage() {
+    return getProductHomeShare();
   },
 });

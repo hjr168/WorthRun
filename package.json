@@ -22,7 +22,8 @@
     "event-source:bootstrap-v0.4.2": "pnpm --filter @worth-running/api event-source:bootstrap-v0.4.2",
     "data:backfill-candidate-confirmation-links": "pnpm --filter @worth-running/api data:backfill-candidate-confirmation-links",
     "feedback:maintenance": "pnpm --filter @worth-running/api feedback:maintenance",
-    "source-summary:backfill": "pnpm --filter @worth-running/api source-summary:backfill"
+    "source-summary:backfill": "pnpm --filter @worth-running/api source-summary:backfill",
+    "release-notes:bootstrap": "pnpm --filter @worth-running/database release-notes:bootstrap"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

@@ -4,6 +4,7 @@ const api_1 = require("../../utils/api");
 const user_1 = require("../../utils/user");
 const home_1 = require("../../utils/home");
 const product_feedback_1 = require("../../utils/product-feedback");
+const share_1 = require("../../utils/share");
 Page({
     data: {
         loading: true,
@@ -16,6 +17,9 @@ Page({
         closingEvents: [],
         recentEvents: [],
         fallbackNotice: '',
+    },
+    onLoad() {
+        (0, share_1.enablePublicShare)();
     },
     onShow() {
         this.load();
@@ -100,5 +104,14 @@ Page({
         catch (_a) {
             wx.showToast({ title: isFavorite ? '取消收藏失败' : '收藏失败', icon: 'none' });
         }
+    },
+    onShareAppMessage() {
+        (0, share_1.trackShare)('page_share', 'home');
+        return (0, share_1.getSharePayload)('home', '/pages/home/index');
+    },
+    onShareTimeline() {
+        (0, share_1.trackShare)('timeline_share', 'home');
+        const payload = (0, share_1.getSharePayload)('home', '/pages/home/index');
+        return { title: payload.title, imageUrl: payload.imageUrl };
     },
 });

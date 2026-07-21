@@ -7,6 +7,7 @@ const launch_1 = require("../../utils/launch");
 const feedback_1 = require("../../utils/feedback");
 const event_detail_1 = require("../../utils/event-detail");
 const product_feedback_1 = require("../../utils/product-feedback");
+const share_1 = require("../../utils/share");
 Page({
     data: {
         id: '',
@@ -34,6 +35,7 @@ Page({
         officialActionText: format_1.officialActionText,
     },
     onLoad(query) {
+        (0, share_1.enablePublicShare)();
         this.setData({ id: (0, launch_1.resolveEventId)(query), userKey: (0, user_1.getUserKey)() });
         this.load();
     },
@@ -69,9 +71,7 @@ Page({
                 sourceCheckedAtText: detail.event.sourceCheckedAt
                     ? (0, format_1.formatDateTime)(detail.event.sourceCheckedAt)
                     : '等待复核',
-                updatedAtText: detail.event.updatedAt
-                    ? (0, format_1.formatDateTime)(detail.event.updatedAt)
-                    : '待确认',
+                updatedAtText: detail.event.updatedAt ? (0, format_1.formatDateTime)(detail.event.updatedAt) : '待确认',
                 eventNotice: (0, event_detail_1.getEventNotice)(detail.event),
                 hasChoiceCounts: (0, event_detail_1.hasChoiceCounts)(detail.event.choiceCounts),
                 infoStatusText: (0, format_1.labelOf)(format_1.infoStatusLabels, detail.event.infoStatus),
@@ -255,24 +255,33 @@ Page({
     },
     onShareAppMessage() {
         const event = this.data.event;
-        if (event) {
-            (0, api_1.recordShare)({
-                userKey: this.data.userKey,
-                eventId: event.id,
-                shareType: 'page_share',
-                scene: 'event_detail',
-            }).catch(() => { });
-        }
-        return {
-            title: event ? `这场值得跑吗？${event.eventName}` : '哪场值得跑｜大湾区跑步赛事决策工具',
-            path: event ? `/pages/event-detail/index?id=${event.id}` : '/pages/home/index',
-        };
+        (0, share_1.trackShare)('page_share', 'event_detail', event === null || event === void 0 ? void 0 : event.id);
+        if (!event)
+            return (0, share_1.getSharePayload)('home', '/pages/home/index');
+        return (0, share_1.getSharePayload)('event_detail', `/pages/event-detail/index?id=${event.id}`, {
+            eventName: event.eventName,
+            city: event.city,
+            eventDate: event.eventDate,
+            distance: event.distanceItems.join('、'),
+            judgement: event.runJudgement,
+        }, event.resolvedShare);
     },
     onShareTimeline() {
         const event = this.data.event;
+        (0, share_1.trackShare)('timeline_share', 'event_detail', event === null || event === void 0 ? void 0 : event.id);
+        const payload = event
+            ? (0, share_1.getSharePayload)('event_detail', `/pages/event-detail/index?id=${event.id}`, {
+                eventName: event.eventName,
+                city: event.city,
+                eventDate: event.eventDate,
+                distance: event.distanceItems.join('、'),
+                judgement: event.runJudgement,
+            }, event.resolvedShare)
+            : (0, share_1.getSharePayload)('home', '/pages/home/index');
         return {
-            title: event ? `这场值得跑吗？${event.eventName}` : '哪场值得跑',
+            title: payload.title,
             query: event ? `id=${event.id}` : '',
+            imageUrl: payload.imageUrl,
         };
     },
 });

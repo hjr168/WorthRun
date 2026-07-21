@@ -138,6 +138,14 @@
 - [ ] `ops/logrotate/worth-running` 已安装并通过 `logrotate -d`，未安装 PM2 常驻模块。
 - [ ] API RSS 小于 220MB，反馈维护任务峰值小于 120MB，cron 数量没有增加。
 
+## 13. 分享与版本更新中心
+
+- [ ] 数据库已备份并应用 `20260721090000_share_settings_and_release_notes`迁移。
+- [ ] `pnpm release-notes:bootstrap` dry-run 数量已核对，需要时再使用 `-- --apply` 创建历史草稿。
+- [ ] 后台全局分享模板、单赛事覆盖、发起数据和版本日志权限已验证。
+- [ ] 外部分享图主机名已配置 `SHARE_IMAGE_ALLOWED_HOSTS` 和微信合法域名；未使用外部图时保持内置默认。
+- [ ] 只发布经人工确认的版本日志，草稿不对小程序公开。
+
 ## 注意事项
 
 - `urlCheck=false` 只允许开发调试，不能用于体验版上传、提审或正式发布。

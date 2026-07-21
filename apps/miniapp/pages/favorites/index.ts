@@ -1,6 +1,7 @@
 import { ApiError, EventSummary, getFavorites, removeFavorite } from '../../utils/api';
 import { getUserKey } from '../../utils/user';
 import { openProductFeedback } from '../../utils/product-feedback';
+import { enableProductShareOnly, getProductHomeShare } from '../../utils/share';
 
 Page({
   data: {
@@ -11,6 +12,7 @@ Page({
     events: [] as EventSummary[],
   },
   onShow() {
+    enableProductShareOnly();
     this.load();
   },
   async load() {
@@ -54,5 +56,8 @@ Page({
   },
   openEvents() {
     wx.switchTab({ url: '/pages/events/index' });
+  },
+  onShareAppMessage() {
+    return getProductHomeShare();
   },
 });

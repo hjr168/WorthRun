@@ -8,7 +8,13 @@ import {
   feedbackStatusValues,
   infoStatusValues,
   publishStatusValues,
+  defaultShareSettings,
+  findUnknownShareVariables,
+  isAllowedShareImageUrl,
+  mergeShareSettings,
+  resolveShareSetting,
   runJudgementValues,
+  shareSceneValues,
   signupStatusValues,
   sourceLevelValues,
 } from '@worth-running/shared';
@@ -19,6 +25,7 @@ import type {
   RunJudgement,
   SignupStatus,
   SourceLevel,
+  ShareSettings,
 } from '@worth-running/shared';
 import { z, ZodError } from 'zod';
 import { aiEventCandidateSchema } from './ai/eventCandidateSchema.js';
@@ -70,11 +77,7 @@ import { previewBulkAccept, runBulkAccept } from './candidateAcceptWorkflow.js';
 import { eventPublishIssues, previewBulkPublish, runBulkPublish } from './eventPublishWorkflow.js';
 import { buildFeedbackSummary, feedbackDisposition, runFeedbackBulk } from './feedbackWorkflow.js';
 import { chinaDay } from './feedbackMaintenance.js';
-import {
-  apiRouteGroup,
-  buildApiErrorSummary,
-  recordApiErrorMetric,
-} from './apiStability.js';
+import { apiRouteGroup, buildApiErrorSummary, recordApiErrorMetric } from './apiStability.js';
 import { runGracefulShutdown } from './gracefulShutdown.js';
 import {
   EventChangeConflictError,
@@ -96,10 +99,7 @@ import {
   removeEventChoice,
   setEventChoice,
 } from './eventChoiceWorkflow.js';
-import {
-  eventChoiceStatsSortValues,
-  getAdminEventChoiceStats,
-} from './eventChoiceStats.js';
+import { eventChoiceStatsSortValues, getAdminEventChoiceStats } from './eventChoiceStats.js';
 import { SourceSummaryGenerationError } from './sourceSummaryGeneration.js';
 import {
   SourceSummaryConflictError,
@@ -128,6 +128,10 @@ if (isProduction && !process.env.FEEDBACK_ABUSE_SECRET) {
 
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'worth-running-dev-secret';
 const feedbackAbuseSecret = process.env.FEEDBACK_ABUSE_SECRET || tokenSecret;
+const shareImageAllowedHosts = (process.env.SHARE_IMAGE_ALLOWED_HOSTS ?? '')
+  .split(',')
+  .map((value) => value.trim().toLowerCase())
+  .filter(Boolean);
 const eventChoiceRateLimit = {
   scope: 'event-choice-user',
   windowMs: 60_000,
@@ -405,8 +409,83 @@ const sourceSummaryPublishSchema = z.object({
 const shareRecordSchema = z.object({
   userKey: z.string().trim().min(1, 'userKey 不能为空').max(100),
   eventId: z.string().trim().min(1).optional(),
-  shareType: z.enum(['page_share', 'image_generate']),
-  scene: z.enum(['event_detail', 'after_favorite', 'home', 'events', 'share_card']),
+  shareType: z.enum(['page_share', 'timeline_share', 'image_generate']),
+  scene: z.enum([
+    'event_detail',
+    'after_favorite',
+    'home',
+    'events',
+    'share_card',
+    'tools',
+    'source_summary',
+    'release_notes',
+    'personal_home',
+  ]),
+});
+
+const shareImageUrlSchema = z
+  .string()
+  .trim()
+  .min(1, '分享图片不能为空')
+  .superRefine((value, context) => {
+    if (!isAllowedShareImageUrl(value, shareImageAllowedHosts)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '分享图片必须是内置资源，或来自 SHARE_IMAGE_ALLOWED_HOSTS 的 HTTPS URL',
+      });
+    }
+  });
+
+const shareTitleTemplateSchema = z
+  .string()
+  .trim()
+  .min(1, '分享标题不能为空')
+  .max(120)
+  .superRefine((value, context) => {
+    const unknown = findUnknownShareVariables(value);
+    if (unknown.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `未知模板变量：${unknown.join('、')}`,
+      });
+    }
+  });
+
+const shareSceneSettingSchema = z.object({
+  titleTemplate: shareTitleTemplateSchema,
+  imageUrl: shareImageUrlSchema,
+});
+
+const shareSettingsSchema = z.object({
+  scenes: z.object(
+    Object.fromEntries(shareSceneValues.map((scene) => [scene, shareSceneSettingSchema])) as Record<
+      (typeof shareSceneValues)[number],
+      typeof shareSceneSettingSchema
+    >,
+  ),
+});
+
+const eventShareOverrideSchema = z
+  .object({
+    titleTemplate: shareTitleTemplateSchema.nullable().optional(),
+    imageUrl: shareImageUrlSchema.nullable().optional(),
+  })
+  .refine((value) => Boolean(value.titleTemplate || value.imageUrl), '请至少设置标题或图片之一');
+
+const releaseChangeSchema = z.object({
+  category: z.enum(['feature', 'improvement', 'fix']),
+  description: z.string().trim().min(1, '变更说明不能为空').max(200),
+});
+
+const releaseNoteInputSchema = z.object({
+  version: z
+    .string()
+    .trim()
+    .regex(/^v\d+\.\d+\.\d+$/i, '版本号格式应为 Vx.y.z'),
+  title: z.string().trim().min(1, '标题不能为空').max(80),
+  summary: z.string().trim().max(500).nullable().optional(),
+  changes: z.array(releaseChangeSchema).min(1, '请至少填写一项更新').max(20),
+  releasedAt: z.string().datetime('更新时间格式无效'),
 });
 
 const interactionSchema = z.object({
@@ -462,9 +541,7 @@ const eventChoiceStatsQuerySchema = paginationQuerySchema
   })
   .refine(
     (value) =>
-      !value.eventDateFrom ||
-      !value.eventDateTo ||
-      value.eventDateFrom <= value.eventDateTo,
+      !value.eventDateFrom || !value.eventDateTo || value.eventDateFrom <= value.eventDateTo,
     { message: '比赛日期起始值不能晚于结束值', path: ['eventDateFrom'] },
   );
 
@@ -735,6 +812,46 @@ async function writeOperationLog(params: {
       note: params.note,
     },
   });
+}
+
+async function getPublicShareSettings(): Promise<ShareSettings> {
+  const config = await prisma.systemConfig.findUnique({ where: { configKey: 'share_settings' } });
+  return mergeShareSettings(
+    config?.configValue,
+    config?.updatedAt.toISOString() || defaultShareSettings.revision,
+  );
+}
+
+function releaseNotePayload(input: z.infer<typeof releaseNoteInputSchema>) {
+  return {
+    version: input.version.toUpperCase(),
+    title: input.title,
+    summary: input.summary || null,
+    changes: input.changes as Prisma.InputJsonValue,
+    releasedAt: new Date(input.releasedAt),
+  };
+}
+
+function encodeReleaseCursor(item: { id: string; releasedAt: Date }) {
+  return Buffer.from(
+    JSON.stringify({ id: item.id, releasedAt: item.releasedAt.toISOString() }),
+  ).toString('base64url');
+}
+
+function decodeReleaseCursor(value: unknown) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8')) as {
+      id?: string;
+      releasedAt?: string;
+    };
+    if (!parsed.id || !parsed.releasedAt || Number.isNaN(new Date(parsed.releasedAt).getTime())) {
+      throw new Error('invalid');
+    }
+    return { id: parsed.id, releasedAt: new Date(parsed.releasedAt) };
+  } catch {
+    throw new HttpError(400, 'cursor 无效');
+  }
 }
 
 function getClientIp(req: Request) {
@@ -2101,27 +2218,246 @@ app.put(
 );
 
 app.get(
+  '/api/admin/share-settings',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    res.json({
+      settings: await getPublicShareSettings(),
+      allowedHosts: shareImageAllowedHosts,
+    });
+  }),
+);
+
+app.put(
+  '/api/admin/share-settings',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin']);
+    const input = validateBody(shareSettingsSchema, req.body);
+    const before = await prisma.systemConfig.findUnique({ where: { configKey: 'share_settings' } });
+    const updated = await prisma.systemConfig.upsert({
+      where: { configKey: 'share_settings' },
+      create: {
+        configKey: 'share_settings',
+        configValue: input as Prisma.InputJsonValue,
+        description: '小程序原生分享场景标题与图片',
+      },
+      update: { configValue: input as Prisma.InputJsonValue },
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'share_settings.update',
+      targetType: 'share_settings',
+      targetId: updated.id,
+      beforeValue: before,
+      afterValue: updated,
+      note: '更新全局分享设置',
+    });
+    res.json({
+      settings: mergeShareSettings(updated.configValue, updated.updatedAt.toISOString()),
+    });
+  }),
+);
+
+app.get(
+  '/api/admin/event-share-overrides',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = validateQuery(
+      paginationQuerySchema.extend({ search: queryStringSchema }),
+      req.query,
+    );
+    const search = typeof query.search === 'string' ? query.search : undefined;
+    const where: Prisma.EventWhereInput = search
+      ? { eventName: { contains: search, mode: 'insensitive' } }
+      : {};
+    const [items, total] = await Promise.all([
+      prisma.event.findMany({
+        where,
+        select: {
+          id: true,
+          eventName: true,
+          city: true,
+          eventDate: true,
+          publishStatus: true,
+          shareOverride: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip: ((query.page ?? 1) - 1) * (query.pageSize ?? 20),
+        take: query.pageSize ?? 20,
+      }),
+      prisma.event.count({ where }),
+    ]);
+    res.json({ items, total, page: query.page, pageSize: query.pageSize });
+  }),
+);
+
+app.put(
+  '/api/admin/events/:id/share-override',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(eventShareOverrideSchema, req.body);
+    const event = await prisma.event.findUnique({
+      where: { id: req.params.id },
+      select: { id: true },
+    });
+    if (!event) throw new HttpError(404, '赛事不存在');
+    const before = await prisma.eventShareOverride.findUnique({ where: { eventId: event.id } });
+    const updated = await prisma.eventShareOverride.upsert({
+      where: { eventId: event.id },
+      create: { eventId: event.id, titleTemplate: input.titleTemplate, imageUrl: input.imageUrl },
+      update: { titleTemplate: input.titleTemplate, imageUrl: input.imageUrl },
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_share_override.update',
+      targetType: 'event_share_override',
+      targetId: updated.id,
+      beforeValue: before,
+      afterValue: updated,
+      note: '更新赛事分享覆盖',
+    });
+    res.json(updated);
+  }),
+);
+
+app.delete(
+  '/api/admin/events/:id/share-override',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const before = await prisma.eventShareOverride.findUnique({
+      where: { eventId: req.params.id },
+    });
+    if (!before) {
+      res.status(204).send();
+      return;
+    }
+    await prisma.eventShareOverride.delete({ where: { eventId: req.params.id } });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_share_override.delete',
+      targetType: 'event_share_override',
+      targetId: before.id,
+      beforeValue: before,
+      note: '清除赛事分享覆盖',
+    });
+    res.status(204).send();
+  }),
+);
+
+app.get(
+  '/api/admin/release-notes',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const items = await prisma.releaseNote.findMany({
+      orderBy: [{ releasedAt: 'desc' }, { id: 'desc' }],
+    });
+    res.json({ items });
+  }),
+);
+
+app.post(
+  '/api/admin/release-notes',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(releaseNoteInputSchema, req.body);
+    const data = releaseNotePayload(input);
+    if (await prisma.releaseNote.findUnique({ where: { version: data.version } })) {
+      throw new HttpError(409, '版本号已存在');
+    }
+    const created = await prisma.releaseNote.create({ data });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'release_note.create',
+      targetType: 'release_note',
+      targetId: created.id,
+      afterValue: created,
+      note: `创建更新日志 ${created.version}`,
+    });
+    res.status(201).json(created);
+  }),
+);
+
+app.put(
+  '/api/admin/release-notes/:id',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(releaseNoteInputSchema, req.body);
+    const before = await prisma.releaseNote.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new HttpError(404, '更新日志不存在');
+    if (before.status === 'published') throw new HttpError(409, '已发布日志请先下线再编辑');
+    const data = releaseNotePayload(input);
+    const duplicate = await prisma.releaseNote.findFirst({
+      where: { version: data.version, id: { not: before.id } },
+    });
+    if (duplicate) throw new HttpError(409, '版本号已存在');
+    const updated = await prisma.releaseNote.update({ where: { id: before.id }, data });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'release_note.update',
+      targetType: 'release_note',
+      targetId: updated.id,
+      beforeValue: before,
+      afterValue: updated,
+      note: `编辑更新日志 ${updated.version}`,
+    });
+    res.json(updated);
+  }),
+);
+
+app.patch(
+  '/api/admin/release-notes/:id/status',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator']);
+    const input = validateBody(z.object({ action: z.enum(['publish', 'offline']) }), req.body);
+    const before = await prisma.releaseNote.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new HttpError(404, '更新日志不存在');
+    if (input.action === 'offline' && before.status !== 'published') {
+      throw new HttpError(409, '只有已发布日志可下线');
+    }
+    const updated = await prisma.releaseNote.update({
+      where: { id: before.id },
+      data:
+        input.action === 'publish'
+          ? { status: 'published', publishedAt: before.publishedAt || new Date() }
+          : { status: 'offline' },
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: `release_note.${input.action}`,
+      targetType: 'release_note',
+      targetId: updated.id,
+      beforeValue: before,
+      afterValue: updated,
+      note: `${input.action === 'publish' ? '发布' : '下线'}更新日志 ${updated.version}`,
+    });
+    res.json(updated);
+  }),
+);
+
+app.get(
   '/api/admin/share-records/stats',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const [total, pageShares, imageGenerates, topEventsRaw, dailyRaw] = await Promise.all([
-      prisma.shareRecord.count(),
-      prisma.shareRecord.count({ where: { shareType: 'page_share' } }),
-      prisma.shareRecord.count({ where: { shareType: 'image_generate' } }),
-      prisma.shareRecord.groupBy({
-        by: ['eventId'],
-        _count: { _all: true },
-        orderBy: { _count: { id: 'desc' } },
-        take: 10,
-      }),
-      prisma.shareRecord.findMany({
-        where: { createdAt: { gte: since } },
-        select: { shareType: true, createdAt: true },
-      }),
-    ]);
+    const [total, pageShares, timelineShares, imageGenerates, topEventsRaw, dailyRaw] =
+      await Promise.all([
+        prisma.shareRecord.count(),
+        prisma.shareRecord.count({ where: { shareType: 'page_share' } }),
+        prisma.shareRecord.count({ where: { shareType: 'timeline_share' } }),
+        prisma.shareRecord.count({ where: { shareType: 'image_generate' } }),
+        prisma.shareRecord.groupBy({
+          by: ['eventId'],
+          _count: { _all: true },
+          orderBy: { _count: { id: 'desc' } },
+          take: 10,
+        }),
+        prisma.shareRecord.findMany({
+          where: { createdAt: { gte: since } },
+          select: { shareType: true, createdAt: true },
+        }),
+      ]);
 
     const eventIds = topEventsRaw.map((item) => item.eventId).filter(Boolean) as string[];
     const events = await prisma.event.findMany({
@@ -2135,19 +2471,27 @@ app.get(
     }));
 
     // 按天聚合趋势
-    const dailyMap = new Map<string, { pageShare: number; imageGenerate: number }>();
+    const dailyMap = new Map<
+      string,
+      { pageShare: number; timelineShare: number; imageGenerate: number }
+    >();
     for (const record of dailyRaw) {
       const day = record.createdAt.toISOString().slice(0, 10);
-      const entry = dailyMap.get(day) || { pageShare: 0, imageGenerate: 0 };
+      const entry = dailyMap.get(day) || { pageShare: 0, timelineShare: 0, imageGenerate: 0 };
       if (record.shareType === 'page_share') entry.pageShare += 1;
-      else entry.imageGenerate += 1;
+      else if (record.shareType === 'timeline_share') entry.timelineShare += 1;
+      else if (record.shareType === 'image_generate') entry.imageGenerate += 1;
       dailyMap.set(day, entry);
     }
     const daily = Array.from(dailyMap.entries())
-      .map(([day, counts]) => ({ day, ...counts, total: counts.pageShare + counts.imageGenerate }))
+      .map(([day, counts]) => ({
+        day,
+        ...counts,
+        total: counts.pageShare + counts.timelineShare + counts.imageGenerate,
+      }))
       .sort((a, b) => a.day.localeCompare(b.day));
 
-    res.json({ total, pageShares, imageGenerates, topEvents, daily });
+    res.json({ total, pageShares, timelineShares, imageGenerates, topEvents, daily });
   }),
 );
 
@@ -2175,11 +2519,61 @@ app.get(
         eventDateFrom: query.eventDateFrom
           ? new Date(`${query.eventDateFrom}T00:00:00.000Z`)
           : undefined,
-        eventDateTo: query.eventDateTo
-          ? new Date(`${query.eventDateTo}T00:00:00.000Z`)
-          : undefined,
+        eventDateTo: query.eventDateTo ? new Date(`${query.eventDateTo}T00:00:00.000Z`) : undefined,
       }),
     );
+  }),
+);
+
+app.get(
+  '/api/share-settings',
+  asyncHandler(async (_req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.json({ settings: await getPublicShareSettings() });
+  }),
+);
+
+app.get(
+  '/api/release-notes/latest',
+  asyncHandler(async (_req, res) => {
+    const item = await prisma.releaseNote.findFirst({
+      where: { status: 'published' },
+      select: { id: true, version: true, releasedAt: true, publishedAt: true },
+      orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+    });
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    res.json({ item });
+  }),
+);
+
+app.get(
+  '/api/release-notes',
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
+    const cursor = decodeReleaseCursor(req.query.cursor);
+    const items = await prisma.releaseNote.findMany({
+      where: {
+        status: 'published',
+        ...(cursor
+          ? {
+              OR: [
+                { releasedAt: { lt: cursor.releasedAt } },
+                { releasedAt: cursor.releasedAt, id: { lt: cursor.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ releasedAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    });
+    const hasMore = items.length > limit;
+    const visible = hasMore ? items.slice(0, limit) : items;
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    res.json({
+      items: visible,
+      nextCursor:
+        hasMore && visible.length ? encodeReleaseCursor(visible[visible.length - 1]) : null,
+    });
   }),
 );
 
@@ -2257,11 +2651,27 @@ app.get(
           orderBy: { publishedAt: 'desc' },
           take: 1,
         },
+        shareOverride: true,
       },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
-    const { changeAlerts, sourceSummaries, ...publicEvent } = event;
-    const choiceCounts = await getEventChoiceCounts(event.id);
+    const { changeAlerts, sourceSummaries, shareOverride, ...publicEvent } = event;
+    const [choiceCounts, shareSettings] = await Promise.all([
+      getEventChoiceCounts(event.id),
+      getPublicShareSettings(),
+    ]);
+    const resolvedShare = resolveShareSetting(
+      shareSettings,
+      'event_detail',
+      {
+        eventName: event.eventName,
+        city: event.city,
+        eventDate: event.eventDate.toISOString().slice(0, 10),
+        distance: event.distanceItems.join('、'),
+        judgement: event.runJudgement,
+      },
+      shareOverride || {},
+    );
     res.json({
       event: {
         ...publicEvent,
@@ -2269,6 +2679,7 @@ app.get(
         hasSourceSummary: sourceSummaries.length > 0,
         sourceSummaryStale: Boolean(sourceSummaries[0]?.staleAt),
         choiceCounts,
+        resolvedShare,
       },
       complianceNotice,
       officialActionText,
@@ -2778,7 +3189,9 @@ async function shutdown(signal: string, exitCode: number) {
     disconnectDatabase: () => prisma.$disconnect().catch(() => undefined),
   });
   if (result.timedOut) server.closeAllConnections();
-  console.log(JSON.stringify({ event: 'api_shutdown_completed', signal, timedOut: result.timedOut }));
+  console.log(
+    JSON.stringify({ event: 'api_shutdown_completed', signal, timedOut: result.timedOut }),
+  );
   process.exit(exitCode);
 }
 

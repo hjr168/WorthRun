@@ -156,6 +156,9 @@
   line-height: 1.35;
 }
 
+.menu-title-line { display: flex; align-items: center; gap: 12rpx; }
+.new-badge { padding: 3rpx 11rpx; border-radius: 999rpx; color: #fff; background: #e76f51; font-size: 20rpx; line-height: 1.4; }
+
 .menu-summary {
   color: #64748b;
   font-size: 22rpx;

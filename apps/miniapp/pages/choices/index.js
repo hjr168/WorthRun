@@ -4,6 +4,7 @@ const api_1 = require("../../utils/api");
 const format_1 = require("../../utils/format");
 const user_1 = require("../../utils/user");
 const product_feedback_1 = require("../../utils/product-feedback");
+const share_1 = require("../../utils/share");
 const choiceLabels = {
     interested: '想跑',
     considering: '观望',
@@ -25,6 +26,7 @@ Page({
         items: [],
     },
     onShow() {
+        (0, share_1.enableProductShareOnly)();
         this.load();
     },
     async load() {
@@ -84,5 +86,8 @@ Page({
     },
     openEvents() {
         wx.switchTab({ url: '/pages/events/index' });
+    },
+    onShareAppMessage() {
+        return (0, share_1.getProductHomeShare)();
     },
 });

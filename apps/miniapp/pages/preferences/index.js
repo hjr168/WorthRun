@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("../../utils/api");
 const user_1 = require("../../utils/user");
+const share_1 = require("../../utils/share");
 const cityOptions = ['广州', '深圳', '佛山', '东莞', '珠海', '中山', '惠州', '香港', '澳门'];
 const distanceOptions = ['5K', '10K', '半马', '全马', '欢乐跑'];
 const focusOptions = ['新手友好', '交通方便', '风景路线', '适合 PB', '周末可去', '信息完整'];
@@ -21,6 +22,7 @@ Page({
         focusChips: makeChips(focusOptions, []),
     },
     onLoad() {
+        (0, share_1.enableProductShareOnly)();
         this.load();
     },
     async load() {
@@ -43,7 +45,9 @@ Page({
     toggleChip(event) {
         const { group, value } = event.currentTarget.dataset;
         const current = (this.data[group] || []);
-        const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+        const next = current.includes(value)
+            ? current.filter((item) => item !== value)
+            : [...current, value];
         const patch = { [group]: next };
         if (group === 'cities')
             patch.cityChips = makeChips(cityOptions, next);
@@ -83,5 +87,8 @@ Page({
     },
     skip() {
         wx.navigateBack();
+    },
+    onShareAppMessage() {
+        return (0, share_1.getProductHomeShare)();
     },
 });

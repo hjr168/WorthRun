@@ -1,4 +1,40 @@
 import { InfoStatus, PublishStatus, RunJudgement, SignupStatus } from '@worth-running/shared';
+import type { ShareSettings } from '@worth-running/shared';
+
+export type { ShareSettings };
+
+export interface EventShareOverride {
+  id: string;
+  eventId: string;
+  titleTemplate?: string | null;
+  imageUrl?: string | null;
+  updatedAt: string;
+}
+
+export interface EventShareOverrideRow {
+  id: string;
+  eventName: string;
+  city: string;
+  eventDate: string;
+  publishStatus: PublishStatus;
+  shareOverride?: EventShareOverride | null;
+}
+
+export type ReleaseNoteStatus = 'draft' | 'published' | 'offline';
+export type ReleaseChangeCategory = 'feature' | 'improvement' | 'fix';
+
+export interface ReleaseNoteItem {
+  id: string;
+  version: string;
+  title: string;
+  summary?: string | null;
+  changes: Array<{ category: ReleaseChangeCategory; description: string }>;
+  status: ReleaseNoteStatus;
+  releasedAt: string;
+  publishedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface AdminEvent {
   id: string;
@@ -65,10 +101,7 @@ export interface EventSourceSummaryItem {
 }
 
 export type EventChoiceStatsSort =
-  | 'total_desc'
-  | 'event_date_asc'
-  | 'event_date_desc'
-  | 'recent_choice_desc';
+  'total_desc' | 'event_date_asc' | 'event_date_desc' | 'recent_choice_desc';
 
 export interface EventChoiceStatsQuery {
   page: number;

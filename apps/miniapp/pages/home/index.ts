@@ -11,6 +11,7 @@ import {
 import { getUserKey } from '../../utils/user';
 import { groupHomeEvents } from '../../utils/home';
 import { openProductFeedback } from '../../utils/product-feedback';
+import { enablePublicShare, getSharePayload, trackShare } from '../../utils/share';
 
 Page({
   data: {
@@ -24,6 +25,9 @@ Page({
     closingEvents: [] as EventSummary[],
     recentEvents: [] as EventSummary[],
     fallbackNotice: '',
+  },
+  onLoad() {
+    enablePublicShare();
   },
   onShow() {
     this.load();
@@ -121,5 +125,14 @@ Page({
     } catch {
       wx.showToast({ title: isFavorite ? '取消收藏失败' : '收藏失败', icon: 'none' });
     }
+  },
+  onShareAppMessage() {
+    trackShare('page_share', 'home');
+    return getSharePayload('home', '/pages/home/index');
+  },
+  onShareTimeline() {
+    trackShare('timeline_share', 'home');
+    const payload = getSharePayload('home', '/pages/home/index');
+    return { title: payload.title, imageUrl: payload.imageUrl };
   },
 });

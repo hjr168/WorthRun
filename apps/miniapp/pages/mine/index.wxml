@@ -61,6 +61,13 @@
         <view class="menu-copy"><text class="menu-title">跑前工具</text><text class="menu-summary">配速估算与赛前清单</text></view>
         <text class="menu-action">打开</text>
       </view>
+      <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openReleaseNotes" aria-label="打开版本更新">
+        <view class="menu-copy">
+          <view class="menu-title-line"><text class="menu-title">版本更新</text><text wx:if="{{hasNewRelease}}" class="new-badge">新</text></view>
+          <text class="menu-summary">查看更新时间线和功能说明</text>
+        </view>
+        <text class="menu-action">查看</text>
+      </view>
     </view>
 
     <view wx:if="{{feedbackReceipts.length}}" class="receipt-section">

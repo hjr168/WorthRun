@@ -4,6 +4,7 @@ import { formatDate, formatDistance } from '../../utils/format';
 import { getEventDisplayStatus } from '../../utils/event-detail';
 import { getUserKey } from '../../utils/user';
 import { resolveMiniProgramEnvVersion } from '../../utils/launch';
+import { enableProductShareOnly, getSharePayload, trackShare } from '../../utils/share';
 
 const CANVAS_W = 375;
 const CANVAS_H = 667;
@@ -126,6 +127,7 @@ Page({
   canvasNode: null as CanvasNode | null,
 
   onLoad(query: { id?: string }) {
+    enableProductShareOnly();
     this.setData({ id: query.id || '', userKey: getUserKey() });
     this.updateCanvasDisplaySize();
     this.load();
@@ -189,7 +191,9 @@ Page({
           ctx.scale(dpr, dpr);
           // 先渲染布局，再异步绘制（等小程序码图片加载）
           wx.nextTick(() => {
-            this.drawShareCard(ctx).then(resolve).catch(() => resolve());
+            this.drawShareCard(ctx)
+              .then(resolve)
+              .catch(() => resolve());
           });
         })
         .exec();
@@ -197,7 +201,9 @@ Page({
   },
 
   /** 主绘制流程，包含小程序码图片加载（异步）。 */
-  async drawShareCard(ctx: WechatMiniprogram.CanvasContext.CanvasRenderingContext2D): Promise<void> {
+  async drawShareCard(
+    ctx: WechatMiniprogram.CanvasContext.CanvasRenderingContext2D,
+  ): Promise<void> {
     const event = this.data.event;
     const W = CANVAS_W;
     const H = CANVAS_H;
@@ -228,9 +234,11 @@ Page({
     let y = wrapText(ctx, event.eventName || '赛事名称待确认', 20, 100, W - 40, 28, 2);
 
     // 4. 赛事元信息：城市 · 日期 · 距离
-    const metaParts = [event.city, formatDate(event.eventDate), formatDistance(event.distanceItems)].filter(
-      (part) => part && part !== '待确认' && part !== '距离待确认',
-    );
+    const metaParts = [
+      event.city,
+      formatDate(event.eventDate),
+      formatDistance(event.distanceItems),
+    ].filter((part) => part && part !== '待确认' && part !== '距离待确认');
     const metaText = metaParts.length > 0 ? metaParts.join(' · ') : '信息待确认';
     ctx.fillStyle = '#64748B';
     ctx.font = '14px sans-serif';
@@ -411,15 +419,18 @@ Page({
   toTempFile(): void {
     const canvas = this.canvasNode;
     if (!canvas) return;
-    wx.canvasToTempFilePath({
-      canvas: canvas as any,
-      success: (res) => {
-        this.setData({ tempFilePath: res.tempFilePath });
+    wx.canvasToTempFilePath(
+      {
+        canvas: canvas as any,
+        success: (res) => {
+          this.setData({ tempFilePath: res.tempFilePath });
+        },
+        fail: () => {
+          wx.showToast({ title: '图片生成失败', icon: 'none' });
+        },
       },
-      fail: () => {
-        wx.showToast({ title: '图片生成失败', icon: 'none' });
-      },
-    }, this);
+      this,
+    );
   },
 
   async saveImage() {
@@ -463,10 +474,19 @@ Page({
 
   onShareAppMessage() {
     const event = this.data.event;
-    return {
-      title: event ? `这场值得跑吗？${event.eventName}` : '哪场值得跑',
-      path: event ? `/pages/event-detail/index?id=${event.id}` : '/pages/home/index',
-      imageUrl: this.data.tempFilePath || undefined,
-    };
+    trackShare('page_share', 'event_detail', event?.id);
+    if (!event) return getSharePayload('home', '/pages/home/index');
+    return getSharePayload(
+      'event_detail',
+      `/pages/event-detail/index?id=${event.id}`,
+      {
+        eventName: event.eventName,
+        city: event.city,
+        eventDate: event.eventDate,
+        distance: event.distanceItems.join('、'),
+        judgement: event.runJudgement,
+      },
+      { ...event.resolvedShare, imageUrl: this.data.tempFilePath || event.resolvedShare?.imageUrl },
+    );
   },
 });

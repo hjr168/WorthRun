@@ -1,5 +1,6 @@
 import { getPreference, savePreference } from '../../utils/api';
 import { getUserKey } from '../../utils/user';
+import { enableProductShareOnly, getProductHomeShare } from '../../utils/share';
 
 const cityOptions = ['广州', '深圳', '佛山', '东莞', '珠海', '中山', '惠州', '香港', '澳门'];
 const distanceOptions = ['5K', '10K', '半马', '全马', '欢乐跑'];
@@ -22,6 +23,7 @@ Page({
     focusChips: makeChips(focusOptions, []),
   },
   onLoad() {
+    enableProductShareOnly();
     this.load();
   },
   async load() {
@@ -44,7 +46,9 @@ Page({
   toggleChip(event: WechatMiniprogram.TouchEvent) {
     const { group, value } = event.currentTarget.dataset as { group: string; value: string };
     const current = (this.data[group as 'cities' | 'distances' | 'focusTags'] || []) as string[];
-    const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value];
     const patch: Record<string, unknown> = { [group]: next };
     if (group === 'cities') patch.cityChips = makeChips(cityOptions, next);
     if (group === 'distances') patch.distanceChips = makeChips(distanceOptions, next);
@@ -80,5 +84,8 @@ Page({
   },
   skip() {
     wx.navigateBack();
+  },
+  onShareAppMessage() {
+    return getProductHomeShare();
   },
 });

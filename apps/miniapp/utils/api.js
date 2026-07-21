@@ -18,6 +18,9 @@ exports.submitFeedback = submitFeedback;
 exports.submitProductFeedback = submitProductFeedback;
 exports.getChecklistTemplates = getChecklistTemplates;
 exports.recordShare = recordShare;
+exports.getShareSettings = getShareSettings;
+exports.getLatestReleaseNote = getLatestReleaseNote;
+exports.getReleaseNotes = getReleaseNotes;
 exports.recordInteraction = recordInteraction;
 const index_1 = require("../config/index");
 class ApiError extends Error {
@@ -164,6 +167,18 @@ function getChecklistTemplates(type) {
 }
 function recordShare(data) {
     return request('/api/share-records', { method: 'POST', data, silent: true });
+}
+function getShareSettings() {
+    return request('/api/share-settings', { silent: true });
+}
+function getLatestReleaseNote() {
+    return request('/api/release-notes/latest', { silent: true });
+}
+function getReleaseNotes(cursor, limit = 10) {
+    return request('/api/release-notes', {
+        data: { cursor, limit },
+        silent: true,
+    });
 }
 function recordInteraction(data) {
     return request('/api/interactions', {

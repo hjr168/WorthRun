@@ -14,6 +14,8 @@ V0.1 使用 PostgreSQL + Prisma。
 - `admin_users`：后台管理员，V0.1 保留角色字段。
 - `admin_operation_logs`：后台关键操作日志。
 - `system_configs`：基础配置。
+- `event_share_overrides`：单赛事原生分享标题/图片覆盖，不填字段时继承全局配置。
+- `release_notes`：版本更新时间线，分为草稿、已发布和已下线。
 - `event_sources`：AI 辅助入库的数据源配置，只由后台管理员维护；当前可执行 `page_url`、`chinaath_api`、`world_athletics` 和 `chinamarathon_sitemap`。
 - `event_candidates`：来源生成的候选赛事草稿，必须人工审核后才能写入 `events`。`source_external_id` 用于同一来源稳定去重，`raw_payload` 保留结构化来源记录，`extractor_version` 标记映射或提示词版本；`priority_score` 和 `review_issues` 用于后台审核排序。
 - `event_source_runs`：记录每次手动或自动来源运行的状态、分页范围、处理数量和错误摘要，不保存 API key、网页正文或大段原始响应。
@@ -84,3 +86,9 @@ V0.5.1 产品反馈与稳定性变更：
 - `FeedbackScope` 区分 `event_correction` 与 `product_feedback`；旧记录默认回填为赛事纠错，不改变状态。
 - 产品反馈可保存固定 `context_page`、最长 32 字符的 `app_version` 和关联服务端请求编号，不保存截图、设备信息或联系方式。
 - `api_error_metrics` 按小时、固定路由组和错误类别聚合 5xx，30 天后由现有反馈维护任务清理。
+
+V0.5.2 分享与版本更新中心变更：
+
+- `event_share_overrides.event_id` 唯一，赛事删除时级联删除覆盖配置。
+- `release_notes.version` 唯一；`released_at` 是用户看到的业务更新时间，`published_at` 是首次发布时间，重新上线不重置。
+- 全局分享模板保存在 `system_configs.share_settings`，只通过强校验专用接口写入。

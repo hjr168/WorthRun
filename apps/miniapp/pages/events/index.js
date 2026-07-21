@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("../../utils/api");
 const user_1 = require("../../utils/user");
 const product_feedback_1 = require("../../utils/product-feedback");
+const share_1 = require("../../utils/share");
 const cities = [
     '全部',
     '广州',
@@ -58,6 +59,7 @@ Page({
         resultText: '',
     },
     onLoad() {
+        (0, share_1.enablePublicShare)();
         this.load(true);
     },
     onShow() {
@@ -182,5 +184,14 @@ Page({
         catch (_a) {
             wx.showToast({ title: isFavorite ? '取消收藏失败' : '收藏失败', icon: 'none' });
         }
+    },
+    onShareAppMessage() {
+        (0, share_1.trackShare)('page_share', 'events');
+        return (0, share_1.getSharePayload)('events', '/pages/events/index');
+    },
+    onShareTimeline() {
+        (0, share_1.trackShare)('timeline_share', 'events');
+        const payload = (0, share_1.getSharePayload)('events', '/pages/events/index');
+        return { title: payload.title, imageUrl: payload.imageUrl };
     },
 });

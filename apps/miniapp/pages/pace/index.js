@@ -1,4 +1,6 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const share_1 = require("../../utils/share");
 Page({
     data: {
         distance: '10',
@@ -9,6 +11,7 @@ Page({
         splits: [],
     },
     onLoad() {
+        (0, share_1.enablePublicShare)();
         this.calculate();
     },
     onDistance(event) {
@@ -62,5 +65,14 @@ Page({
         const m = Math.floor((seconds % 3600) / 60);
         const s = Math.round(seconds % 60);
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    },
+    onShareAppMessage() {
+        (0, share_1.trackShare)('page_share', 'tools');
+        return (0, share_1.getSharePayload)('tools', '/pages/pace/index');
+    },
+    onShareTimeline() {
+        (0, share_1.trackShare)('timeline_share', 'tools');
+        const payload = (0, share_1.getSharePayload)('tools', '/pages/pace/index');
+        return { title: payload.title, imageUrl: payload.imageUrl };
     },
 });

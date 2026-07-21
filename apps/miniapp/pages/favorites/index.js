@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("../../utils/api");
 const user_1 = require("../../utils/user");
 const product_feedback_1 = require("../../utils/product-feedback");
+const share_1 = require("../../utils/share");
 Page({
     data: {
         loading: true,
@@ -12,6 +13,7 @@ Page({
         events: [],
     },
     onShow() {
+        (0, share_1.enableProductShareOnly)();
         this.load();
     },
     async load() {
@@ -53,5 +55,8 @@ Page({
     },
     openEvents() {
         wx.switchTab({ url: '/pages/events/index' });
+    },
+    onShareAppMessage() {
+        return (0, share_1.getProductHomeShare)();
     },
 });

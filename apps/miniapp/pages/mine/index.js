@@ -6,6 +6,8 @@ const format_1 = require("../../utils/format");
 const user_1 = require("../../utils/user");
 const feedback_1 = require("../../utils/feedback");
 const product_feedback_1 = require("../../utils/product-feedback");
+const release_notes_1 = require("../../utils/release-notes");
+const share_1 = require("../../utils/share");
 Page({
     data: {
         loading: true,
@@ -21,9 +23,14 @@ Page({
         complianceNotice: format_1.complianceNotice,
         isDev: index_1.config.env === 'dev',
         feedbackReceipts: [],
+        hasNewRelease: false,
     },
     onShow() {
+        (0, share_1.enableProductShareOnly)();
         this.load();
+        (0, release_notes_1.refreshReleaseBadge)()
+            .then((result) => this.setData({ hasNewRelease: result.hasNew }))
+            .catch(() => { });
     },
     async load() {
         var _a;
@@ -100,6 +107,9 @@ Page({
     openTools() {
         wx.navigateTo({ url: '/pages/tools/index' });
     },
+    openReleaseNotes() {
+        wx.navigateTo({ url: '/pages/release-notes/index' });
+    },
     openNextEvent() {
         if (!this.data.nextEvent)
             return;
@@ -119,5 +129,8 @@ Page({
                 this.load();
             },
         });
+    },
+    onShareAppMessage() {
+        return (0, share_1.getProductHomeShare)();
     },
 });

@@ -56,6 +56,24 @@ export interface EventDetail extends EventSummary {
   checklistItems: ChecklistItem[];
   eventTags: Array<{ tagName: string; tagType: string }>;
   choiceCounts: EventChoiceCounts;
+  resolvedShare?: { title: string; imageUrl: string };
+}
+
+export type ShareScene =
+  'home' | 'events' | 'event_detail' | 'tools' | 'source_summary' | 'release_notes';
+export interface ShareSettings {
+  revision: string;
+  scenes: Record<ShareScene, { titleTemplate: string; imageUrl: string }>;
+}
+
+export interface ReleaseNoteItem {
+  id: string;
+  version: string;
+  title: string;
+  summary?: string | null;
+  changes: Array<{ category: 'feature' | 'improvement' | 'fix'; description: string }>;
+  releasedAt: string;
+  publishedAt?: string | null;
 }
 
 export interface EventChoiceItem {
@@ -293,10 +311,36 @@ export function getChecklistTemplates(type?: string) {
 export function recordShare(data: {
   userKey: string;
   eventId?: string;
-  shareType: 'page_share' | 'image_generate';
-  scene: 'event_detail' | 'after_favorite' | 'home' | 'events' | 'share_card';
+  shareType: 'page_share' | 'timeline_share' | 'image_generate';
+  scene:
+    | 'event_detail'
+    | 'after_favorite'
+    | 'home'
+    | 'events'
+    | 'share_card'
+    | 'tools'
+    | 'source_summary'
+    | 'release_notes'
+    | 'personal_home';
 }) {
   return request<{ id: string }>('/api/share-records', { method: 'POST', data, silent: true });
+}
+
+export function getShareSettings() {
+  return request<{ settings: ShareSettings }>('/api/share-settings', { silent: true });
+}
+
+export function getLatestReleaseNote() {
+  return request<{
+    item: Pick<ReleaseNoteItem, 'id' | 'version' | 'releasedAt' | 'publishedAt'> | null;
+  }>('/api/release-notes/latest', { silent: true });
+}
+
+export function getReleaseNotes(cursor?: string, limit = 10) {
+  return request<{ items: ReleaseNoteItem[]; nextCursor: string | null }>('/api/release-notes', {
+    data: { cursor, limit },
+    silent: true,
+  });
 }
 
 export function recordInteraction(data: {
