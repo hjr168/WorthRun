@@ -1,7 +1,10 @@
 import { ApiError, submitProductFeedback } from '../../utils/api';
 import { createFeedbackRequestId, saveFeedbackReceipt } from '../../utils/feedback';
 import {
+  canSubmitProductFeedback,
   getMiniappVersion,
+  productFeedbackContexts,
+  resolveProductFeedbackContext,
   type ProductFeedbackContext,
 } from '../../utils/product-feedback';
 import { getUserKey } from '../../utils/user';
@@ -23,8 +26,12 @@ const contextLabels: Record<ProductFeedbackContext, string> = {
   choices: '我的选择',
   mine: '我的',
 };
-const contextPages = Object.keys(contextLabels) as ProductFeedbackContext[];
-const contextOptions = contextPages.map((value) => ({ value, label: contextLabels[value] }));
+const customContextValue = '__custom__';
+const contextOptions = [
+  ...productFeedbackContexts.map((value) => ({ value, label: contextLabels[value] })),
+  { value: customContextValue, label: '自定义' },
+];
+const customContextIndex = contextOptions.length - 1;
 
 Page({
   data: {
@@ -32,9 +39,10 @@ Page({
     requestId: '',
     contextPage: 'mine' as ProductFeedbackContext,
     contextLabel: '我的',
-    contextIndex: contextPages.indexOf('mine'),
+    contextIndex: productFeedbackContexts.indexOf('mine'),
     contextOptions,
     customContextPage: '',
+    isCustomContext: false,
     relatedRequestId: '',
     appVersion: '',
     feedbackTypes,
@@ -48,17 +56,19 @@ Page({
     successMessage: '反馈已收到',
   },
   onLoad(query: { contextPage?: string; relatedRequestId?: string }) {
-    const contextPage = contextPages.includes(query.contextPage as ProductFeedbackContext)
-      ? (query.contextPage as ProductFeedbackContext)
-      : 'mine';
+    const context = resolveProductFeedbackContext(query.contextPage);
     const relatedRequestId = /^[0-9a-f-]{36}$/i.test(query.relatedRequestId || '')
       ? String(query.relatedRequestId)
       : '';
     this.setData({
       userKey: getUserKey(),
-      contextPage,
-      contextLabel: contextLabels[contextPage],
-      contextIndex: contextPages.indexOf(contextPage),
+      contextPage: context.contextPage,
+      contextLabel: context.isCustomContext ? '自定义' : contextLabels[context.contextPage],
+      contextIndex: context.isCustomContext
+        ? customContextIndex
+        : productFeedbackContexts.indexOf(context.contextPage),
+      customContextPage: context.customContextPage,
+      isCustomContext: context.isCustomContext,
       relatedRequestId,
       appVersion: getMiniappVersion() || '',
     });
@@ -70,20 +80,43 @@ Page({
     const contextIndex = Number(event.detail.value);
     const option = contextOptions[contextIndex];
     if (!option) return;
+    const isCustomContext = option.value === customContextValue;
+    const customContextPage = isCustomContext ? this.data.customContextPage : '';
     this.setData({
       contextIndex,
-      contextPage: option.value,
+      contextPage: isCustomContext ? this.data.contextPage : option.value,
       contextLabel: option.label,
-      customContextPage: '',
+      customContextPage,
+      isCustomContext,
+      canSubmit: canSubmitProductFeedback(
+        this.data.contentLength,
+        isCustomContext,
+        customContextPage,
+      ),
     });
   },
   onContextInput(event: WechatMiniprogram.Input) {
-    this.setData({ customContextPage: event.detail.value });
+    const customContextPage = event.detail.value;
+    this.setData({
+      customContextPage,
+      isCustomContext: true,
+      contextIndex: customContextIndex,
+      contextLabel: '自定义',
+      canSubmit: canSubmitProductFeedback(this.data.contentLength, true, customContextPage),
+    });
   },
   onContentInput(event: WechatMiniprogram.Input) {
     const content = event.detail.value;
     const contentLength = content.trim().length;
-    this.setData({ content, contentLength, canSubmit: contentLength >= 6 && contentLength <= 500 });
+    this.setData({
+      content,
+      contentLength,
+      canSubmit: canSubmitProductFeedback(
+        contentLength,
+        this.data.isCustomContext,
+        this.data.customContextPage,
+      ),
+    });
   },
   goBack() {
     wx.navigateBack({ delta: 1 });
@@ -92,7 +125,9 @@ Page({
     if (this.data.submitting || !this.data.canSubmit) return;
     const requestId = this.data.requestId || createFeedbackRequestId();
     const feedbackType = feedbackTypes[this.data.typeIndex];
-    const contextPage = this.data.customContextPage.trim() || this.data.contextPage;
+    const contextPage = this.data.isCustomContext
+      ? this.data.customContextPage.trim()
+      : this.data.contextPage;
     this.setData({ submitting: true, requestId });
     try {
       const result = await submitProductFeedback({

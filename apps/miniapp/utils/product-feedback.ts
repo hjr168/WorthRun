@@ -7,6 +7,48 @@ export type ProductFeedbackContext =
   | 'choices'
   | 'mine';
 
+export const productFeedbackContexts: ProductFeedbackContext[] = [
+  'home',
+  'events',
+  'event_detail',
+  'source_summary',
+  'favorites',
+  'choices',
+  'mine',
+];
+
+export function resolveProductFeedbackContext(value?: string) {
+  const normalized = value?.trim() || '';
+  if (productFeedbackContexts.includes(normalized as ProductFeedbackContext)) {
+    return {
+      contextPage: normalized as ProductFeedbackContext,
+      customContextPage: '',
+      isCustomContext: false,
+    };
+  }
+  if (normalized) {
+    return {
+      contextPage: 'mine' as ProductFeedbackContext,
+      customContextPage: normalized,
+      isCustomContext: true,
+    };
+  }
+  return {
+    contextPage: 'mine' as ProductFeedbackContext,
+    customContextPage: '',
+    isCustomContext: false,
+  };
+}
+
+export function canSubmitProductFeedback(
+  contentLength: number,
+  isCustomContext: boolean,
+  customContextPage: string,
+) {
+  const hasValidContent = contentLength >= 6 && contentLength <= 500;
+  return hasValidContent && (!isCustomContext || Boolean(customContextPage.trim()));
+}
+
 export function resolveMiniappVersion(miniProgram?: {
   version?: string;
   envVersion?: string;

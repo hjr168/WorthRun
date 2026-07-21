@@ -21,17 +21,22 @@ const contextLabels = {
     choices: '我的选择',
     mine: '我的',
 };
-const contextPages = Object.keys(contextLabels);
-const contextOptions = contextPages.map((value) => ({ value, label: contextLabels[value] }));
+const customContextValue = '__custom__';
+const contextOptions = [
+    ...product_feedback_1.productFeedbackContexts.map((value) => ({ value, label: contextLabels[value] })),
+    { value: customContextValue, label: '自定义' },
+];
+const customContextIndex = contextOptions.length - 1;
 Page({
     data: {
         userKey: '',
         requestId: '',
         contextPage: 'mine',
         contextLabel: '我的',
-        contextIndex: contextPages.indexOf('mine'),
+        contextIndex: product_feedback_1.productFeedbackContexts.indexOf('mine'),
         contextOptions,
         customContextPage: '',
+        isCustomContext: false,
         relatedRequestId: '',
         appVersion: '',
         feedbackTypes,
@@ -45,17 +50,19 @@ Page({
         successMessage: '反馈已收到',
     },
     onLoad(query) {
-        const contextPage = contextPages.includes(query.contextPage)
-            ? query.contextPage
-            : 'mine';
+        const context = (0, product_feedback_1.resolveProductFeedbackContext)(query.contextPage);
         const relatedRequestId = /^[0-9a-f-]{36}$/i.test(query.relatedRequestId || '')
             ? String(query.relatedRequestId)
             : '';
         this.setData({
             userKey: (0, user_1.getUserKey)(),
-            contextPage,
-            contextLabel: contextLabels[contextPage],
-            contextIndex: contextPages.indexOf(contextPage),
+            contextPage: context.contextPage,
+            contextLabel: context.isCustomContext ? '自定义' : contextLabels[context.contextPage],
+            contextIndex: context.isCustomContext
+                ? customContextIndex
+                : product_feedback_1.productFeedbackContexts.indexOf(context.contextPage),
+            customContextPage: context.customContextPage,
+            isCustomContext: context.isCustomContext,
             relatedRequestId,
             appVersion: (0, product_feedback_1.getMiniappVersion)() || '',
         });
@@ -68,20 +75,35 @@ Page({
         const option = contextOptions[contextIndex];
         if (!option)
             return;
+        const isCustomContext = option.value === customContextValue;
+        const customContextPage = isCustomContext ? this.data.customContextPage : '';
         this.setData({
             contextIndex,
-            contextPage: option.value,
+            contextPage: isCustomContext ? this.data.contextPage : option.value,
             contextLabel: option.label,
-            customContextPage: '',
+            customContextPage,
+            isCustomContext,
+            canSubmit: (0, product_feedback_1.canSubmitProductFeedback)(this.data.contentLength, isCustomContext, customContextPage),
         });
     },
     onContextInput(event) {
-        this.setData({ customContextPage: event.detail.value });
+        const customContextPage = event.detail.value;
+        this.setData({
+            customContextPage,
+            isCustomContext: true,
+            contextIndex: customContextIndex,
+            contextLabel: '自定义',
+            canSubmit: (0, product_feedback_1.canSubmitProductFeedback)(this.data.contentLength, true, customContextPage),
+        });
     },
     onContentInput(event) {
         const content = event.detail.value;
         const contentLength = content.trim().length;
-        this.setData({ content, contentLength, canSubmit: contentLength >= 6 && contentLength <= 500 });
+        this.setData({
+            content,
+            contentLength,
+            canSubmit: (0, product_feedback_1.canSubmitProductFeedback)(contentLength, this.data.isCustomContext, this.data.customContextPage),
+        });
     },
     goBack() {
         wx.navigateBack({ delta: 1 });
@@ -91,7 +113,9 @@ Page({
             return;
         const requestId = this.data.requestId || (0, feedback_1.createFeedbackRequestId)();
         const feedbackType = feedbackTypes[this.data.typeIndex];
-        const contextPage = this.data.customContextPage.trim() || this.data.contextPage;
+        const contextPage = this.data.isCustomContext
+            ? this.data.customContextPage.trim()
+            : this.data.contextPage;
         this.setData({ submitting: true, requestId });
         try {
             const result = await (0, api_1.submitProductFeedback)({
