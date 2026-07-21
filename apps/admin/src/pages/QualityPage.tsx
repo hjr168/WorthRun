@@ -33,6 +33,17 @@ const contextPageLabels: Record<string, string> = {
   mine: '我的',
 };
 
+export function formatFeedbackContextPage(contextPage?: string | null) {
+  const normalized = contextPage?.trim();
+  if (!normalized) return '未标记页面';
+  return contextPageLabels[normalized] || normalized;
+}
+
+export function formatFeedbackAppVersion(appVersion?: string | null) {
+  const normalized = appVersion?.trim();
+  return normalized ? `版本 ${normalized}` : '版本未上报';
+}
+
 const riskLabels: Record<string, string> = {
   sql_probe: '疑似自动探测',
   jndi_probe: '疑似自动探测',
@@ -367,8 +378,8 @@ export function QualityPage() {
                 )
               ) : (
                 <Space direction="vertical" size={0}>
-                  <span>{contextPageLabels[record.contextPage || ''] || '未标记页面'}</span>
-                  <span>{record.appVersion ? `版本 ${record.appVersion}` : '版本未知'}</span>
+                  <span>{formatFeedbackContextPage(record.contextPage)}</span>
+                  <span>{formatFeedbackAppVersion(record.appVersion)}</span>
                   {record.relatedRequestId && <Typography.Text copyable>{record.relatedRequestId}</Typography.Text>}
                 </Space>
               ),

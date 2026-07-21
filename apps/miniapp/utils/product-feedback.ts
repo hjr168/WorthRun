@@ -7,9 +7,21 @@ export type ProductFeedbackContext =
   | 'choices'
   | 'mine';
 
+export function resolveMiniappVersion(miniProgram?: {
+  version?: string;
+  envVersion?: string;
+}) {
+  const version = miniProgram?.version?.trim();
+  if (version) return version;
+  const envVersion = miniProgram?.envVersion?.trim();
+  return envVersion && ['develop', 'trial', 'release'].includes(envVersion)
+    ? envVersion
+    : undefined;
+}
+
 export function getMiniappVersion() {
   try {
-    return wx.getAccountInfoSync().miniProgram.version || undefined;
+    return resolveMiniappVersion(wx.getAccountInfoSync().miniProgram);
   } catch {
     return undefined;
   }
