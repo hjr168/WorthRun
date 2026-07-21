@@ -22,12 +22,16 @@ const contextLabels = {
     mine: '我的',
 };
 const contextPages = Object.keys(contextLabels);
+const contextOptions = contextPages.map((value) => ({ value, label: contextLabels[value] }));
 Page({
     data: {
         userKey: '',
         requestId: '',
         contextPage: 'mine',
         contextLabel: '我的',
+        contextIndex: contextPages.indexOf('mine'),
+        contextOptions,
+        customContextPage: '',
         relatedRequestId: '',
         appVersion: '',
         feedbackTypes,
@@ -51,12 +55,28 @@ Page({
             userKey: (0, user_1.getUserKey)(),
             contextPage,
             contextLabel: contextLabels[contextPage],
+            contextIndex: contextPages.indexOf(contextPage),
             relatedRequestId,
             appVersion: (0, product_feedback_1.getMiniappVersion)() || '',
         });
     },
     onTypeSelect(event) {
         this.setData({ typeIndex: Number(event.currentTarget.dataset.index) });
+    },
+    onContextSelect(event) {
+        const contextIndex = Number(event.detail.value);
+        const option = contextOptions[contextIndex];
+        if (!option)
+            return;
+        this.setData({
+            contextIndex,
+            contextPage: option.value,
+            contextLabel: option.label,
+            customContextPage: '',
+        });
+    },
+    onContextInput(event) {
+        this.setData({ customContextPage: event.detail.value });
     },
     onContentInput(event) {
         const content = event.detail.value;
@@ -71,6 +91,7 @@ Page({
             return;
         const requestId = this.data.requestId || (0, feedback_1.createFeedbackRequestId)();
         const feedbackType = feedbackTypes[this.data.typeIndex];
+        const contextPage = this.data.customContextPage.trim() || this.data.contextPage;
         this.setData({ submitting: true, requestId });
         try {
             const result = await (0, api_1.submitProductFeedback)({
@@ -78,14 +99,14 @@ Page({
                 requestId,
                 feedbackType,
                 content: this.data.content.trim(),
-                contextPage: this.data.contextPage,
+                contextPage,
                 appVersion: this.data.appVersion || undefined,
                 relatedRequestId: this.data.relatedRequestId || undefined,
             });
             (0, feedback_1.saveFeedbackReceipt)({
                 scope: 'product_feedback',
                 feedbackType,
-                contextPage: this.data.contextPage,
+                contextPage,
                 createdAt: new Date().toISOString(),
                 requestId,
             });

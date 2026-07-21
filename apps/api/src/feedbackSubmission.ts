@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   eventCorrectionTypes,
   isLowInformationFeedback,
-  productFeedbackContextPages,
   productFeedbackTypes,
 } from './feedbackAbuse.js';
 
@@ -26,11 +25,21 @@ const eventCorrectionSchema = baseFeedbackSchema.extend({
   relatedRequestId: z.undefined().optional(),
 });
 
+const productFeedbackContextPageSchema = z
+  .string()
+  .trim()
+  .min(1, '反馈页面不能为空')
+  .max(40, '反馈页面不能超过 40 个字')
+  .refine(
+    (value) => !/https?:\/\/|www\.|[<>]|[\u0000-\u001f]/i.test(value),
+    '反馈页面无效',
+  );
+
 const productFeedbackSchema = baseFeedbackSchema.extend({
   scope: z.literal('product_feedback'),
   eventId: z.undefined().optional(),
   feedbackType: z.enum(productFeedbackTypes, { required_error: '反馈类型无效' }),
-  contextPage: z.enum(productFeedbackContextPages).optional(),
+  contextPage: productFeedbackContextPageSchema.optional(),
   appVersion: z
     .string()
     .trim()

@@ -9,10 +9,27 @@
   </view>
 
   <block wx:else>
-    <view class="context-band">
-      <text>反馈页面：{{contextLabel}}</text>
+    <view wx:if="{{appVersion || relatedRequestId}}" class="context-band">
       <text wx:if="{{appVersion}}">版本：{{appVersion}}</text>
       <text wx:if="{{relatedRequestId}}" class="request-id">问题编号：{{relatedRequestId}}</text>
+    </view>
+
+    <view class="form-section context-section">
+      <view class="field-label">反馈页面</view>
+      <picker range="{{contextOptions}}" range-key="label" value="{{contextIndex}}" bindchange="onContextSelect">
+        <view class="context-picker-field">
+          <text class="context-picker-value">{{contextLabel}}</text>
+          <text class="context-picker-action">选择</text>
+        </view>
+      </picker>
+      <input
+        class="input context-input"
+        value="{{customContextPage}}"
+        maxlength="40"
+        placeholder="也可自行输入，如：配速计算器"
+        bindinput="onContextInput"
+      />
+      <view class="field-help">可选择常用页面，也可输入更具体的页面名称；输入内容优先。</view>
     </view>
 
     <view class="form-section">
@@ -22,9 +39,12 @@
           wx:for="{{feedbackTypes}}"
           wx:key="*this"
           class="type-option {{typeIndex === index ? 'selected' : ''}}"
+          hover-class="type-option-hover"
           data-index="{{index}}"
           bindtap="onTypeSelect"
-        >{{item}}</button>
+        >
+          <text class="type-option-label">{{item}}</text>
+        </button>
       </view>
     </view>
 

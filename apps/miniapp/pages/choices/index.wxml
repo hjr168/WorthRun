@@ -2,7 +2,9 @@
   <page-header title="我的选择" subtitle="管理想跑、观望和已报名赛事。具体选择仅你自己可见。" />
 
   <view class="choice-filters">
-    <button wx:for="{{filters}}" wx:key="value" class="filter-button {{filter === item.value ? 'active' : ''}}" aria-label="{{item.label}}{{filter === item.value ? '，当前筛选' : ''}}" data-value="{{item.value}}" bindtap="changeFilter">{{item.label}}</button>
+    <button wx:for="{{filters}}" wx:key="value" class="filter-button {{filter === item.value ? 'active' : ''}}" aria-label="{{item.label}}{{filter === item.value ? '，当前筛选' : ''}}" data-value="{{item.value}}" bindtap="changeFilter">
+      <text class="filter-button-label">{{item.label}}</text>
+    </button>
   </view>
 
   <loading-state wx:if="{{loading}}" text="正在加载我的选择" />
@@ -23,7 +25,9 @@
         <view class="choice-event">赛事已不可用</view>
         <view class="choice-meta">已隐藏赛事详情，仍可清除本地选择。</view>
       </view>
-      <button class="remove-button" data-id="{{item.eventId}}" catchtap="removeChoice">清除</button>
+      <button class="remove-button" hover-class="remove-button-hover" aria-label="清除这条选择" data-id="{{item.eventId}}" catchtap="removeChoice">
+        <text class="remove-button-label">清除</text>
+      </button>
     </view>
     <view wx:if="{{!items.length}}" bindtap="openEvents">
       <empty-state title="暂无选择" description="打开赛事详情，标记想跑、观望或已报名" />

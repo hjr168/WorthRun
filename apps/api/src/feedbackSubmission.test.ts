@@ -28,6 +28,15 @@ describe('public feedback submission', () => {
         relatedRequestId: '550e8400-e29b-41d4-a716-446655440000',
       }),
     ).toMatchObject({ scope: 'product_feedback', contextPage: 'source_summary' });
+
+    expect(
+      publicFeedbackSchema.parse({
+        ...base,
+        scope: 'product_feedback',
+        feedbackType: '功能建议',
+        contextPage: '配速计算器',
+      }),
+    ).toMatchObject({ scope: 'product_feedback', contextPage: '配速计算器' });
   });
 
   it('requires events only for event corrections', () => {
@@ -47,7 +56,7 @@ describe('public feedback submission', () => {
     ).toThrow();
   });
 
-  it('rejects cross-scope categories and arbitrary context', () => {
+  it('rejects cross-scope categories and unsafe context', () => {
     expect(() =>
       publicFeedbackSchema.parse({
         ...base,
