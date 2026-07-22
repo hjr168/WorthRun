@@ -76,10 +76,17 @@ function reminderData(input: {
   };
 }
 
+export function assertReminderDeliveryEnabled(env: NodeJS.ProcessEnv = process.env) {
+  if (env.REMINDER_FEATURE_ENABLED !== 'true') {
+    throw new Error('赛事提醒功能未开启');
+  }
+}
+
 export async function deliverDueReminders(input: { dryRun: boolean; now?: Date; limit?: number }) {
   const now = input.now ?? new Date();
   const limit = Math.min(30, Math.max(1, input.limit ?? 30));
   if (!input.dryRun) {
+    assertReminderDeliveryEnabled();
     await prisma.eventReminder.updateMany({
       where: {
         status: 'sending',

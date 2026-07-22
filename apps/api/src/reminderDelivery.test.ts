@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { reminderMessageDate } from './reminderDelivery.js';
+import { assertReminderDeliveryEnabled, reminderMessageDate } from './reminderDelivery.js';
+
+describe('reminder delivery feature flag', () => {
+  it('blocks apply delivery unless the reminder feature is explicitly enabled', () => {
+    expect(() => assertReminderDeliveryEnabled({})).toThrow('赛事提醒功能未开启');
+    expect(() =>
+      assertReminderDeliveryEnabled({ REMINDER_FEATURE_ENABLED: 'false' }),
+    ).toThrow('赛事提醒功能未开启');
+    expect(() =>
+      assertReminderDeliveryEnabled({ REMINDER_FEATURE_ENABLED: 'true' }),
+    ).not.toThrow();
+  });
+});
 
 describe('reminder message date', () => {
   const now = new Date('2026-07-22T02:30:00.000Z');
