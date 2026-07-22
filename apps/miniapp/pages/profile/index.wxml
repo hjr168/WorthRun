@@ -1,0 +1,25 @@
+<theme-shell title="个人资料" show-back="{{true}}">
+<view class="page profile-page">
+  <view wx:if="{{loading}}" class="status-text">正在加载资料</view>
+  <block wx:else>
+    <view wx:if="{{error}}" class="error-text">{{error}}</view>
+    <view class="profile-form">
+      <button class="avatar-button" open-type="chooseAvatar" bindchooseavatar="chooseAvatar" disabled="{{uploading}}" aria-label="选择头像">
+        <image wx:if="{{avatarUrl}}" class="avatar-image" src="{{avatarUrl}}" mode="aspectFill" />
+        <view wx:else class="avatar-placeholder">跑</view>
+        <text class="avatar-action">{{uploading ? '上传中' : '更换头像'}}</text>
+      </button>
+      <view class="field">
+        <view class="field-label">昵称</view>
+        <input class="input" type="nickname" maxlength="32" value="{{nickname}}" bindinput="onNicknameInput" placeholder="跑者" />
+        <view class="field-hint">头像和昵称仅本人和管理后台可见。</view>
+      </view>
+      <button class="primary-button" bindtap="save" loading="{{saving}}" disabled="{{saving}}">保存资料</button>
+    </view>
+    <view class="account-actions">
+      <button class="secondary-button" bindtap="clearProfile">清除头像昵称</button>
+      <button class="plain-button danger" bindtap="deleteAccount">删除个人账号与数据</button>
+    </view>
+  </block>
+</view>
+</theme-shell>

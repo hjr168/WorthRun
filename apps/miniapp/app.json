@@ -6,6 +6,8 @@
     "pages/source-summary/index",
     "pages/preferences/index",
     "pages/mine/index",
+    "pages/profile/index",
+    "pages/reminders/index",
     "pages/favorites/index",
     "pages/choices/index",
     "pages/feedback/index",

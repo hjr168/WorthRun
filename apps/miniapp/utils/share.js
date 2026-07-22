@@ -100,8 +100,14 @@ function enablePublicShare() {
 function enableProductShareOnly() {
     wx.showShareMenu({ withShareTicket: false, menus: ['shareAppMessage'] });
 }
-function trackShare(shareType, scene, eventId) {
-    (0, api_1.recordShare)({ userKey: (0, user_1.getUserKey)(), eventId, shareType, scene }).catch(() => { });
+function trackShare(shareType, scene, eventId, requestShareToken = false) {
+    return (0, api_1.recordShare)({
+        userKey: (0, user_1.getUserKey)(),
+        eventId,
+        shareType,
+        scene,
+        requestShareToken,
+    }).catch(() => ({ id: '', shareToken: null }));
 }
 function getProductHomeShare() {
     trackShare('page_share', 'personal_home');

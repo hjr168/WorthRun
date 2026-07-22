@@ -1,6 +1,7 @@
 export interface EventLaunchQuery {
   id?: string;
   scene?: string;
+  shareToken?: string;
 }
 
 export type MiniProgramEnvVersion = 'develop' | 'trial' | 'release';

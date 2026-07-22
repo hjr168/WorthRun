@@ -38,7 +38,7 @@ export async function getEventChoiceCounts(eventId: string, store: ChoiceStore =
 }
 
 export async function setEventChoice(
-  input: { userKey: string; eventId: string; choice: EventChoiceType },
+  input: { userKey: string; userId?: string; eventId: string; choice: EventChoiceType },
   store: ChoiceStore = prisma,
 ) {
   const event = await store.event.findFirst({
@@ -47,39 +47,53 @@ export async function setEventChoice(
   });
   if (!event) throw new EventChoiceNotFoundError('赛事不存在或未发布');
 
-  const record = await store.userEventChoice.upsert({
-    where: { userKey_eventId: { userKey: input.userKey, eventId: input.eventId } },
-    create: input,
-    update: { choice: input.choice },
-  });
+  const record = input.userId
+    ? await store.userEventChoice.upsert({
+        where: { userId_eventId: { userId: input.userId, eventId: input.eventId } },
+        create: input,
+        update: { choice: input.choice, userKey: input.userKey },
+      })
+    : await store.userEventChoice.upsert({
+        where: { userKey_eventId: { userKey: input.userKey, eventId: input.eventId } },
+        create: input,
+        update: { choice: input.choice },
+      });
   return { choice: record.choice, choiceCounts: await getEventChoiceCounts(input.eventId, store) };
 }
 
 export async function removeEventChoice(
-  input: { userKey: string; eventId: string },
+  input: { userKey: string; userId?: string; eventId: string },
   store: ChoiceStore = prisma,
 ) {
-  await store.userEventChoice.deleteMany({ where: input });
+  await store.userEventChoice.deleteMany({
+    where: input.userId
+      ? { userId: input.userId, eventId: input.eventId }
+      : { userKey: input.userKey, eventId: input.eventId },
+  });
   return { removed: true as const, choiceCounts: await getEventChoiceCounts(input.eventId, store) };
 }
 
 export async function getViewerEventChoice(
-  input: { userKey: string; eventId: string },
+  input: { userKey: string; userId?: string; eventId: string },
   store: ChoiceStore = prisma,
 ) {
-  const record = await store.userEventChoice.findUnique({
-    where: { userKey_eventId: input },
+  const record = await store.userEventChoice.findFirst({
+    where: input.userId
+      ? { userId: input.userId, eventId: input.eventId }
+      : { userKey: input.userKey, eventId: input.eventId },
     select: { choice: true },
   });
   return { choice: record?.choice ?? null };
 }
 
 export async function listViewerEventChoices(
-  input: { userKey: string; choice?: EventChoiceType },
+  input: { userKey: string; userId?: string; choice?: EventChoiceType },
   store: ChoiceStore = prisma,
 ) {
   const choices = await store.userEventChoice.findMany({
-    where: { userKey: input.userKey, choice: input.choice },
+    where: input.userId
+      ? { userId: input.userId, choice: input.choice }
+      : { userKey: input.userKey, choice: input.choice },
     orderBy: { updatedAt: 'desc' },
     take: 100,
   });

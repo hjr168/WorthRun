@@ -23,6 +23,8 @@
     "data:backfill-candidate-confirmation-links": "pnpm --filter @worth-running/api data:backfill-candidate-confirmation-links",
     "feedback:maintenance": "pnpm --filter @worth-running/api feedback:maintenance",
     "source-summary:backfill": "pnpm --filter @worth-running/api source-summary:backfill",
+    "reminder:send-due": "pnpm --filter @worth-running/api reminder:send-due",
+    "release:preflight-v0.5.3": "pnpm --filter @worth-running/api release:preflight-v0.5.3",
     "release-notes:bootstrap": "pnpm --filter @worth-running/database release-notes:bootstrap"
   },
   "devDependencies": {

@@ -23,12 +23,21 @@
   - `AI_INGEST_BASE_URL`：兼容 OpenAI SDK 的模型服务地址；留空时按 provider 使用默认值：GLM 为 `https://open.bigmodel.cn/api/paas/v4/`，DeepSeek 为 `https://api.deepseek.com`。
   - `AI_INGEST_USER_AGENT`：抓取来源页使用的 User-Agent，建议使用可联系到运营方的标识。
   - `EVENT_SOURCE_MIN_AVAILABLE_MB`：一次性赛事源任务启动所需最低可用内存，默认 256MB。
+  - `USER_SYSTEM_ENABLED`：V0.5.3 微信用户体系开关。数据库迁移、UniCloud 和隐私配置完成前保持 `false`。
+  - `USER_TOKEN_SECRET` / `USER_OPENID_HASH_SECRET`：分别用于 30 天用户会话和 OpenID/alias HMAC，必须使用不同的强随机值。
+  - `USER_OPENID_ENCRYPTION_KEY`：AES-256-GCM 密钥，用 `openssl rand -base64 32` 生成；丢失后无法恢复 OpenID。
+  - `REMINDER_FEATURE_ENABLED`：赛事提醒开关；订阅消息模板和真机验收完成前保持 `false`。
+  - `WX_SIGNUP_REMINDER_TEMPLATE_ID` / `WX_RACE_REMINDER_TEMPLATE_ID`：报名与赛前 7 天订阅消息模板。当前模板分别为“报名时间提醒”和“比赛开始提醒”。
+  - `WX_SIGNUP_REMINDER_*_FIELD` / `WX_RACE_REMINDER_*_FIELD`：两个模板中赛事名称、提醒说明和日期对应的字段键，必须按微信公众平台显示的 `thing1`、`time3` 等实际键填写，不能沿用示例猜测。
+  - `UNICLOUD_AVATAR_BASE_URL` / `UNICLOUD_AVATAR_SHARED_SECRET`：UniCloud 支付宝云 URL 化头像函数地址与共享密钥。
+  - `UNICLOUD_PROVIDER=alipay` / `UNICLOUD_SPACE_ID=env-00jy6bpz3vhc` / `UNICLOUD_SPACE_EXPIRES_AT`：记录头像空间供应商、空间和有效期，供上线预检阻断错误空间或临近到期。
 - `chinaath_api` 来源使用固定的中国田协公开赛事目录，不需要 AI Key；每次最多读取 20 条，并只生成后台候选。该接口是当前观察到的公开接口，不是承诺稳定的开放平台契约，响应结构变化时适配器会明确失败并记录状态。
 - 中国田协目录不提供可直接采信的赛事官方报名入口；运营人员必须人工补充并核验 `officialUrl` 和报名状态后才能采纳为赛事草稿。
 - 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。
 - API 对外访问需要 HTTPS 域名，体验版和提审不能使用 `localhost`、局域网 IP 或 HTTP。
 - API 保持 `HOST=127.0.0.1`，仅由单层 Nginx 反向代理公开；Nginx 必须传递 `X-Forwarded-For` 与 `X-Forwarded-Proto`，不要把 API 端口直接暴露到公网。
 - 每日执行一次 `pnpm feedback:maintenance`，清理过期反馈指纹、48 小时以前的限流摘要、90 天以前的拦截聚合和 30 天以前的 5xx 聚合。该任务不会删除反馈正文或操作日志，Node heap 上限为 96MB。
+- V0.5.3 沿用上述维护任务清理过期头像凭证和分享 token，不增加维护 cron。提醒发送使用 `pnpm reminder:send-due`的一次性任务，Node heap 上限 96MB，不加入 PM2。
 - Nginx 使用仓库 `ops/nginx/worth-running.conf`；仅 `/api/feedback` 使用 16KB 请求体上限和每 IP 每分钟 6 次、burst 3 的限流，其他公开和后台接口不受影响。
 - 将 `ops/logrotate/worth-running` 安装到 `/etc/logrotate.d/worth-running`，统一轮转 API、赛事源和反馈维护日志；不要安装 PM2 常驻日志模块。
 - 生产 `DATABASE_URL` 建议追加 `connection_limit=2&pool_timeout=10`，降低 API 与短时赛事源任务并存时的数据库连接内存。
@@ -39,6 +48,7 @@
 pnpm install
 pnpm db:generate
 pnpm db:migrate
+NODE_ENV=production APP_RELEASE=<当前提交号> pnpm release:preflight-v0.5.3 -- --phase=foundation
 pnpm release-notes:bootstrap
 # 核对 dry-run 后再创建 V0.5.0 / V0.5.1 草稿
 pnpm release-notes:bootstrap -- --apply
@@ -90,6 +100,8 @@ VITE_API_BASE_URL=https://run-api.huangjiarong.top pnpm --filter @worth-running/
 - `test.ts` 当前已使用真实 HTTPS API。
 - `prod.ts` 当前可暂时与体验版同域；如果后续独立部署正式环境，再替换为独立生产域名。
 - 微信公众平台 request 合法域名必须与小程序配置中的 API 域名一致。
+- V0.5.3 还需把 UniCloud URL 化函数域名配置到 `request` / `uploadFile` / `downloadFile` 合法域名，并在微信隐私保护指引声明 OpenID 及用户主动填写的头像昵称用途。
+- 开启用户体系前运行 `pnpm release:preflight-v0.5.3 -- --phase=users`；配置并真机验证订阅消息后运行 `--phase=reminders`。任一 `BLOCK` 都必须先处理，命令不会输出密钥明文。
 - `urlCheck=false` 只适合本地调试。体验版、提审和正式发布前必须开启合法域名校验。
 
 ## 5. 发布前检查

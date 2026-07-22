@@ -1,0 +1,17 @@
+<theme-shell title="我的提醒" show-back="{{true}}">
+<view class="page reminders-page">
+  <view wx:if="{{loading}}" class="state-text">正在加载提醒</view>
+  <view wx:elif="{{error}}" class="state-text error">{{error}}<button class="secondary-button" bindtap="load">重新加载</button></view>
+  <view wx:elif="{{!items.length}}" class="state-text">还没有赛事提醒</view>
+  <view wx:else class="reminder-list">
+    <view wx:for="{{items}}" wx:key="id" class="reminder-row">
+      <view class="reminder-main" data-event-id="{{item.eventId}}" bindtap="openEvent">
+        <view class="reminder-name">{{item.event.eventName}}</view>
+        <view class="reminder-meta">{{item.event.city}} · {{item.dateText}}</view>
+        <view class="reminder-type">{{item.typeText}} · {{item.scheduleText}}</view>
+      </view>
+      <button class="cancel-button" data-event-id="{{item.eventId}}" data-type="{{item.reminderType}}" bindtap="cancel">取消</button>
+    </view>
+  </view>
+</view>
+</theme-shell>

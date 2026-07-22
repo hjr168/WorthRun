@@ -138,7 +138,11 @@ export function WorkbenchPage() {
           message="AI 整理，仅供参考，报名以官方为准。官方入口统一使用“前往官方确认”。"
         />
         <Alert
-          type={systemHealth?.database === 'ok' && (systemHealth?.errors.last24h.total || 0) === 0 ? 'success' : 'warning'}
+          type={
+            systemHealth?.database === 'ok' && (systemHealth?.errors.last24h.total || 0) === 0
+              ? 'success'
+              : 'warning'
+          }
           showIcon
           message={
             systemHealth
@@ -147,7 +151,7 @@ export function WorkbenchPage() {
           }
           description={
             systemHealth
-              ? `版本 ${systemHealth.release} · 数据库 ${systemHealth.databaseLatencyMs}ms · 最近来源任务 ${systemHealth.lastSourceRun?.status || '暂无'}`
+              ? `版本 ${systemHealth.release} · 数据库 ${systemHealth.databaseLatencyMs}ms · 最近来源任务 ${systemHealth.lastSourceRun?.status || '暂无'} · 用户体系 ${systemHealth.features.userSystem.enabled ? '已开启' : systemHealth.features.userSystem.configured ? '待开启' : '待配置'} · 头像 ${systemHealth.features.avatar.configured ? '已配置' : '待配置'} · 提醒 ${systemHealth.features.reminders.enabled ? '已开启' : systemHealth.features.reminders.configured ? '待开启' : '待配置'}`
               : undefined
           }
         />

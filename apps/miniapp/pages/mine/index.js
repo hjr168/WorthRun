@@ -8,6 +8,8 @@ const feedback_1 = require("../../utils/feedback");
 const product_feedback_1 = require("../../utils/product-feedback");
 const release_notes_1 = require("../../utils/release-notes");
 const share_1 = require("../../utils/share");
+const account_1 = require("../../utils/account");
+const user_session_1 = require("../../utils/user-session");
 Page({
     data: {
         loading: true,
@@ -24,6 +26,11 @@ Page({
         isDev: index_1.config.env === 'dev',
         feedbackReceipts: [],
         hasNewRelease: false,
+        isRegistered: false,
+        registrationPaused: false,
+        profileName: '跑者',
+        profileAvatarUrl: '',
+        registeredAtText: '',
     },
     onShow() {
         (0, share_1.enableProductShareOnly)();
@@ -35,13 +42,27 @@ Page({
     async load() {
         var _a;
         const userKey = (0, user_1.getUserKey)();
-        this.setData({ loading: true, error: '', errorRequestId: '', userKey });
+        const cachedProfile = (0, user_session_1.getCachedUserProfile)();
+        this.setData({
+            loading: true,
+            error: '',
+            errorRequestId: '',
+            userKey,
+            registrationPaused: (0, user_session_1.isAutoRegisterPaused)(),
+            isRegistered: Boolean(cachedProfile),
+            profileName: (cachedProfile === null || cachedProfile === void 0 ? void 0 : cachedProfile.nickname) || '跑者',
+            profileAvatarUrl: (cachedProfile === null || cachedProfile === void 0 ? void 0 : cachedProfile.avatarUrl) || '',
+        });
         try {
-            const [preference, favorites, choices] = await Promise.all([
+            await (0, account_1.ensureWechatSession)();
+            const [preference, favorites, choices, account] = await Promise.all([
                 (0, api_1.getPreference)(userKey).catch(() => null),
                 (0, api_1.getFavorites)(userKey),
                 (0, api_1.getEventChoices)(userKey).catch(() => ({ items: [] })),
+                (0, api_1.getMyUser)().catch(() => null),
             ]);
+            if (account)
+                (0, user_session_1.updateCachedUserProfile)(account.user);
             const availableChoices = choices.items.filter((item) => Boolean(item.event));
             const nextChoice = [...availableChoices]
                 .filter((item) => item.choice === 'registered' || item.choice === 'interested')
@@ -69,6 +90,13 @@ Page({
                 choiceCounts,
                 complianceNotice: format_1.complianceNotice,
                 feedbackReceipts,
+                isRegistered: Boolean(account),
+                registrationPaused: (0, user_session_1.isAutoRegisterPaused)(),
+                profileName: (account === null || account === void 0 ? void 0 : account.user.nickname) || '跑者',
+                profileAvatarUrl: (account === null || account === void 0 ? void 0 : account.user.avatarUrl) || '',
+                registeredAtText: account
+                    ? new Date(account.user.registeredAt).toLocaleDateString('zh-CN')
+                    : '',
             });
         }
         catch (error) {
@@ -88,6 +116,17 @@ Page({
     },
     openPreferences() {
         wx.navigateTo({ url: '/pages/preferences/index' });
+    },
+    openProfile() {
+        wx.navigateTo({ url: '/pages/profile/index' });
+    },
+    openReminders() {
+        wx.navigateTo({ url: '/pages/reminders/index' });
+    },
+    async enablePersonalization() {
+        (0, user_session_1.resumeAutoRegister)();
+        await (0, account_1.ensureWechatSession)(true);
+        this.load();
     },
     openFavorites() {
         wx.navigateTo({ url: '/pages/favorites/index' });

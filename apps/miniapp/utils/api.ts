@@ -1,4 +1,7 @@
 import { config } from '../config/index';
+import { clearUserSession, getUserToken } from './user-session';
+export type { UserProfile } from './user-session';
+import type { UserProfile } from './user-session';
 
 export type RunJudgement = 'priority' | 'watch' | 'unverified';
 export type SignupStatus = 'signup_open' | 'closing_soon' | 'closed' | 'not_started' | 'unknown';
@@ -57,6 +60,24 @@ export interface EventDetail extends EventSummary {
   eventTags: Array<{ tagName: string; tagType: string }>;
   choiceCounts: EventChoiceCounts;
   resolvedShare?: { title: string; imageUrl: string };
+  reminderOptions?: ReminderOption[];
+}
+
+export interface ReminderOption {
+  type: 'signup' | 'race_week';
+  available: boolean;
+  reason?: string;
+  trigger?: 'signup_open' | 'signup_deadline_3d' | 'race_week_7d';
+  scheduledAt?: string | null;
+}
+
+export interface EventReminderItem {
+  id: string;
+  eventId: string;
+  reminderType: 'signup' | 'race_week';
+  status: string;
+  scheduledAt: string | null;
+  event: EventDetail;
 }
 
 export type ShareScene =
@@ -110,7 +131,7 @@ export interface Preference {
   focusTags: string[];
 }
 
-interface RequestOptions {
+export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   data?: object;
   loadingText?: string;
@@ -153,7 +174,10 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
       url,
       method,
       data: isGet ? undefined : options.data,
-      header: { 'content-type': 'application/json' },
+      header: {
+        'content-type': 'application/json',
+        ...(getUserToken() ? { Authorization: `Bearer ${getUserToken()}` } : {}),
+      },
       success(res) {
         const data = res.data as { message?: string; requestId?: string };
         if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -162,6 +186,7 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
         }
 
         const message = data?.message || '请求失败';
+        if (res.statusCode === 401) clearUserSession();
         if (!options.silent) wx.showToast({ title: message, icon: 'none' });
         const retryAfterHeader = res.header?.['Retry-After'] || res.header?.['retry-after'];
         const retryAfterSeconds = Number(retryAfterHeader);
@@ -322,8 +347,13 @@ export function recordShare(data: {
     | 'source_summary'
     | 'release_notes'
     | 'personal_home';
+  requestShareToken?: boolean;
 }) {
-  return request<{ id: string }>('/api/share-records', { method: 'POST', data, silent: true });
+  return request<{ id: string; shareToken: string | null }>('/api/share-records', {
+    method: 'POST',
+    data,
+    silent: true,
+  });
 }
 
 export function getShareSettings() {
@@ -356,6 +386,69 @@ export function recordInteraction(data: {
   return request<{ recorded: true }>('/api/interactions', {
     method: 'POST',
     data,
+    silent: true,
+  });
+}
+
+export function getMyUser() {
+  return request<{
+    user: UserProfile;
+    summary: { favorites: number; choices: number; feedback: number; reminders: number };
+  }>('/api/users/me', { silent: true });
+}
+
+export function updateMyUser(data: { nickname?: string | null; clearAvatar?: boolean }) {
+  return request<{ user: UserProfile }>('/api/users/me', {
+    method: 'PUT',
+    data,
+    silent: true,
+  });
+}
+
+export function createAvatarUploadGrant() {
+  return request<{ grantId: string; token: string; uploadUrl: string; expiresAt: string }>(
+    '/api/users/me/avatar-upload-grants',
+    { method: 'POST', silent: true },
+  );
+}
+
+export function deleteMyUser() {
+  return request<void>('/api/users/me', { method: 'DELETE', silent: true });
+}
+
+export function recordActivity(data: {
+  entryPage?: string;
+  channel?: string;
+  referralShareToken?: string;
+  action?:
+    | 'viewedDetail'
+    | 'copiedOfficial'
+    | 'addedFavorite'
+    | 'setChoice'
+    | 'startedShare'
+    | 'subscribedReminder';
+}) {
+  return request<{ recorded: true }>('/api/activity', { method: 'POST', data, silent: true });
+}
+
+export function getMyReminders() {
+  return request<{ items: EventReminderItem[] }>('/api/users/me/reminders', { silent: true });
+}
+
+export function subscribeEventReminders(
+  eventId: string,
+  acceptedTypes: Array<'signup' | 'race_week'>,
+) {
+  return request('/api/users/me/reminders', {
+    method: 'POST',
+    data: { eventId, acceptedTypes },
+    silent: true,
+  });
+}
+
+export function cancelEventReminder(eventId: string, type: 'signup' | 'race_week') {
+  return request(`/api/users/me/reminders/${eventId}/${type}`, {
+    method: 'DELETE',
     silent: true,
   });
 }

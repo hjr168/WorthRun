@@ -290,6 +290,11 @@ export interface SystemHealth {
     source: { id: string; name: string };
   } | null;
   pendingFeedback: Partial<Record<'event_correction' | 'product_feedback', number>>;
+  features: {
+    userSystem: { enabled: boolean; configured: boolean };
+    avatar: { enabled: boolean; configured: boolean };
+    reminders: { enabled: boolean; configured: boolean };
+  };
   checkedAt: string;
 }
 
@@ -522,4 +527,68 @@ export interface InteractionStats {
   sourceSummaryViews: number;
   sourceSummaryCopies: number;
   sourceSummaryLoadRate: number;
+}
+
+export interface MiniappUserItem {
+  id: string;
+  nickname: string | null;
+  avatarFileId: string | null;
+  avatarUrl?: string | null;
+  maskedOpenId: string;
+  status: 'active' | 'disabled';
+  registeredAt: string;
+  lastLoginAt: string;
+  lastActiveAt: string;
+  profileUpdatedAt: string | null;
+  _count: {
+    favorites: number;
+    choices: number;
+    feedback: number;
+    reminders: number;
+    shares?: number;
+    activities?: number;
+  };
+  reminders?: Array<{
+    id: string;
+    reminderType: 'signup' | 'race_week';
+    status: string;
+    scheduledAt: string | null;
+    event: { eventName: string; eventDate: string };
+  }>;
+}
+
+export interface MiniappUsersResponse {
+  items: MiniappUserItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface GrowthStats {
+  days: 7 | 30;
+  activeUsers: number;
+  newUsers: number;
+  d1: { eligible: number; returned: number; rate: number };
+  d7: { eligible: number; returned: number; rate: number };
+  funnel: {
+    detailUsers: number;
+    officialUsers: number;
+    favoriteUsers: number;
+    choiceUsers: number;
+    shareUsers: number;
+    reminderUsers: number;
+    detailRate: number;
+    officialRate: number;
+    favoriteRate: number;
+    choiceRate: number;
+    shareRate: number;
+    reminderRate: number;
+  };
+  attribution: {
+    shareStarts: number;
+    referralVisitors: number;
+    referredNewUsers: number;
+    referralDetailUsers: number;
+    referralToDetailRate: number;
+  };
 }

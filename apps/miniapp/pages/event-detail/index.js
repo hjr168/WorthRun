@@ -8,6 +8,8 @@ const feedback_1 = require("../../utils/feedback");
 const event_detail_1 = require("../../utils/event-detail");
 const product_feedback_1 = require("../../utils/product-feedback");
 const share_1 = require("../../utils/share");
+const account_1 = require("../../utils/account");
+const index_1 = require("../../config/index");
 Page({
     data: {
         id: '',
@@ -33,11 +35,24 @@ Page({
         hasFeedbackReceipt: false,
         complianceNotice: format_1.complianceNotice,
         officialActionText: format_1.officialActionText,
+        reminderUpdating: '',
+        reminderSubscribed: { signup: false, race_week: false },
     },
     onLoad(query) {
         (0, share_1.enablePublicShare)();
         this.setData({ id: (0, launch_1.resolveEventId)(query), userKey: (0, user_1.getUserKey)() });
         this.load();
+        if (query.shareToken) {
+            (0, account_1.ensureWechatSession)()
+                .then((profile) => profile
+                ? (0, api_1.recordActivity)({
+                    entryPage: 'event_detail',
+                    channel: 'share',
+                    referralShareToken: query.shareToken,
+                })
+                : undefined)
+                .catch(() => { });
+        }
     },
     onShow() {
         this.refreshFeedbackReceipt();
@@ -56,10 +71,11 @@ Page({
         }
         this.setData({ loading: true, error: '', errorRequestId: '' });
         try {
-            const [detail, favorites, viewerChoice] = await Promise.all([
+            const [detail, favorites, viewerChoice, reminderResult] = await Promise.all([
                 (0, api_1.getEventDetail)(this.data.id),
                 (0, api_1.getFavorites)(this.data.userKey).catch(() => ({ items: [] })),
                 (0, api_1.getEventChoice)(this.data.userKey, this.data.id).catch(() => ({ choice: null })),
+                (0, api_1.getMyReminders)().catch(() => ({ items: [] })),
             ]);
             const verification = (0, event_detail_1.buildVerificationGroups)(detail.event.infoStatus, detail.event.checklistItems);
             this.setData({
@@ -80,6 +96,10 @@ Page({
                 hasVerificationItems: verification.hasItemRecords,
                 complianceNotice: detail.complianceNotice || format_1.complianceNotice,
                 officialActionText: detail.officialActionText || format_1.officialActionText,
+                reminderSubscribed: {
+                    signup: reminderResult.items.some((item) => item.eventId === detail.event.id && item.reminderType === 'signup'),
+                    race_week: reminderResult.items.some((item) => item.eventId === detail.event.id && item.reminderType === 'race_week'),
+                },
                 loading: false,
             });
             this.refreshFeedbackReceipt();
@@ -206,6 +226,42 @@ Page({
             this.setData({ choiceUpdating: false });
         }
     },
+    async subscribeReminder(event) {
+        var _a;
+        const type = String(event.currentTarget.dataset.type || '');
+        if (!this.data.event || this.data.reminderUpdating || this.data.reminderSubscribed[type])
+            return;
+        const option = (_a = this.data.event.reminderOptions) === null || _a === void 0 ? void 0 : _a.find((item) => item.type === type);
+        if (!(option === null || option === void 0 ? void 0 : option.available)) {
+            wx.showToast({ title: (option === null || option === void 0 ? void 0 : option.reason) || '当前暂无可用提醒', icon: 'none' });
+            return;
+        }
+        const templateId = index_1.config.reminderTemplateIds[type];
+        if (!templateId) {
+            wx.showToast({ title: '提醒功能正在灰度开放', icon: 'none' });
+            return;
+        }
+        this.setData({ reminderUpdating: type });
+        try {
+            const profile = await (0, account_1.ensureWechatSession)(true);
+            if (!profile)
+                throw new Error('请稍后重试微信登录');
+            const permission = await new Promise((resolve, reject) => {
+                wx.requestSubscribeMessage({ tmplIds: [templateId], success: resolve, fail: reject });
+            });
+            if (permission[templateId] !== 'accept')
+                throw new Error('需先允许本次消息提醒');
+            await (0, api_1.subscribeEventReminders)(this.data.event.id, [type]);
+            this.setData({ [`reminderSubscribed.${type}`]: true });
+            wx.showToast({ title: '提醒已开启', icon: 'success' });
+        }
+        catch (error) {
+            wx.showToast({ title: error.message || '开启提醒失败', icon: 'none' });
+        }
+        finally {
+            this.setData({ reminderUpdating: '' });
+        }
+    },
     openOfficial() {
         var _a;
         const url = (_a = this.data.event) === null || _a === void 0 ? void 0 : _a.officialUrl;
@@ -253,12 +309,12 @@ Page({
             return;
         wx.navigateTo({ url: `/pages/share-card/index?id=${this.data.id}` });
     },
-    onShareAppMessage() {
+    async onShareAppMessage() {
         const event = this.data.event;
-        (0, share_1.trackShare)('page_share', 'event_detail', event === null || event === void 0 ? void 0 : event.id);
+        const tracked = await (0, share_1.trackShare)('page_share', 'event_detail', event === null || event === void 0 ? void 0 : event.id, true);
         if (!event)
             return (0, share_1.getSharePayload)('home', '/pages/home/index');
-        return (0, share_1.getSharePayload)('event_detail', `/pages/event-detail/index?id=${event.id}`, {
+        return (0, share_1.getSharePayload)('event_detail', `/pages/event-detail/index?id=${event.id}${tracked.shareToken ? `&shareToken=${tracked.shareToken}` : ''}`, {
             eventName: event.eventName,
             city: event.city,
             eventDate: event.eventDate,

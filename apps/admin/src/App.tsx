@@ -12,6 +12,8 @@ import {
   ToolOutlined,
   WarningOutlined,
   RocketOutlined,
+  TeamOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import {
@@ -40,6 +42,8 @@ import { EventChangesPage } from './pages/EventChangesPage';
 import { ChoiceStatsPage } from './pages/ChoiceStatsPage';
 import { ShareCenterPage } from './pages/ShareCenterPage';
 import { ReleaseNotesPage } from './pages/ReleaseNotesPage';
+import { UsersPage } from './pages/UsersPage';
+import { GrowthPage } from './pages/GrowthPage';
 
 const { Content, Sider } = Layout;
 
@@ -103,9 +107,13 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
                     ? '/release-notes'
                     : location.pathname.startsWith('/choice-stats')
                       ? '/choice-stats'
-                      : location.pathname.startsWith('/logs')
-                        ? '/logs'
-                        : '/workbench';
+                      : location.pathname.startsWith('/users')
+                        ? '/users'
+                        : location.pathname.startsWith('/growth')
+                          ? '/growth'
+                          : location.pathname.startsWith('/logs')
+                            ? '/logs'
+                            : '/workbench';
 
   return (
     <Layout className="app-shell">
@@ -156,6 +164,20 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               icon: <BarChartOutlined />,
               label: <Link to="/choice-stats">选择数据</Link>,
             },
+            ...(admin?.role === 'super_admin'
+              ? [
+                  {
+                    key: '/users',
+                    icon: <TeamOutlined />,
+                    label: <Link to="/users">用户管理</Link>,
+                  },
+                  {
+                    key: '/growth',
+                    icon: <LineChartOutlined />,
+                    label: <Link to="/growth">增长与提醒</Link>,
+                  },
+                ]
+              : []),
             {
               key: '/content',
               icon: <ToolOutlined />,
@@ -195,6 +217,22 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/share-stats" element={<Navigate to="/share?tab=stats" replace />} />
             <Route path="/release-notes" element={<ReleaseNotesPage />} />
             <Route path="/choice-stats" element={<ChoiceStatsPage />} />
+            <Route
+              path="/users"
+              element={
+                admin?.role === 'super_admin' ? <UsersPage /> : <Navigate to="/workbench" replace />
+              }
+            />
+            <Route
+              path="/growth"
+              element={
+                admin?.role === 'super_admin' ? (
+                  <GrowthPage />
+                ) : (
+                  <Navigate to="/workbench" replace />
+                )
+              }
+            />
             <Route path="/content" element={<ContentPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/logs" element={<LogsPage />} />

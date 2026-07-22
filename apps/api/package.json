@@ -15,6 +15,8 @@
     "data:backfill-candidate-confirmation-links": "node --max-old-space-size=160 dist/apps/api/src/candidateConfirmationBackfillCli.js",
     "feedback:maintenance": "node --max-old-space-size=96 dist/apps/api/src/feedbackMaintenanceCli.js",
     "source-summary:backfill": "node --max-old-space-size=160 dist/apps/api/src/sourceSummaryBackfillCli.js",
+    "reminder:send-due": "node --max-old-space-size=96 dist/apps/api/src/reminderDeliveryCli.js",
+    "release:preflight-v0.5.3": "node --max-old-space-size=96 --import tsx src/v053ReleasePreflightCli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

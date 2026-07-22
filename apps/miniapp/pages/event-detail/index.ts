@@ -6,10 +6,13 @@ import {
   getEventDetail,
   getEventChoice,
   getFavorites,
+  getMyReminders,
   recordInteraction,
+  recordActivity,
   removeFavorite,
   removeEventChoice,
   setEventChoice,
+  subscribeEventReminders,
 } from '../../utils/api';
 import {
   complianceNotice,
@@ -31,6 +34,8 @@ import {
 } from '../../utils/event-detail';
 import { openProductFeedback } from '../../utils/product-feedback';
 import { enablePublicShare, getSharePayload, trackShare } from '../../utils/share';
+import { ensureWechatSession } from '../../utils/account';
+import { config } from '../../config/index';
 
 Page({
   data: {
@@ -57,11 +62,26 @@ Page({
     hasFeedbackReceipt: false,
     complianceNotice,
     officialActionText,
+    reminderUpdating: '',
+    reminderSubscribed: { signup: false, race_week: false },
   },
   onLoad(query: EventLaunchQuery) {
     enablePublicShare();
     this.setData({ id: resolveEventId(query), userKey: getUserKey() });
     this.load();
+    if (query.shareToken) {
+      ensureWechatSession()
+        .then((profile) =>
+          profile
+            ? recordActivity({
+                entryPage: 'event_detail',
+                channel: 'share',
+                referralShareToken: query.shareToken,
+              })
+            : undefined,
+        )
+        .catch(() => {});
+    }
   },
   onShow() {
     this.refreshFeedbackReceipt();
@@ -79,10 +99,11 @@ Page({
     }
     this.setData({ loading: true, error: '', errorRequestId: '' });
     try {
-      const [detail, favorites, viewerChoice] = await Promise.all([
+      const [detail, favorites, viewerChoice, reminderResult] = await Promise.all([
         getEventDetail(this.data.id),
         getFavorites(this.data.userKey).catch(() => ({ items: [] })),
         getEventChoice(this.data.userKey, this.data.id).catch(() => ({ choice: null })),
+        getMyReminders().catch(() => ({ items: [] })),
       ]);
       const verification = buildVerificationGroups(
         detail.event.infoStatus,
@@ -106,6 +127,14 @@ Page({
         hasVerificationItems: verification.hasItemRecords,
         complianceNotice: detail.complianceNotice || complianceNotice,
         officialActionText: detail.officialActionText || officialActionText,
+        reminderSubscribed: {
+          signup: reminderResult.items.some(
+            (item) => item.eventId === detail.event.id && item.reminderType === 'signup',
+          ),
+          race_week: reminderResult.items.some(
+            (item) => item.eventId === detail.event.id && item.reminderType === 'race_week',
+          ),
+        },
         loading: false,
       });
       this.refreshFeedbackReceipt();
@@ -219,6 +248,37 @@ Page({
       this.setData({ choiceUpdating: false });
     }
   },
+  async subscribeReminder(event: WechatMiniprogram.TouchEvent) {
+    const type = String(event.currentTarget.dataset.type || '') as 'signup' | 'race_week';
+    if (!this.data.event || this.data.reminderUpdating || this.data.reminderSubscribed[type])
+      return;
+    const option = this.data.event.reminderOptions?.find((item) => item.type === type);
+    if (!option?.available) {
+      wx.showToast({ title: option?.reason || '当前暂无可用提醒', icon: 'none' });
+      return;
+    }
+    const templateId = config.reminderTemplateIds[type];
+    if (!templateId) {
+      wx.showToast({ title: '提醒功能正在灰度开放', icon: 'none' });
+      return;
+    }
+    this.setData({ reminderUpdating: type });
+    try {
+      const profile = await ensureWechatSession(true);
+      if (!profile) throw new Error('请稍后重试微信登录');
+      const permission = await new Promise<Record<string, string>>((resolve, reject) => {
+        wx.requestSubscribeMessage({ tmplIds: [templateId], success: resolve, fail: reject });
+      });
+      if (permission[templateId] !== 'accept') throw new Error('需先允许本次消息提醒');
+      await subscribeEventReminders(this.data.event.id, [type]);
+      this.setData({ [`reminderSubscribed.${type}`]: true });
+      wx.showToast({ title: '提醒已开启', icon: 'success' });
+    } catch (error) {
+      wx.showToast({ title: (error as Error).message || '开启提醒失败', icon: 'none' });
+    } finally {
+      this.setData({ reminderUpdating: '' });
+    }
+  },
   openOfficial() {
     const url = this.data.event?.officialUrl;
     if (!url) {
@@ -263,13 +323,13 @@ Page({
     if (!this.data.event) return;
     wx.navigateTo({ url: `/pages/share-card/index?id=${this.data.id}` });
   },
-  onShareAppMessage() {
+  async onShareAppMessage() {
     const event = this.data.event;
-    trackShare('page_share', 'event_detail', event?.id);
+    const tracked = await trackShare('page_share', 'event_detail', event?.id, true);
     if (!event) return getSharePayload('home', '/pages/home/index');
     return getSharePayload(
       'event_detail',
-      `/pages/event-detail/index?id=${event.id}`,
+      `/pages/event-detail/index?id=${event.id}${tracked.shareToken ? `&shareToken=${tracked.shareToken}` : ''}`,
       {
         eventName: event.eventName,
         city: event.city,

@@ -15,8 +15,16 @@
 }
 
 .profile-main {
+  flex: 1;
   min-width: 0;
 }
+
+.profile-layout { display: flex; align-items: center; gap: 24rpx; }
+.profile-avatar { flex: 0 0 104rpx; width: 104rpx; height: 104rpx; border-radius: 50%; }
+.profile-avatar-placeholder { display: flex; align-items: center; justify-content: center; background: #fff1eb; color: #ff5c1a; font-size: 38rpx; font-weight: 800; }
+.profile-actions { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; margin-top: 22rpx; }
+.profile-action { min-height: 60rpx; background: transparent; color: #ff5c1a; padding: 8rpx 0; font-size: 24rpx; font-weight: 700; }
+.registered-at { color: #6b7a8d; font-size: 21rpx; }
 
 .profile-kicker {
   color: var(--wr-primary, #ff5c1a);

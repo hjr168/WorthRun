@@ -220,6 +220,20 @@ dry-run 返回 `preview.expected.alertUpdatedAt` 和 `preview.expected.eventUpda
 - `GET /api/release-notes/latest`
 - `POST /api/share-records`
 
+## V0.5.3 用户与提醒
+
+- `POST /api/auth/wechat`：使用 `wx.login` code 静默注册或登录，并幂等关联历史匿名 `userKey`。
+- `GET /api/users/me`、`PUT /api/users/me`、`DELETE /api/users/me`：读取、更新或注销本人账号。
+- `POST /api/users/me/avatar-upload-grants`：创建 5 分钟有效、一次性的 UniCloud 头像上传凭证。
+- `POST /api/activity`：记录按用户和北京时间日期去重的增长行为。
+- `GET /api/users/me/reminders`、`POST /api/users/me/reminders`、`DELETE /api/users/me/reminders/:eventId/:type`：查询、订阅或取消本人赛事提醒。
+- `GET /api/admin/users`、`GET /api/admin/users/:id`：超级管理员分页查看用户和行为摘要。
+- `POST /api/admin/users/:id/reveal-openid`：单次查看完整 OpenID，并写入管理员操作日志。
+- `PATCH /api/admin/users/:id/status`、`DELETE /api/admin/users/:id/profile`：禁用/恢复用户或清除违规资料。
+- `GET /api/admin/growth-stats?days=7|30`、`GET /api/admin/reminder-stats`：读取用户增长、分享归因和提醒汇总。
+
+用户接口使用 `Authorization: Bearer <user token>`。功能开关关闭时，公开赛事与旧版匿名接口继续可用；头像文件只保存 UniCloud `fileID`，OpenID 不通过本人接口返回。
+
 公开赛事接口只返回 `publishStatus = published`、比赛日期晚于北京时间当天且城市属于粤港澳大湾区的赛事，不返回 hidden / offline / archived。
 
 更新日志公开接口只返回 `published`，按业务更新时间倒序分页；`latest` 按首次发布时间返回最新可见记录，用于本机未读红点。

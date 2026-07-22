@@ -1,0 +1,11 @@
+.profile-page { padding-top: 28rpx; }
+.status-text, .error-text { padding: 32rpx 0; color: #64748b; text-align: center; }
+.error-text { color: #b91c1c; }
+.profile-form { display: grid; gap: 28rpx; }
+.avatar-button { display: flex; flex-direction: column; align-items: center; gap: 14rpx; background: transparent; }
+.avatar-image, .avatar-placeholder { width: 152rpx; height: 152rpx; border-radius: 50%; }
+.avatar-placeholder { display: flex; align-items: center; justify-content: center; background: #fff1eb; color: #ff5c1a; font-size: 54rpx; font-weight: 800; }
+.avatar-action { color: #ff5c1a; font-size: 24rpx; font-weight: 700; }
+.field-hint { margin-top: 10rpx; color: #64748b; font-size: 23rpx; }
+.account-actions { display: grid; gap: 12rpx; margin-top: 56rpx; }
+.danger { color: #b91c1c; }

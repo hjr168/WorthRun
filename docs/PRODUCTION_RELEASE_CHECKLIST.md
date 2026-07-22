@@ -146,6 +146,25 @@
 - [ ] 外部分享图主机名已配置 `SHARE_IMAGE_ALLOWED_HOSTS` 和微信合法域名；未使用外部图时保持内置默认。
 - [ ] 只发布经人工确认的版本日志，草稿不对小程序公开。
 
+## 14. V0.5.3 用户体系、增长与提醒
+
+- [ ] 已备份 PostgreSQL 并执行 `20260722160000_user_growth_reminders` 迁移，原有收藏、选择、偏好和反馈数量不变。
+- [ ] `USER_SYSTEM_ENABLED=false` 时公开赛事和旧版匿名功能正常；配置密钥后再通过体验版开启。
+- [ ] OpenID 数据库只存密文与 HMAC，后台默认脱敏，查看完整 OpenID 会新增审计日志。
+- [ ] 同一微信用户在两台真机首次绑定后，收藏去重、选择取最新、偏好取最新。
+- [ ] 禁用用户只可浏览，不可修改资料、收藏、选择、反馈或订阅提醒。
+- [ ] UniCloud 支付宝云函数已部署，JPEG/PNG/WebP、2MB 限制、过期/重放凭证、伪造回调和旧头像删除均通过真机验证。
+- [ ] `worthrun-avatar` 函数详情的“云函数URL化” PATH 为 `/worthrun-avatar`，使用控制台显示的 `dev-hz.cloudbasefunction.cn` 测试域名；公网请求能到达函数。
+- [ ] 支付宝云空间 `env-00jy6bpz3vhc` 已续期，剩余有效期不少于 30 天；当前控制台显示到期时间为 2026-08-26 23:59:59。
+- [ ] UniCloud 云存储权限已设为仅云函数可读写，头像展示只使用短期 URL。
+- [ ] 微信平台已配置 API 与 UniCloud 的 `request` / `uploadFile` / `downloadFile` 合法域名。
+- [ ] 微信 `request` 合法域名包含 `https://run-api.huangjiarong.top`；`uploadFile` 包含 `https://env-00jy6bpz3vhc.dev-hz.cloudbasefunction.cn`；头像下载域名包含 `https://env-00jy6bpz3vhc.normal.cloudstatic.cn`。
+- [ ] 隐私政策和微信隐私保护指引已声明 OpenID、头像昵称、跨设备恢复与赛事提醒用途。
+- [ ] 两个订阅消息模板的 ID 和赛事/提示/日期字段键已按公众平台实际值配置，并完成真机验收，再开启 `REMINDER_FEATURE_ENABLED=true`。
+- [ ] 依次执行 V0.5.3 `foundation`、`users`、`reminders` 预检，对应阶段均无 `BLOCK`。
+- [ ] 提醒任务使用一次性 cron，PM2 仍只有一个 API 进程；API RSS < 220MB，提醒任务峰值 < 120MB。
+- [ ] 后台生产资产不含 `localhost:4000`，“用户管理”和“增长与提醒”仅超级管理员可见；工作台显示用户、头像和提醒均已就绪。
+
 ## 注意事项
 
 - `urlCheck=false` 只允许开发调试，不能用于体验版上传、提审或正式发布。

@@ -1,0 +1,8 @@
+{
+  "name": "WorthRun",
+  "appid": "NADF29805",
+  "description": "WorthRun UniCloud deployment manifest",
+  "versionName": "0.5.3",
+  "versionCode": "53",
+  "transformPx": false
+}

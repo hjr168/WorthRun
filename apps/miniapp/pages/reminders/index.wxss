@@ -1,0 +1,11 @@
+.reminders-page { padding-top: 24rpx; }
+.state-text { padding: 80rpx 0; color: #64748b; text-align: center; }
+.state-text .secondary-button { margin-top: 24rpx; }
+.error { color: #b91c1c; }
+.reminder-list { display: grid; gap: 16rpx; }
+.reminder-row { display: flex; align-items: center; gap: 20rpx; border: 2rpx solid rgba(15,25,35,.08); border-radius: 24rpx; background: #fff; padding: 24rpx; }
+.reminder-main { flex: 1; min-width: 0; }
+.reminder-name { color: #0f1923; font-size: 29rpx; font-weight: 800; }
+.reminder-meta, .reminder-type { margin-top: 8rpx; color: #64748b; font-size: 23rpx; }
+.reminder-type { color: #2a7f75; }
+.cancel-button { flex: 0 0 auto; background: transparent; color: #64748b; font-size: 24rpx; }

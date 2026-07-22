@@ -4,6 +4,7 @@ import {
   EventSummary,
   getEventChoices,
   getFavorites,
+  getMyUser,
   getPreference,
   Preference,
 } from '../../utils/api';
@@ -14,6 +15,13 @@ import { feedbackReceiptStorageKey, getFeedbackReceipts } from '../../utils/feed
 import { openProductFeedback } from '../../utils/product-feedback';
 import { refreshReleaseBadge } from '../../utils/release-notes';
 import { enableProductShareOnly, getProductHomeShare } from '../../utils/share';
+import { ensureWechatSession } from '../../utils/account';
+import {
+  getCachedUserProfile,
+  isAutoRegisterPaused,
+  resumeAutoRegister,
+  updateCachedUserProfile,
+} from '../../utils/user-session';
 
 Page({
   data: {
@@ -36,6 +44,11 @@ Page({
       createdAtText: string;
     }>,
     hasNewRelease: false,
+    isRegistered: false,
+    registrationPaused: false,
+    profileName: '跑者',
+    profileAvatarUrl: '',
+    registeredAtText: '',
   },
   onShow() {
     enableProductShareOnly();
@@ -46,13 +59,26 @@ Page({
   },
   async load() {
     const userKey = getUserKey();
-    this.setData({ loading: true, error: '', errorRequestId: '', userKey });
+    const cachedProfile = getCachedUserProfile();
+    this.setData({
+      loading: true,
+      error: '',
+      errorRequestId: '',
+      userKey,
+      registrationPaused: isAutoRegisterPaused(),
+      isRegistered: Boolean(cachedProfile),
+      profileName: cachedProfile?.nickname || '跑者',
+      profileAvatarUrl: cachedProfile?.avatarUrl || '',
+    });
     try {
-      const [preference, favorites, choices] = await Promise.all([
+      await ensureWechatSession();
+      const [preference, favorites, choices, account] = await Promise.all([
         getPreference(userKey).catch(() => null),
         getFavorites(userKey),
         getEventChoices(userKey).catch(() => ({ items: [] })),
+        getMyUser().catch(() => null),
       ]);
+      if (account) updateCachedUserProfile(account.user);
       const availableChoices = choices.items.filter(
         (item): item is typeof item & { event: EventSummary } => Boolean(item.event),
       );
@@ -89,6 +115,13 @@ Page({
         choiceCounts,
         complianceNotice,
         feedbackReceipts,
+        isRegistered: Boolean(account),
+        registrationPaused: isAutoRegisterPaused(),
+        profileName: account?.user.nickname || '跑者',
+        profileAvatarUrl: account?.user.avatarUrl || '',
+        registeredAtText: account
+          ? new Date(account.user.registeredAt).toLocaleDateString('zh-CN')
+          : '',
       });
     } catch (error) {
       this.setData({
@@ -107,6 +140,17 @@ Page({
   },
   openPreferences() {
     wx.navigateTo({ url: '/pages/preferences/index' });
+  },
+  openProfile() {
+    wx.navigateTo({ url: '/pages/profile/index' });
+  },
+  openReminders() {
+    wx.navigateTo({ url: '/pages/reminders/index' });
+  },
+  async enablePersonalization() {
+    resumeAutoRegister();
+    await ensureWechatSession(true);
+    this.load();
   },
   openFavorites() {
     wx.navigateTo({ url: '/pages/favorites/index' });

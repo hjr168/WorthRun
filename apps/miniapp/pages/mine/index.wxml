@@ -8,12 +8,21 @@
   </block>
   <block wx:else>
     <view class="profile-card">
+      <view class="profile-layout">
+        <image wx:if="{{profileAvatarUrl}}" class="profile-avatar" src="{{profileAvatarUrl}}" mode="aspectFill" />
+        <view wx:else class="profile-avatar profile-avatar-placeholder">跑</view>
       <view class="profile-main">
         <view class="profile-kicker">我的跑赛档案</view>
-        <view class="profile-title">匿名跑者</view>
-        <view class="profile-desc">收藏、选择、偏好和反馈都使用匿名身份，不公开个人资料。</view>
+        <view class="profile-title">{{profileName}}</view>
+        <view class="profile-desc">{{isRegistered ? '资料仅本人和管理后台可见，赛事选择仍匿名公开。' : '当前使用本机匿名模式，不影响浏览赛事。'}}</view>
       </view>
-      <view class="identity-chip">{{shortUserKey}}</view>
+      </view>
+      <view wx:if="{{isRegistered}}" class="profile-actions">
+        <button class="profile-action" bindtap="openProfile">完善个人资料</button>
+        <text class="registered-at">注册于 {{registeredAtText}}</text>
+      </view>
+      <button wx:elif="{{registrationPaused}}" class="profile-action" bindtap="enablePersonalization">重新启用个性化功能</button>
+      <view wx:else class="identity-chip">{{shortUserKey}}</view>
     </view>
 
     <view class="summary-panel">
@@ -56,6 +65,11 @@
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openFavorites" aria-label="打开我的收藏">
         <view class="menu-icon-box"><image class="menu-icon" src="/assets/icons/heart-orange.png" mode="aspectFit" /></view>
         <view class="menu-copy"><text class="menu-title">我的收藏</text><text class="menu-summary">集中查看已收藏赛事</text></view>
+        <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+      </view>
+      <view wx:if="{{isRegistered}}" class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openReminders" aria-label="打开我的提醒">
+        <view class="menu-icon-box"><image class="menu-icon" src="/assets/icons/calendar-orange.png" mode="aspectFit" /></view>
+        <view class="menu-copy"><text class="menu-title">我的提醒</text><text class="menu-summary">管理报名和赛前提醒</text></view>
         <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openFeedback" aria-label="打开赛事纠错">

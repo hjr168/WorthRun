@@ -69,6 +69,39 @@ enum AdminStatus {
   disabled
 }
 
+enum UserStatus {
+  active
+  disabled
+}
+
+enum AvatarUploadGrantStatus {
+  pending
+  consumed
+  completed
+  failed
+}
+
+enum EventReminderType {
+  signup
+  race_week
+}
+
+enum EventReminderTrigger {
+  signup_open
+  signup_deadline_3d
+  race_week_7d
+}
+
+enum EventReminderStatus {
+  pending
+  sending
+  sent
+  cancelled
+  expired
+  failed
+  review_required
+}
+
 enum EventSourceType {
   page_url
   chinaath_api
@@ -187,6 +220,7 @@ model Event {
   userChoices     UserEventChoice[]
   sourceSummaries EventSourceSummary[]
   shareOverride   EventShareOverride?
+  reminders       EventReminder[]
 
   @@index([city])
   @@index([eventDate])
@@ -228,24 +262,33 @@ model EventTag {
 model UserPreference {
   id        String   @id @default(cuid())
   userKey   String   @unique @map("user_key")
+  userId    String?  @map("user_id")
   cities    String[] @default([])
   distances String[] @default([])
   focusTags String[] @default([]) @map("focus_tags")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@index([userId])
   @@map("user_preferences")
 }
 
 model UserFavorite {
   id        String   @id @default(cuid())
   userKey   String   @map("user_key")
+  userId    String?  @map("user_id")
   eventId   String   @map("event_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userKey, eventId])
+  @@unique([userId, eventId])
+  @@index([userId])
   @@index([eventId])
   @@map("user_favorites")
 }
@@ -253,18 +296,133 @@ model UserFavorite {
 model UserEventChoice {
   id        String          @id @default(cuid())
   userKey   String          @map("user_key")
+  userId    String?         @map("user_id")
   eventId   String          @map("event_id")
   choice    EventChoiceType
   createdAt DateTime        @default(now()) @map("created_at")
   updatedAt DateTime        @updatedAt @map("updated_at")
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userKey, eventId])
+  @@unique([userId, eventId])
+  @@index([userId])
   @@index([userKey, choice, updatedAt])
   @@index([eventId, choice])
   @@index([createdAt])
   @@map("user_event_choices")
+}
+
+model User {
+  id               String     @id @default(cuid())
+  openIdHash       String     @unique @map("open_id_hash")
+  openIdCiphertext String     @map("open_id_ciphertext")
+  openIdIv         String     @map("open_id_iv")
+  openIdAuthTag    String     @map("open_id_auth_tag")
+  nickname         String?
+  avatarFileId     String?    @map("avatar_file_id")
+  status           UserStatus @default(active)
+  registeredAt     DateTime   @default(now()) @map("registered_at")
+  lastLoginAt      DateTime   @default(now()) @map("last_login_at")
+  lastActiveAt     DateTime   @default(now()) @map("last_active_at")
+  profileUpdatedAt DateTime?  @map("profile_updated_at")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  aliases            UserAlias[]
+  preferences        UserPreference[]
+  favorites          UserFavorite[]
+  choices            UserEventChoice[]
+  feedback           Feedback[]
+  shares             ShareRecord[]
+  activities         UserActivityDaily[]
+  reminders          EventReminder[]
+  avatarUploadGrants AvatarUploadGrant[]
+
+  @@index([status, registeredAt])
+  @@index([lastActiveAt])
+  @@index([nickname])
+  @@map("users")
+}
+
+model UserAlias {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  userKeyHash String   @unique @map("user_key_hash")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_aliases")
+}
+
+model UserActivityDaily {
+  userId             String   @map("user_id")
+  activityDate       DateTime @map("activity_date") @db.Date
+  firstEntryPage     String?  @map("first_entry_page")
+  firstChannel       String?  @map("first_channel")
+  referralShareToken String?  @map("referral_share_token")
+  viewedDetail       Boolean  @default(false) @map("viewed_detail")
+  copiedOfficial     Boolean  @default(false) @map("copied_official")
+  addedFavorite      Boolean  @default(false) @map("added_favorite")
+  setChoice          Boolean  @default(false) @map("set_choice")
+  startedShare       Boolean  @default(false) @map("started_share")
+  subscribedReminder Boolean  @default(false) @map("subscribed_reminder")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, activityDate])
+  @@index([activityDate])
+  @@index([referralShareToken])
+  @@map("user_activity_daily")
+}
+
+model AvatarUploadGrant {
+  id          String                  @id @default(cuid())
+  userId      String                  @map("user_id")
+  tokenHash   String                  @unique @map("token_hash")
+  status      AvatarUploadGrantStatus @default(pending)
+  expiresAt   DateTime                @map("expires_at")
+  consumedAt  DateTime?               @map("consumed_at")
+  completedAt DateTime?               @map("completed_at")
+  createdAt   DateTime                @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt, status])
+  @@index([userId, createdAt])
+  @@map("avatar_upload_grants")
+}
+
+model EventReminder {
+  id            String               @id @default(cuid())
+  userId        String               @map("user_id")
+  eventId       String               @map("event_id")
+  reminderType  EventReminderType    @map("reminder_type")
+  trigger       EventReminderTrigger
+  status        EventReminderStatus  @default(pending)
+  scheduledAt   DateTime?            @map("scheduled_at")
+  sentAt        DateTime?            @map("sent_at")
+  cancelledAt   DateTime?            @map("cancelled_at")
+  attempts      Int                  @default(0)
+  lastErrorCode String?              @map("last_error_code")
+  lockedAt      DateTime?            @map("locked_at")
+  lockToken     String?              @map("lock_token")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId, reminderType])
+  @@index([status, scheduledAt])
+  @@index([eventId, status])
+  @@map("event_reminders")
 }
 
 model EventSourceSummary {
@@ -302,6 +460,7 @@ model Feedback {
   id               String         @id @default(cuid())
   eventId          String?        @map("event_id")
   userKey          String?        @map("user_key")
+  userId           String?        @map("user_id")
   scope            FeedbackScope  @default(event_correction)
   feedbackType     String         @map("feedback_type")
   content          String
@@ -318,10 +477,12 @@ model Feedback {
   updatedAt        DateTime       @updatedAt @map("updated_at")
 
   event             Event?               @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  user              User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   fingerprintRecord FeedbackFingerprint?
 
   @@index([status])
   @@index([eventId])
+  @@index([userId])
   @@index([scope, status, createdAt])
   @@index([contextPage])
   @@index([fingerprint])
@@ -588,15 +749,23 @@ model EventChangeAlert {
 }
 
 model ShareRecord {
-  id        String   @id @default(cuid())
-  userKey   String?  @map("user_key")
-  eventId   String?  @map("event_id")
-  shareType String   @map("share_type")
-  scene     String
-  createdAt DateTime @default(now()) @map("created_at")
+  id             String    @id @default(cuid())
+  userKey        String?   @map("user_key")
+  userId         String?   @map("user_id")
+  userKeyHash    String?   @map("user_key_hash")
+  shareToken     String?   @unique @map("share_token")
+  tokenExpiresAt DateTime? @map("token_expires_at")
+  eventId        String?   @map("event_id")
+  shareType      String    @map("share_type")
+  scene          String
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  @@index([userId])
+  @@index([userKeyHash])
+  @@index([shareToken, tokenExpiresAt])
   @@index([eventId])
   @@index([createdAt])
   @@map("share_records")

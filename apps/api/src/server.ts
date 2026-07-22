@@ -111,6 +111,34 @@ import {
   publishSourceSummary,
   updateSourceSummaryDraft,
 } from './sourceSummaryWorkflow.js';
+import {
+  UserIdentityError,
+  createUserToken,
+  decryptOpenId,
+  exchangeWeChatCode,
+  maskOpenId,
+  openIdHash,
+  parseUserToken,
+  publicUser,
+  registerWechatUser,
+  secretKey,
+} from './userIdentity.js';
+import { createShareToken, getGrowthStats, recordUserActivity } from './growthAnalytics.js';
+import {
+  buildReminderOptions,
+  getReminderStats,
+  reminderOptionsForEvent,
+  subscribeReminders,
+} from './reminderWorkflow.js';
+import {
+  AvatarUploadError,
+  completeAvatarUpload,
+  consumeAvatarUploadGrant,
+  createAvatarUploadGrant,
+  deleteAvatarFile,
+  getAvatarTemporaryUrls,
+  safeEqual,
+} from './avatarUploads.js';
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -125,9 +153,56 @@ if (isProduction && !process.env.ADMIN_TOKEN_SECRET) {
 if (isProduction && !process.env.FEEDBACK_ABUSE_SECRET) {
   throw new Error('生产环境必须配置 FEEDBACK_ABUSE_SECRET');
 }
+if (
+  isProduction &&
+  process.env.USER_SYSTEM_ENABLED === 'true' &&
+  (!process.env.WX_APPID ||
+    (process.env.WX_APPSECRET?.length || 0) < 16 ||
+    (process.env.USER_TOKEN_SECRET?.length || 0) < 32 ||
+    (process.env.USER_OPENID_HASH_SECRET?.length || 0) < 32 ||
+    process.env.USER_TOKEN_SECRET === process.env.USER_OPENID_HASH_SECRET ||
+    Buffer.from(process.env.USER_OPENID_ENCRYPTION_KEY || '', 'base64').length !== 32)
+) {
+  throw new Error('启用用户体系时必须配置微信登录与独立的高强度用户密钥');
+}
 
 const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'worth-running-dev-secret';
 const feedbackAbuseSecret = process.env.FEEDBACK_ABUSE_SECRET || tokenSecret;
+const userSystemEnabled = process.env.USER_SYSTEM_ENABLED === 'true';
+const reminderFeatureEnabled = process.env.REMINDER_FEATURE_ENABLED === 'true';
+const userTokenSecret = process.env.USER_TOKEN_SECRET || tokenSecret;
+const userHashSecret = process.env.USER_OPENID_HASH_SECRET || feedbackAbuseSecret;
+const avatarSharedSecret = process.env.UNICLOUD_AVATAR_SHARED_SECRET || '';
+const userSystemConfigured = Boolean(
+  process.env.WX_APPID &&
+  process.env.WX_APPSECRET &&
+  (process.env.USER_TOKEN_SECRET?.length || 0) >= 32 &&
+  (process.env.USER_OPENID_HASH_SECRET?.length || 0) >= 32 &&
+  process.env.USER_TOKEN_SECRET !== process.env.USER_OPENID_HASH_SECRET &&
+  Buffer.from(process.env.USER_OPENID_ENCRYPTION_KEY || '', 'base64').length === 32,
+);
+const avatarConfigured = Boolean(
+  /^https:\/\//.test(process.env.UNICLOUD_AVATAR_BASE_URL || '') && avatarSharedSecret.length >= 32,
+);
+const reminderFieldKeys = [
+  process.env.WX_SIGNUP_REMINDER_EVENT_FIELD,
+  process.env.WX_SIGNUP_REMINDER_NOTICE_FIELD,
+  process.env.WX_SIGNUP_REMINDER_DATE_FIELD,
+  process.env.WX_RACE_REMINDER_EVENT_FIELD,
+  process.env.WX_RACE_REMINDER_NOTICE_FIELD,
+  process.env.WX_RACE_REMINDER_DATE_FIELD,
+];
+const remindersConfigured = Boolean(
+  process.env.WX_SIGNUP_REMINDER_TEMPLATE_ID &&
+  process.env.WX_RACE_REMINDER_TEMPLATE_ID &&
+  process.env.WX_SIGNUP_REMINDER_TEMPLATE_ID !== process.env.WX_RACE_REMINDER_TEMPLATE_ID &&
+  reminderFieldKeys.every((value) =>
+    /^(thing|date|time|phrase|character_string|number)\d+$/.test(value || ''),
+  ),
+);
+if (isProduction && reminderFeatureEnabled && (!userSystemEnabled || !remindersConfigured)) {
+  throw new Error('启用赛事提醒时必须先启用用户体系并配置订阅消息模板与字段');
+}
 const shareImageAllowedHosts = (process.env.SHARE_IMAGE_ALLOWED_HOSTS ?? '')
   .split(',')
   .map((value) => value.trim().toLowerCase())
@@ -394,6 +469,79 @@ const eventChoiceQuerySchema = z.object({
   choice: z.enum(eventChoiceValues).optional(),
 });
 
+const wechatAuthSchema = z.object({
+  code: z.string().trim().min(1, 'code 不能为空').max(128),
+  userKey: z.string().trim().min(1, 'userKey 不能为空').max(100),
+});
+
+const nicknameSchema = z
+  .string()
+  .trim()
+  .max(32, '昵称不能超过 32 个字符')
+  .refine((value) => !/[\u0000-\u001f\u007f]/.test(value), '昵称包含不可用字符')
+  .refine((value) => !value || !classifyFeedbackRisk(value).suspicious, '昵称格式异常');
+
+const userProfileSchema = z.object({
+  nickname: z.union([nicknameSchema, z.null()]).optional(),
+  clearAvatar: z.boolean().optional(),
+});
+
+const activitySchema = z.object({
+  entryPage: z.string().trim().max(64).optional(),
+  channel: z.string().trim().max(64).optional(),
+  referralShareToken: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{20,64}$/)
+    .optional(),
+  action: z
+    .enum([
+      'viewedDetail',
+      'copiedOfficial',
+      'addedFavorite',
+      'setChoice',
+      'startedShare',
+      'subscribedReminder',
+    ])
+    .optional(),
+});
+
+const reminderSubscriptionSchema = z.object({
+  eventId: z.string().trim().min(1),
+  acceptedTypes: z
+    .array(z.enum(['signup', 'race_week']))
+    .min(1)
+    .max(2),
+});
+
+const adminUsersQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(['active', 'disabled']).optional(),
+  profile: z.enum(['complete', 'incomplete']).optional(),
+  hasReminder: z.enum(['true', 'false']).optional(),
+  search: z.string().trim().max(64).optional(),
+  openId: z.string().trim().max(128).optional(),
+  registeredFrom: z.string().datetime().optional(),
+  registeredTo: z.string().datetime().optional(),
+  activeFrom: z.string().datetime().optional(),
+  activeTo: z.string().datetime().optional(),
+});
+
+const adminUserStatusSchema = z.object({ status: z.enum(['active', 'disabled']) });
+
+const avatarGrantSchema = z.object({
+  grantId: z.string().trim().min(1),
+  token: z.string().trim().min(20),
+});
+
+const avatarCompleteSchema = z.object({
+  grantId: z.string().trim().min(1),
+  fileId: z.string().trim().min(1).max(1024),
+  timestamp: z.string().trim().min(1),
+  signature: z.string().trim().length(64),
+});
+
 const sourceSummaryUpdateSchema = z.object({
   summary: z.string().trim().min(80, '摘要至少 80 字').max(400, '摘要不能超过 400 字'),
   keyPoints: z.array(z.string().trim().min(1).max(120)).min(2).max(6),
@@ -421,6 +569,7 @@ const shareRecordSchema = z.object({
     'release_notes',
     'personal_home',
   ]),
+  requestShareToken: z.boolean().optional(),
 });
 
 const shareImageUrlSchema = z
@@ -765,6 +914,43 @@ function getAdmin(req: Request): AdminContext {
   throw new HttpError(401, '请先登录后台');
 }
 
+function userEncryptionKey() {
+  const configured = process.env.USER_OPENID_ENCRYPTION_KEY;
+  if (!configured) throw new HttpError(503, '用户服务尚未启用');
+  return secretKey(configured);
+}
+
+async function getRequestUser(req: Request, required = false) {
+  if (!userSystemEnabled && !required) return null;
+  const token = getBearerToken(req);
+  if (!token) {
+    if (required) throw new HttpError(401, '请先完成微信登录');
+    return null;
+  }
+  let userId: string;
+  try {
+    userId = parseUserToken(token, userTokenSecret).userId;
+  } catch (error) {
+    if (error instanceof UserIdentityError) throw new HttpError(error.status, error.message);
+    throw error;
+  }
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new HttpError(401, '用户登录已失效');
+  if (user.status === 'disabled') throw new HttpError(403, '账号已被禁用');
+  return user;
+}
+
+function requireUserFeature() {
+  if (!userSystemEnabled) throw new HttpError(503, '用户服务尚未启用');
+}
+
+function requireInternalAvatarSecret(req: Request) {
+  const supplied = req.header('x-worthrun-avatar-secret') || '';
+  if (!avatarSharedSecret || !safeEqual(supplied, avatarSharedSecret)) {
+    throw new HttpError(401, '云函数认证失败');
+  }
+}
+
 function requireRole(req: Request, allowed: AdminRole[]) {
   const admin = getAdmin(req);
   if (!allowed.includes(admin.role)) {
@@ -937,6 +1123,220 @@ app.get(
 );
 
 app.post(
+  '/api/auth/wechat',
+  asyncHandler(async (req, res) => {
+    requireUserFeature();
+    const input = validateBody(wechatAuthSchema, req.body);
+    const appId = process.env.WX_APPID || '';
+    const appSecret = process.env.WX_APPSECRET || '';
+    try {
+      const openId = await exchangeWeChatCode({ code: input.code, appId, appSecret });
+      const user = await registerWechatUser({
+        openId,
+        userKey: input.userKey,
+        hashSecret: userHashSecret,
+        encryptionKey: userEncryptionKey(),
+      });
+      await recordUserActivity({ userId: user.id, entryPage: 'app_launch' });
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      res.json({
+        token: createUserToken(user.id, userTokenSecret),
+        expiresAt,
+        user: publicUser(user),
+      });
+    } catch (error) {
+      if (error instanceof UserIdentityError) throw new HttpError(error.status, error.message);
+      throw error;
+    }
+  }),
+);
+
+app.get(
+  '/api/users/me',
+  asyncHandler(async (req, res) => {
+    requireUserFeature();
+    const user = await getRequestUser(req, true);
+    const [favorites, choices, feedback, reminders] = await Promise.all([
+      prisma.userFavorite.count({ where: { userId: user!.id } }),
+      prisma.userEventChoice.count({ where: { userId: user!.id } }),
+      prisma.feedback.count({ where: { userId: user!.id } }),
+      prisma.eventReminder.count({ where: { userId: user!.id, status: 'pending' } }),
+    ]);
+    const avatarUrls = await getAvatarTemporaryUrls([user!.avatarFileId]);
+    res.json({
+      user: {
+        ...publicUser(user!),
+        avatarUrl: user!.avatarFileId ? (avatarUrls.get(user!.avatarFileId) ?? null) : null,
+      },
+      summary: { favorites, choices, feedback, reminders },
+    });
+  }),
+);
+
+app.put(
+  '/api/users/me',
+  asyncHandler(async (req, res) => {
+    requireUserFeature();
+    const user = await getRequestUser(req, true);
+    const input = validateBody(userProfileSchema, req.body);
+    if (input.clearAvatar && user!.avatarFileId) await deleteAvatarFile(user!.avatarFileId);
+    const updated = await prisma.user.update({
+      where: { id: user!.id },
+      data: {
+        ...(input.nickname !== undefined ? { nickname: input.nickname || null } : {}),
+        ...(input.clearAvatar ? { avatarFileId: null } : {}),
+        profileUpdatedAt: new Date(),
+      },
+    });
+    const avatarUrls = await getAvatarTemporaryUrls([updated.avatarFileId]);
+    res.json({
+      user: {
+        ...publicUser(updated),
+        avatarUrl: updated.avatarFileId ? (avatarUrls.get(updated.avatarFileId) ?? null) : null,
+      },
+    });
+  }),
+);
+
+app.post(
+  '/api/users/me/avatar-upload-grants',
+  asyncHandler(async (req, res) => {
+    requireUserFeature();
+    const user = await getRequestUser(req, true);
+    const uploadUrl = process.env.UNICLOUD_AVATAR_BASE_URL?.trim();
+    if (!uploadUrl || !avatarSharedSecret) throw new HttpError(503, '头像上传服务尚未启用');
+    res.status(201).json(
+      await createAvatarUploadGrant({
+        userId: user!.id,
+        secret: avatarSharedSecret,
+        uploadUrl,
+      }),
+    );
+  }),
+);
+
+app.delete(
+  '/api/users/me',
+  asyncHandler(async (req, res) => {
+    requireUserFeature();
+    const user = await getRequestUser(req, true);
+    if (user!.avatarFileId) await deleteAvatarFile(user!.avatarFileId);
+    await prisma.$transaction(async (tx) => {
+      await Promise.all([
+        tx.feedback.updateMany({
+          where: { userId: user!.id },
+          data: { userId: null, userKey: null },
+        }),
+        tx.shareRecord.updateMany({
+          where: { userId: user!.id },
+          data: { userId: null, userKey: null, userKeyHash: null },
+        }),
+        tx.userFavorite.deleteMany({ where: { userId: user!.id } }),
+        tx.userEventChoice.deleteMany({ where: { userId: user!.id } }),
+        tx.userPreference.deleteMany({ where: { userId: user!.id } }),
+        tx.eventReminder.deleteMany({ where: { userId: user!.id } }),
+        tx.userAlias.deleteMany({ where: { userId: user!.id } }),
+      ]);
+      await tx.user.delete({ where: { id: user!.id } });
+    });
+    res.status(204).send();
+  }),
+);
+
+app.post(
+  '/api/activity',
+  asyncHandler(async (req, res) => {
+    requireUserFeature();
+    const user = await getRequestUser(req, true);
+    const input = validateBody(activitySchema, req.body);
+    let referralShareToken: string | undefined;
+    if (input.referralShareToken) {
+      const share = await prisma.shareRecord.findFirst({
+        where: { shareToken: input.referralShareToken, tokenExpiresAt: { gt: new Date() } },
+        select: { shareToken: true },
+      });
+      referralShareToken = share?.shareToken ?? undefined;
+    }
+    await recordUserActivity({ ...input, referralShareToken, userId: user!.id });
+    res.status(201).json({ recorded: true });
+  }),
+);
+
+app.get(
+  '/api/users/me/reminders',
+  asyncHandler(async (req, res) => {
+    requireUserFeature();
+    const user = await getRequestUser(req, true);
+    const items = await prisma.eventReminder.findMany({
+      where: { userId: user!.id, status: { in: ['pending', 'review_required'] } },
+      include: { event: true },
+      orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
+    });
+    res.json({ items });
+  }),
+);
+
+app.post(
+  '/api/users/me/reminders',
+  asyncHandler(async (req, res) => {
+    requireUserFeature();
+    if (!reminderFeatureEnabled) throw new HttpError(503, '赛事提醒尚未启用');
+    const user = await getRequestUser(req, true);
+    const input = validateBody(reminderSubscriptionSchema, req.body);
+    const result = await subscribeReminders({ userId: user!.id, ...input });
+    if (!result.reminders.length) throw new HttpError(400, '当前赛事暂无可订阅提醒');
+    await recordUserActivity({ userId: user!.id, action: 'subscribedReminder' });
+    res.status(201).json(result);
+  }),
+);
+
+app.delete(
+  '/api/users/me/reminders/:eventId/:type',
+  asyncHandler(async (req, res) => {
+    requireUserFeature();
+    const user = await getRequestUser(req, true);
+    const reminderType = z.enum(['signup', 'race_week']).parse(req.params.type);
+    await prisma.eventReminder.updateMany({
+      where: { userId: user!.id, eventId: req.params.eventId, reminderType },
+      data: { status: 'cancelled', cancelledAt: new Date() },
+    });
+    res.status(204).send();
+  }),
+);
+
+app.post(
+  '/api/internal/avatar-upload/authorize',
+  asyncHandler(async (req, res) => {
+    requireInternalAvatarSecret(req);
+    const input = validateBody(avatarGrantSchema, req.body);
+    try {
+      res.json(await consumeAvatarUploadGrant({ ...input, secret: avatarSharedSecret }));
+    } catch (error) {
+      if (error instanceof AvatarUploadError) throw new HttpError(error.status, error.message);
+      throw error;
+    }
+  }),
+);
+
+app.post(
+  '/api/internal/avatar-upload/complete',
+  asyncHandler(async (req, res) => {
+    requireInternalAvatarSecret(req);
+    const input = validateBody(avatarCompleteSchema, req.body);
+    try {
+      const completed = await completeAvatarUpload({ ...input, secret: avatarSharedSecret });
+      if (completed.previousAvatarFileId && completed.previousAvatarFileId !== input.fileId) {
+        await deleteAvatarFile(completed.previousAvatarFileId);
+      }
+      res.json({ completed: true });
+    } catch (error) {
+      if (error instanceof AvatarUploadError) throw new HttpError(error.status, error.message);
+      throw error;
+    }
+  }),
+);
+
+app.post(
   '/api/admin/auth/login',
   asyncHandler(async (req, res) => {
     const input = validateBody(loginSchema, req.body);
@@ -1058,6 +1458,11 @@ app.get(
       pendingFeedback: Object.fromEntries(
         pendingByScope.map((item) => [item.scope, item._count._all]),
       ),
+      features: {
+        userSystem: { enabled: userSystemEnabled, configured: userSystemConfigured },
+        avatar: { enabled: userSystemEnabled, configured: avatarConfigured },
+        reminders: { enabled: reminderFeatureEnabled, configured: remindersConfigured },
+      },
       checkedAt: now.toISOString(),
     });
   }),
@@ -1068,6 +1473,210 @@ app.get(
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
     res.json(await getDataQualitySummary());
+  }),
+);
+
+app.get(
+  '/api/admin/users',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin']);
+    const query = validateQuery(adminUsersQuerySchema, req.query);
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const where: Prisma.UserWhereInput = {};
+    if (query.status) where.status = query.status;
+    if (query.search) where.nickname = { contains: query.search, mode: 'insensitive' };
+    if (query.openId) where.openIdHash = openIdHash(userHashSecret, query.openId);
+    if (query.profile === 'complete')
+      where.OR = [{ nickname: { not: null } }, { avatarFileId: { not: null } }];
+    if (query.profile === 'incomplete') where.AND = [{ nickname: null }, { avatarFileId: null }];
+    if (query.hasReminder === 'true') where.reminders = { some: { status: 'pending' } };
+    if (query.hasReminder === 'false') where.reminders = { none: { status: 'pending' } };
+    if (query.registeredFrom || query.registeredTo) {
+      where.registeredAt = {
+        ...(query.registeredFrom ? { gte: new Date(query.registeredFrom) } : {}),
+        ...(query.registeredTo ? { lte: new Date(query.registeredTo) } : {}),
+      };
+    }
+    if (query.activeFrom || query.activeTo) {
+      where.lastActiveAt = {
+        ...(query.activeFrom ? { gte: new Date(query.activeFrom) } : {}),
+        ...(query.activeTo ? { lte: new Date(query.activeTo) } : {}),
+      };
+    }
+    const [items, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        orderBy: { registeredAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          _count: {
+            select: {
+              favorites: true,
+              choices: true,
+              feedback: true,
+              reminders: { where: { status: { in: ['pending', 'review_required'] } } },
+            },
+          },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+    const key = items.length ? userEncryptionKey() : null;
+    const avatarUrls = await getAvatarTemporaryUrls(items.map((item) => item.avatarFileId));
+    res.json({
+      items: items.map((user) => {
+        const openId = decryptOpenId(
+          { ciphertext: user.openIdCiphertext, iv: user.openIdIv, authTag: user.openIdAuthTag },
+          key!,
+        );
+        const { openIdCiphertext, openIdIv, openIdAuthTag, ...safeUser } = user;
+        return {
+          ...safeUser,
+          maskedOpenId: maskOpenId(openId),
+          avatarUrl: user.avatarFileId ? (avatarUrls.get(user.avatarFileId) ?? null) : null,
+        };
+      }),
+      total,
+      page,
+      pageSize,
+    });
+  }),
+);
+
+app.get(
+  '/api/admin/users/:id',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin']);
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: {
+        _count: {
+          select: {
+            favorites: true,
+            choices: true,
+            feedback: true,
+            reminders: true,
+            shares: true,
+            activities: true,
+          },
+        },
+        reminders: {
+          where: { status: { in: ['pending', 'review_required'] } },
+          include: { event: { select: { eventName: true, eventDate: true } } },
+          take: 20,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+    if (!user) throw new HttpError(404, '用户不存在');
+    const openId = decryptOpenId(
+      { ciphertext: user.openIdCiphertext, iv: user.openIdIv, authTag: user.openIdAuthTag },
+      userEncryptionKey(),
+    );
+    const { openIdCiphertext, openIdIv, openIdAuthTag, ...safeUser } = user;
+    const avatarUrls = await getAvatarTemporaryUrls([user.avatarFileId]);
+    res.json({
+      ...safeUser,
+      maskedOpenId: maskOpenId(openId),
+      avatarUrl: user.avatarFileId ? (avatarUrls.get(user.avatarFileId) ?? null) : null,
+    });
+  }),
+);
+
+app.post(
+  '/api/admin/users/:id/reveal-openid',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin']);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) throw new HttpError(404, '用户不存在');
+    const openId = decryptOpenId(
+      { ciphertext: user.openIdCiphertext, iv: user.openIdIv, authTag: user.openIdAuthTag },
+      userEncryptionKey(),
+    );
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'user.reveal_openid',
+      targetType: 'users',
+      targetId: user.id,
+      note: '单次查看完整 OpenID',
+    });
+    res.json({ openId });
+  }),
+);
+
+app.patch(
+  '/api/admin/users/:id/status',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin']);
+    const input = validateBody(adminUserStatusSchema, req.body);
+    const before = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new HttpError(404, '用户不存在');
+    const updated = await prisma.$transaction(async (tx) => {
+      if (input.status === 'disabled') {
+        await tx.eventReminder.updateMany({
+          where: { userId: before.id, status: { in: ['pending', 'review_required'] } },
+          data: { status: 'cancelled', cancelledAt: new Date() },
+        });
+      }
+      return tx.user.update({ where: { id: before.id }, data: { status: input.status } });
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: input.status === 'disabled' ? 'user.disable' : 'user.restore',
+      targetType: 'users',
+      targetId: before.id,
+      beforeValue: { status: before.status },
+      afterValue: { status: updated.status },
+    });
+    res.json({ id: updated.id, status: updated.status });
+  }),
+);
+
+app.delete(
+  '/api/admin/users/:id/profile',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin']);
+    const before = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new HttpError(404, '用户不存在');
+    if (before.avatarFileId) await deleteAvatarFile(before.avatarFileId);
+    await prisma.user.update({
+      where: { id: before.id },
+      data: { nickname: null, avatarFileId: null, profileUpdatedAt: new Date() },
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'user.clear_profile',
+      targetType: 'users',
+      targetId: before.id,
+      beforeValue: {
+        hadNickname: Boolean(before.nickname),
+        hadAvatar: Boolean(before.avatarFileId),
+      },
+      afterValue: { nickname: null, hadAvatar: false },
+    });
+    res.status(204).send();
+  }),
+);
+
+app.get(
+  '/api/admin/growth-stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin']);
+    const days = z.coerce
+      .number()
+      .pipe(z.union([z.literal(7), z.literal(30)]))
+      .parse(req.query.days);
+    res.json(await getGrowthStats(days));
+  }),
+);
+
+app.get(
+  '/api/admin/reminder-stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin']);
+    res.json(await getReminderStats());
   }),
 );
 
@@ -2656,9 +3265,10 @@ app.get(
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
     const { changeAlerts, sourceSummaries, shareOverride, ...publicEvent } = event;
-    const [choiceCounts, shareSettings] = await Promise.all([
+    const [choiceCounts, shareSettings, reminderOptions] = await Promise.all([
       getEventChoiceCounts(event.id),
       getPublicShareSettings(),
+      reminderFeatureEnabled ? reminderOptionsForEvent(event.id) : Promise.resolve(null),
     ]);
     const resolvedShare = resolveShareSetting(
       shareSettings,
@@ -2679,6 +3289,7 @@ app.get(
         hasSourceSummary: sourceSummaries.length > 0,
         sourceSummaryStale: Boolean(sourceSummaries[0]?.staleAt),
         choiceCounts,
+        reminderOptions: reminderOptions ?? [],
         resolvedShare,
       },
       complianceNotice,
@@ -2702,11 +3313,14 @@ app.put(
   '/api/event-choices',
   asyncHandler(async (req, res) => {
     const input = validateBody(eventChoiceSchema, req.body);
+    const user = await getRequestUser(req);
     try {
       await prisma.$transaction((tx) =>
         consumeFeedbackRateLimit(tx, eventChoiceRateLimit, input.userKey, new Date()),
       );
-      res.json(await setEventChoice(input));
+      const result = await setEventChoice({ ...input, userId: user?.id });
+      if (user) await recordUserActivity({ userId: user.id, action: 'setChoice' });
+      res.json(result);
     } catch (error) {
       if (error instanceof EventChoiceNotFoundError) throw new HttpError(404, error.message);
       throw error;
@@ -2718,7 +3332,8 @@ app.get(
   '/api/event-choices',
   asyncHandler(async (req, res) => {
     const query = validateQuery(eventChoiceQuerySchema, req.query);
-    res.json(await listViewerEventChoices(query));
+    const user = await getRequestUser(req);
+    res.json(await listViewerEventChoices({ ...query, userId: user?.id }));
   }),
 );
 
@@ -2726,7 +3341,14 @@ app.get(
   '/api/event-choices/:eventId',
   asyncHandler(async (req, res) => {
     const query = validateQuery(eventChoiceQuerySchema.pick({ userKey: true }), req.query);
-    res.json(await getViewerEventChoice({ userKey: query.userKey, eventId: req.params.eventId }));
+    const user = await getRequestUser(req);
+    res.json(
+      await getViewerEventChoice({
+        userKey: query.userKey,
+        userId: user?.id,
+        eventId: req.params.eventId,
+      }),
+    );
   }),
 );
 
@@ -2734,7 +3356,14 @@ app.delete(
   '/api/event-choices/:eventId',
   asyncHandler(async (req, res) => {
     const query = validateQuery(eventChoiceQuerySchema.pick({ userKey: true }), req.query);
-    res.json(await removeEventChoice({ userKey: query.userKey, eventId: req.params.eventId }));
+    const user = await getRequestUser(req);
+    res.json(
+      await removeEventChoice({
+        userKey: query.userKey,
+        userId: user?.id,
+        eventId: req.params.eventId,
+      }),
+    );
   }),
 );
 
@@ -2742,11 +3371,23 @@ app.post(
   '/api/preferences',
   asyncHandler(async (req, res) => {
     const input = validateBody(preferenceSchema, req.body);
-    const preference = await prisma.userPreference.upsert({
-      where: { userKey: input.userKey },
-      create: input,
-      update: { cities: input.cities, distances: input.distances, focusTags: input.focusTags },
-    });
+    const user = await getRequestUser(req);
+    const preference = user
+      ? await prisma.userPreference.upsert({
+          where: { userId: user.id },
+          create: { ...input, userId: user.id },
+          update: {
+            userKey: input.userKey,
+            cities: input.cities,
+            distances: input.distances,
+            focusTags: input.focusTags,
+          },
+        })
+      : await prisma.userPreference.upsert({
+          where: { userKey: input.userKey },
+          create: input,
+          update: { cities: input.cities, distances: input.distances, focusTags: input.focusTags },
+        });
     res.status(201).json(preference);
   }),
 );
@@ -2754,8 +3395,9 @@ app.post(
 app.get(
   '/api/preferences/:userKey',
   asyncHandler(async (req, res) => {
-    const preference = await prisma.userPreference.findUnique({
-      where: { userKey: req.params.userKey },
+    const user = await getRequestUser(req);
+    const preference = await prisma.userPreference.findFirst({
+      where: user ? { userId: user.id } : { userKey: req.params.userKey },
     });
     // 无偏好记录时返回 200 + null，作为"尚无偏好"的语义化信号，
     // 避免新用户/清过数据的用户在控制台看到 404 噪音。
@@ -2767,15 +3409,23 @@ app.post(
   '/api/favorites',
   asyncHandler(async (req, res) => {
     const input = validateBody(favoriteSchema, req.body);
+    const user = await getRequestUser(req);
     const event = await prisma.event.findFirst({
       where: { id: input.eventId, ...buildPublicEventWhere() },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
-    const favorite = await prisma.userFavorite.upsert({
-      where: { userKey_eventId: { userKey: input.userKey, eventId: input.eventId } },
-      create: input,
-      update: {},
-    });
+    const favorite = user
+      ? await prisma.userFavorite.upsert({
+          where: { userId_eventId: { userId: user.id, eventId: input.eventId } },
+          create: { ...input, userId: user.id },
+          update: { userKey: input.userKey },
+        })
+      : await prisma.userFavorite.upsert({
+          where: { userKey_eventId: { userKey: input.userKey, eventId: input.eventId } },
+          create: input,
+          update: {},
+        });
+    if (user) await recordUserActivity({ userId: user.id, action: 'addedFavorite' });
     res.status(201).json(favorite);
   }),
 );
@@ -2785,7 +3435,12 @@ app.delete(
   asyncHandler(async (req, res) => {
     const userKey = String(req.query.userKey || '');
     if (!userKey) throw new HttpError(400, 'userKey 不能为空');
-    await prisma.userFavorite.deleteMany({ where: { userKey, eventId: req.params.eventId } });
+    const user = await getRequestUser(req);
+    await prisma.userFavorite.deleteMany({
+      where: user
+        ? { userId: user.id, eventId: req.params.eventId }
+        : { userKey, eventId: req.params.eventId },
+    });
     res.status(204).send();
   }),
 );
@@ -2795,8 +3450,12 @@ app.get(
   asyncHandler(async (req, res) => {
     const userKey = String(req.query.userKey || '');
     if (!userKey) throw new HttpError(400, 'userKey 不能为空');
+    const user = await getRequestUser(req);
     const items = await prisma.userFavorite.findMany({
-      where: { userKey, event: buildPublicEventWhere() },
+      where: {
+        ...(user ? { userId: user.id } : { userKey }),
+        event: buildPublicEventWhere(),
+      },
       include: {
         event: {
           include: {
@@ -2822,6 +3481,7 @@ app.post(
   '/api/feedback',
   asyncHandler(async (req, res) => {
     const input = validateBody(publicFeedbackSchema, req.body) as PublicFeedbackInput;
+    const user = await getRequestUser(req);
     const content = normalizeFeedbackContent(input.content);
     const risk = classifyFeedbackRisk(content);
     if (risk.suspicious) {
@@ -2862,6 +3522,7 @@ app.post(
           data: {
             eventId: input.eventId,
             userKey: input.userKey,
+            userId: user?.id,
             scope: input.scope,
             requestId: input.requestId,
             fingerprint,
@@ -2912,15 +3573,22 @@ app.post(
   '/api/share-records',
   asyncHandler(async (req, res) => {
     const input = validateBody(shareRecordSchema, req.body);
+    const user = await getRequestUser(req);
+    const shareToken = input.requestShareToken ? createShareToken() : null;
     const record = await prisma.shareRecord.create({
       data: {
         userKey: input.userKey,
+        userId: user?.id,
+        userKeyHash: user ? hmacDigest(userHashSecret, input.userKey) : null,
+        shareToken,
+        tokenExpiresAt: shareToken ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
         eventId: input.eventId || null,
         shareType: input.shareType,
         scene: input.scene,
       },
     });
-    res.status(201).json({ id: record.id });
+    if (user) await recordUserActivity({ userId: user.id, action: 'startedShare' });
+    res.status(201).json({ id: record.id, shareToken });
   }),
 );
 
@@ -2928,12 +3596,19 @@ app.post(
   '/api/interactions',
   asyncHandler(async (req, res) => {
     const input = validateBody(interactionSchema, req.body);
+    const user = await getRequestUser(req);
     const event = await prisma.event.findFirst({
       where: { id: input.eventId, ...buildPublicEventWhere() },
       select: { id: true },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
     await recordEventInteraction({ ...input, secret: feedbackAbuseSecret });
+    if (user) {
+      await recordUserActivity({
+        userId: user.id,
+        action: input.action === 'event_detail_view' ? 'viewedDetail' : 'copiedOfficial',
+      });
+    }
     res.status(201).json({ recorded: true });
   }),
 );

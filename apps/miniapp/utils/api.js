@@ -22,7 +22,16 @@ exports.getShareSettings = getShareSettings;
 exports.getLatestReleaseNote = getLatestReleaseNote;
 exports.getReleaseNotes = getReleaseNotes;
 exports.recordInteraction = recordInteraction;
+exports.getMyUser = getMyUser;
+exports.updateMyUser = updateMyUser;
+exports.createAvatarUploadGrant = createAvatarUploadGrant;
+exports.deleteMyUser = deleteMyUser;
+exports.recordActivity = recordActivity;
+exports.getMyReminders = getMyReminders;
+exports.subscribeEventReminders = subscribeEventReminders;
+exports.cancelEventReminder = cancelEventReminder;
 const index_1 = require("../config/index");
+const user_session_1 = require("./user-session");
 class ApiError extends Error {
     constructor(message, statusCode, retryAfterSeconds, requestId) {
         super(message);
@@ -55,7 +64,7 @@ function request(path, options = {}) {
             url,
             method,
             data: isGet ? undefined : options.data,
-            header: { 'content-type': 'application/json' },
+            header: Object.assign({ 'content-type': 'application/json' }, ((0, user_session_1.getUserToken)() ? { Authorization: `Bearer ${(0, user_session_1.getUserToken)()}` } : {})),
             success(res) {
                 var _a, _b;
                 const data = res.data;
@@ -64,6 +73,8 @@ function request(path, options = {}) {
                     return;
                 }
                 const message = (data === null || data === void 0 ? void 0 : data.message) || '请求失败';
+                if (res.statusCode === 401)
+                    (0, user_session_1.clearUserSession)();
                 if (!options.silent)
                     wx.showToast({ title: message, icon: 'none' });
                 const retryAfterHeader = ((_a = res.header) === null || _a === void 0 ? void 0 : _a['Retry-After']) || ((_b = res.header) === null || _b === void 0 ? void 0 : _b['retry-after']);
@@ -166,7 +177,11 @@ function getChecklistTemplates(type) {
     });
 }
 function recordShare(data) {
-    return request('/api/share-records', { method: 'POST', data, silent: true });
+    return request('/api/share-records', {
+        method: 'POST',
+        data,
+        silent: true,
+    });
 }
 function getShareSettings() {
     return request('/api/share-settings', { silent: true });
@@ -184,6 +199,41 @@ function recordInteraction(data) {
     return request('/api/interactions', {
         method: 'POST',
         data,
+        silent: true,
+    });
+}
+function getMyUser() {
+    return request('/api/users/me', { silent: true });
+}
+function updateMyUser(data) {
+    return request('/api/users/me', {
+        method: 'PUT',
+        data,
+        silent: true,
+    });
+}
+function createAvatarUploadGrant() {
+    return request('/api/users/me/avatar-upload-grants', { method: 'POST', silent: true });
+}
+function deleteMyUser() {
+    return request('/api/users/me', { method: 'DELETE', silent: true });
+}
+function recordActivity(data) {
+    return request('/api/activity', { method: 'POST', data, silent: true });
+}
+function getMyReminders() {
+    return request('/api/users/me/reminders', { silent: true });
+}
+function subscribeEventReminders(eventId, acceptedTypes) {
+    return request('/api/users/me/reminders', {
+        method: 'POST',
+        data: { eventId, acceptedTypes },
+        silent: true,
+    });
+}
+function cancelEventReminder(eventId, type) {
+    return request(`/api/users/me/reminders/${eventId}/${type}`, {
+        method: 'DELETE',
         silent: true,
     });
 }

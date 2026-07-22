@@ -113,8 +113,15 @@ export function trackShare(
     | 'release_notes'
     | 'personal_home',
   eventId?: string,
+  requestShareToken = false,
 ) {
-  recordShare({ userKey: getUserKey(), eventId, shareType, scene }).catch(() => {});
+  return recordShare({
+    userKey: getUserKey(),
+    eventId,
+    shareType,
+    scene,
+    requestShareToken,
+  }).catch(() => ({ id: '', shareToken: null }));
 }
 
 export function getProductHomeShare() {

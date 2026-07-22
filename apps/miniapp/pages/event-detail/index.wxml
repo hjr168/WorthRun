@@ -85,6 +85,20 @@
       <view class="choice-note">匿名意向统计，不代表官方报名人数；“已报名”为用户自报。</view>
     </view>
 
+    <view wx:if="{{event.reminderOptions && event.reminderOptions.length}}" class="section reminder-panel">
+      <view class="section-title">赛事提醒</view>
+      <view class="reminder-subtitle">由你主动授权，每场每类最多提醒一次。</view>
+      <view class="reminder-options">
+        <view wx:for="{{event.reminderOptions}}" wx:key="type" class="reminder-option">
+          <view class="reminder-copy">
+            <view class="reminder-name">{{item.type === 'signup' ? '报名提醒' : '赛前 7 天提醒'}}</view>
+            <view class="reminder-desc">{{item.available ? (item.type === 'signup' ? '报名开放或截止前 3 天提醒' : '比赛前 7 天 09:00 提醒') : item.reason}}</view>
+          </view>
+          <button class="reminder-button {{reminderSubscribed[item.type] ? 'is-on' : ''}}" data-type="{{item.type}}" bindtap="subscribeReminder" disabled="{{!item.available || reminderSubscribed[item.type] || reminderUpdating}}">{{reminderSubscribed[item.type] ? '已开启' : (reminderUpdating === item.type ? '开启中' : '开启')}}</button>
+        </view>
+      </view>
+    </view>
+
     <view class="section">
       <judgement-card event="{{event}}" />
     </view>

@@ -576,3 +576,12 @@
     font-size: 22rpx;
   }
 }
+.reminder-panel { border-top: 2rpx solid rgba(15,25,35,.08); padding-top: 24rpx; }
+.reminder-subtitle { margin-top: -6rpx; color: #64748b; font-size: 23rpx; }
+.reminder-options { display: grid; gap: 12rpx; margin-top: 16rpx; }
+.reminder-option { display: flex; align-items: center; gap: 18rpx; border: 2rpx solid rgba(15,25,35,.08); border-radius: 20rpx; background: #fff; padding: 20rpx; }
+.reminder-copy { flex: 1; min-width: 0; }
+.reminder-name { color: #0f1923; font-size: 27rpx; font-weight: 700; }
+.reminder-desc { margin-top: 5rpx; color: #64748b; font-size: 22rpx; }
+.reminder-button { flex: 0 0 120rpx; min-height: 64rpx; border: 2rpx solid #ff5c1a; background: #fff; color: #ff5c1a; padding: 8rpx 14rpx; font-size: 23rpx; font-weight: 700; }
+.reminder-button.is-on { border-color: #b8d9d3; background: #eef8f6; color: #2a7f75; }

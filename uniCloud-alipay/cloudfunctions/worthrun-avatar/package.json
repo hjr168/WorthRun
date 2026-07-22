@@ -1,0 +1,15 @@
+{
+  "name": "worthrun-avatar",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "busboy": "^1.6.0"
+  },
+  "cloudfunction-config": {
+    "concurrency": 1,
+    "memorySize": 512,
+    "path": "/worthrun-avatar",
+    "timeout": 15,
+    "triggers": []
+  }
+}
