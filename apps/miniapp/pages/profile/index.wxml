@@ -3,22 +3,57 @@
   <view wx:if="{{loading}}" class="status-text">正在加载资料</view>
   <block wx:else>
     <view wx:if="{{error}}" class="error-text">{{error}}</view>
-    <view class="profile-form">
-      <button class="avatar-button" open-type="chooseAvatar" bindchooseavatar="chooseAvatar" disabled="{{uploading}}" aria-label="选择头像">
-        <image wx:if="{{avatarUrl}}" class="avatar-image" src="{{avatarUrl}}" mode="aspectFill" />
-        <view wx:else class="avatar-placeholder">跑</view>
-        <text class="avatar-action">{{uploading ? '上传中' : '更换头像'}}</text>
-      </button>
-      <view class="field">
-        <view class="field-label">昵称</view>
-        <input class="input" type="nickname" maxlength="32" value="{{nickname}}" bindinput="onNicknameInput" placeholder="跑者" />
-        <view class="field-hint">头像和昵称仅本人和管理后台可见。</view>
-      </view>
-      <button class="primary-button" bindtap="save" loading="{{saving}}" disabled="{{saving}}">保存资料</button>
+    <view class="profile-intro">
+      <view class="intro-title">设置你的跑赛名片</view>
+      <view class="intro-copy">使用微信头像和昵称，之后也可以随时修改。</view>
     </view>
-    <view class="account-actions">
-      <button class="secondary-button" bindtap="clearProfile">清除头像昵称</button>
-      <button class="plain-button danger" bindtap="deleteAccount">删除个人账号与数据</button>
+
+    <view class="profile-editor">
+      <button class="avatar-picker" open-type="chooseAvatar" bindchooseavatar="chooseAvatar" disabled="{{uploading}}" aria-label="使用微信头像">
+        <view class="avatar-wrap">
+          <image wx:if="{{avatarUrl}}" class="avatar-image" src="{{avatarUrl}}" mode="aspectFill" />
+          <view wx:else class="avatar-placeholder">跑</view>
+          <view wx:if="{{uploading}}" class="avatar-uploading">上传中</view>
+        </view>
+        <view class="avatar-copy">
+          <text class="editor-label">头像</text>
+          <text class="editor-value">{{avatarUrl ? '更换微信头像' : '使用微信头像'}}</text>
+          <text class="editor-hint">从微信头像或手机相册中选择</text>
+        </view>
+        <image class="editor-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+      </button>
+
+      <view class="editor-divider"></view>
+
+      <view class="nickname-field">
+        <view class="nickname-heading">
+          <text class="editor-label">昵称</text>
+          <text class="nickname-count">{{nicknameLength}}/32</text>
+        </view>
+        <input
+          class="nickname-input"
+          type="nickname"
+          maxlength="32"
+          value="{{nickname}}"
+          bindinput="onNicknameInput"
+          confirm-type="done"
+          placeholder="选择或填写微信昵称"
+          aria-label="微信昵称"
+        />
+        <view class="editor-hint nickname-hint">点击输入框可直接选择微信昵称</view>
+      </view>
+    </view>
+
+    <view class="privacy-note">头像和昵称仅本人和管理后台可见，不会展示给其他用户。</view>
+    <button class="primary-button save-button" bindtap="save" loading="{{saving}}" disabled="{{saving}}">保存资料</button>
+
+    <view class="account-section">
+      <view class="account-title">账号管理</view>
+      <view wx:if="{{registeredAt}}" class="account-meta">注册于 {{registeredAt}}</view>
+      <view class="account-actions">
+        <button class="account-action" bindtap="clearProfile">清除头像和昵称</button>
+        <button class="account-action danger" bindtap="deleteAccount">删除个人账号与数据</button>
+      </view>
     </view>
   </block>
 </view>

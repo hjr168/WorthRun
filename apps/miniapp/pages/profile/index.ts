@@ -20,6 +20,7 @@ Page({
     uploading: false,
     error: '',
     nickname: '',
+    nicknameLength: 0,
     avatarUrl: '',
     registeredAt: '',
     hasAccount: false,
@@ -36,6 +37,7 @@ Page({
   }) {
     this.setData({
       nickname: profile.nickname || '',
+      nicknameLength: (profile.nickname || '').length,
       avatarUrl: profile.avatarUrl || '',
       registeredAt: new Date(profile.registeredAt).toLocaleDateString('zh-CN'),
       hasAccount: true,
@@ -57,7 +59,8 @@ Page({
     }
   },
   onNicknameInput(event: WechatMiniprogram.Input) {
-    this.setData({ nickname: String(event.detail.value || '').slice(0, 32) });
+    const nickname = String(event.detail.value || '').slice(0, 32);
+    this.setData({ nickname, nicknameLength: nickname.length });
   },
   async save() {
     if (this.data.saving) return;
