@@ -13,6 +13,9 @@ Component({
         rows: (value || []).map((item: Record<string, string>) => ({
           ...item,
           statusText: labelOf(infoStatusLabels, item.itemStatus),
+          statusIcon: item.itemStatus === 'confirmed'
+            ? '/assets/icons/circle-check-orange.png'
+            : '/assets/icons/circle.png',
         })),
       });
     },

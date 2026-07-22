@@ -1,3 +1,4 @@
+<theme-shell title="来源详情" show-back="{{true}}">
 <view class="page source-summary-page">
   <loading-state wx:if="{{loading}}" text="正在加载来源摘要" />
   <block wx:elif="{{error}}">
@@ -45,3 +46,4 @@
     <view class="compliance-notice">{{complianceNotice}}</view>
   </block>
 </view>
+</theme-shell>

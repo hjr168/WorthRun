@@ -1,3 +1,4 @@
+<theme-shell title="反馈纠错" show-back="{{true}}">
 <view class="page feedback-page">
   <page-header title="反馈纠错" subtitle="请提供具体变化，运营人员会按官方信息人工核对。" />
 
@@ -64,3 +65,4 @@
     <button class="primary-button submit {{submitting || !canSubmit ? 'is-disabled' : ''}}" loading="{{submitting}}" disabled="{{submitting || !canSubmit}}" bindtap="submit">提交反馈</button>
   </block>
 </view>
+</theme-shell>

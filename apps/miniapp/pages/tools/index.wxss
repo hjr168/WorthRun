@@ -1,4 +1,8 @@
 .tools-page {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
   padding-bottom: 64rpx;
   padding-bottom: calc(64rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(64rpx + env(safe-area-inset-bottom));
@@ -8,17 +12,37 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  align-self: stretch;
+  flex: 0 0 auto;
   gap: 20rpx;
   width: 100%;
+  min-width: 100%;
+  max-width: none;
   min-height: 112rpx;
   margin-top: 16rpx;
-  border: 1rpx solid #e2e8f0;
-  border-radius: 18rpx;
-  background: #ffffff;
-  color: #1e293b;
-  padding: 20rpx 22rpx;
+  border: 2rpx solid var(--wr-card-border, rgba(15, 25, 35, 0.08));
+  border-radius: 32rpx;
+  background: var(--wr-surface, #ffffff);
+  color: var(--wr-text, #0f1923);
+  padding: 28rpx;
   text-align: left;
-  box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
+  box-shadow: none;
+}
+
+.tool-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 96rpx;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 32rpx;
+  background: var(--wr-primary-soft, #fff1eb);
+}
+
+.tool-icon {
+  width: 44rpx;
+  height: 44rpx;
 }
 
 .tool-copy {
@@ -27,7 +51,7 @@
 }
 
 .tool-title {
-  color: #111827;
+  color: var(--wr-text, #0f1923);
   font-size: 29rpx;
   font-weight: 700;
   margin-bottom: 6rpx;
@@ -35,7 +59,7 @@
 
 .tool-action {
   flex: 0 0 auto;
-  color: #2a9d8f;
+  color: var(--wr-primary, #ff5c1a);
   font-size: 24rpx;
   font-weight: 700;
 }

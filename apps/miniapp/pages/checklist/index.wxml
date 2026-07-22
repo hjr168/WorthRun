@@ -1,8 +1,9 @@
+<theme-shell title="赛前清单" show-back="{{true}}">
 <view class="page checklist-page">
   <page-header title="赛前清单" subtitle="报名、领物、装备和风险项，按类型逐项确认。" />
 
   <picker range="{{groups}}" value="{{groupIndex}}" bindchange="onGroupChange">
-    <view class="picker-box">类型：{{groups[groupIndex]}}</view>
+    <view class="picker-box"><text class="picker-text">类型：{{groups[groupIndex]}}</text><image class="picker-chevron" src="/assets/icons/chevron-down.png" mode="aspectFit" /></view>
   </picker>
 
   <view class="section">
@@ -17,3 +18,4 @@
     </block>
   </view>
 </view>
+</theme-shell>

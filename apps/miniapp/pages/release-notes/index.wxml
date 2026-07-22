@@ -1,3 +1,4 @@
+<theme-shell title="版本更新" show-back="{{true}}">
 <view class="page release-page">
   <view class="release-hero">
     <view class="hero-kicker">WHAT'S NEW</view>
@@ -37,3 +38,4 @@
     <view wx:else class="timeline-end">已经看完全部更新</view>
   </view>
 </view>
+</theme-shell>

@@ -17,28 +17,38 @@
     "pages/release-notes/index"
   ],
   "window": {
-    "navigationBarTitleText": "哪场值得跑",
-    "navigationBarBackgroundColor": "#1E293B",
-    "navigationBarTextStyle": "white",
+    "navigationStyle": "custom",
+    "navigationBarTitleText": "",
+    "navigationBarBackgroundColor": "#F4F5F7",
+    "navigationBarTextStyle": "black",
     "backgroundColor": "#F8FAFC"
+  },
+  "usingComponents": {
+    "theme-shell": "/components/theme-shell/index"
   },
   "tabBar": {
     "color": "#64748B",
-    "selectedColor": "#2A9D8F",
+    "selectedColor": "#FF5C1A",
     "backgroundColor": "#FFFFFF",
     "borderStyle": "black",
     "list": [
       {
         "pagePath": "pages/home/index",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "assets/icons/tab-home.png",
+        "selectedIconPath": "assets/icons/tab-home-active.png"
       },
       {
         "pagePath": "pages/events/index",
-        "text": "赛事"
+        "text": "赛事",
+        "iconPath": "assets/icons/tab-events.png",
+        "selectedIconPath": "assets/icons/tab-events-active.png"
       },
       {
         "pagePath": "pages/mine/index",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "assets/icons/tab-mine.png",
+        "selectedIconPath": "assets/icons/tab-mine-active.png"
       }
     ]
   },

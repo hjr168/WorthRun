@@ -1,7 +1,9 @@
+<theme-shell title="跑前工具" show-back="{{true}}">
 <view class="page tools-page">
   <page-header title="跑前工具" subtitle="把配速估算和赛前检查放在一处。" />
 
   <button class="tool-card" bindtap="openPace" aria-label="打开配速计算器">
+    <view class="tool-icon-box"><image class="tool-icon" src="/assets/icons/calculator-orange.png" mode="aspectFit" /></view>
     <view class="tool-copy">
       <view class="tool-title">配速计算器</view>
       <view class="muted">根据距离和目标完赛时间估算平均配速。</view>
@@ -9,6 +11,7 @@
     <view class="tool-action">打开</view>
   </button>
   <button class="tool-card" bindtap="openChecklist" aria-label="打开赛前清单">
+    <view class="tool-icon-box"><image class="tool-icon" src="/assets/icons/clipboard-list-orange.png" mode="aspectFit" /></view>
     <view class="tool-copy">
       <view class="tool-title">赛前清单</view>
       <view class="muted">查看报名、领物、装备和风险确认项。</view>
@@ -16,3 +19,4 @@
     <view class="tool-action">打开</view>
   </button>
 </view>
+</theme-shell>

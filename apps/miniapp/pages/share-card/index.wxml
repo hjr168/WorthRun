@@ -1,3 +1,4 @@
+<theme-shell title="分享卡片" show-back="{{true}}">
 <view class="page share-card-page">
   <loading-state wx:if="{{loading}}" text="正在生成分享图" />
   <block wx:elif="{{error}}">
@@ -15,3 +16,4 @@
     <view class="notice">AI 整理，仅供参考，报名以官方为准。</view>
   </block>
 </view>
+</theme-shell>

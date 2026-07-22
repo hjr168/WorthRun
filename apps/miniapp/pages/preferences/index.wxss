@@ -64,7 +64,9 @@
   margin-top: 24rpx;
 }
 
-.actions button {
+.actions .primary-button,
+.actions .secondary-button,
+.actions .plain-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -78,7 +80,8 @@
   gap: 14rpx;
 }
 
-.secondary-actions button {
+.secondary-actions .secondary-button,
+.secondary-actions .plain-button {
   width: 100%;
   min-width: 0;
 }

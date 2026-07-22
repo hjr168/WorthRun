@@ -1,23 +1,45 @@
 .page-header {
+  position: relative;
   width: 100%;
   overflow: hidden;
-  border-radius: 18rpx;
-  background: linear-gradient(145deg, #122b32 0%, #1c4650 100%);
-  color: #ffffff;
-  box-shadow: 0 10rpx 24rpx rgba(18, 43, 50, 0.12);
+  border: 2rpx solid var(--wr-card-border, rgba(15, 25, 35, 0.08));
+  border-radius: 32rpx;
+  background: var(--wr-hero, #ffffff);
+  color: var(--wr-hero-text, #0f1923);
+  box-shadow: var(--wr-shadow, 0 8rpx 24rpx rgba(15, 25, 35, 0.05));
 }
 
-.page-header.compact {
-  padding: 24rpx 28rpx;
+.page-header-accent {
+  width: var(--wr-banner-accent-width, 100%);
+  height: var(--wr-banner-accent-height, 12rpx);
+  margin: var(--wr-banner-accent-margin, 0);
+  border-radius: var(--wr-banner-accent-radius, 0);
+  background: var(--wr-primary, #ff5c1a);
 }
 
-.page-header.hero {
-  padding: 30rpx 32rpx;
+.page-header-body {
+  padding: var(--wr-banner-body-padding, 34rpx 40rpx 38rpx);
+}
+
+.page-header.plain {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.page-header.plain .page-header-accent {
+  display: none;
+}
+
+.page-header.plain .page-header-body {
+  padding: 0;
 }
 
 .page-header-kicker {
   margin-bottom: 6rpx;
-  color: #8bd8ce;
+  color: var(--wr-primary, #ff5c1a);
   font-size: 23rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
@@ -25,18 +47,18 @@
 }
 
 .page-header-title {
-  font-size: 36rpx;
+  font-size: 34rpx;
   font-weight: 800;
   line-height: 1.25;
 }
 
-.hero .page-header-title {
-  font-size: 40rpx;
+.plain .page-header-title {
+  font-size: 52rpx;
 }
 
 .page-header-subtitle {
   margin-top: 8rpx;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--wr-hero-muted, #6b7a8d);
   font-size: 25rpx;
   line-height: 1.55;
 }

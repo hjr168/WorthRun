@@ -1,5 +1,8 @@
-<view class="page-header {{compact ? 'compact' : 'hero'}}">
-  <view wx:if="{{kicker}}" class="page-header-kicker">{{kicker}}</view>
-  <view class="page-header-title">{{title}}</view>
-  <view wx:if="{{subtitle}}" class="page-header-subtitle">{{subtitle}}</view>
+<view class="page-header {{compact ? 'compact' : 'hero'}} {{plain ? 'plain' : ''}}">
+  <view class="page-header-accent"></view>
+  <view class="page-header-body">
+    <view wx:if="{{kicker}}" class="page-header-kicker">{{kicker}}</view>
+    <view class="page-header-title">{{title}}</view>
+    <view wx:if="{{subtitle}}" class="page-header-subtitle">{{subtitle}}</view>
+  </view>
 </view>

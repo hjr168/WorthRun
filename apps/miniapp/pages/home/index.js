@@ -85,6 +85,10 @@ Page({
     openEvents() {
         wx.switchTab({ url: '/pages/events/index' });
     },
+    openSearch() {
+        wx.setStorageSync('worthrun_focus_event_search', true);
+        wx.switchTab({ url: '/pages/events/index' });
+    },
     openEvent(event) {
         wx.navigateTo({ url: `/pages/event-detail/index?id=${event.detail.id}` });
     },

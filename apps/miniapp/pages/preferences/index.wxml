@@ -1,3 +1,4 @@
+<theme-shell title="跑赛偏好" show-back="{{true}}">
 <view class="page preferences-page">
   <loading-state wx:if="{{loading}}" text="正在读取偏好" />
   <block wx:else>
@@ -63,3 +64,4 @@
     </view>
   </block>
 </view>
+</theme-shell>

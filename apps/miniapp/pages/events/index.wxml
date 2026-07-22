@@ -1,27 +1,28 @@
+<theme-shell title="赛事列表">
 <view class="page events-page">
-  <page-header title="赛事列表" subtitle="按城市、距离和报名状态快速筛选。" />
+  <view class="events-subtitle">按城市、距离和报名状态快速筛选</view>
+
+  <view class="search-row">
+    <view class="search-field"><view class="search-submit" role="button" bindtap="submitSearch" aria-label="提交搜索"><image class="search-field-icon" src="/assets/icons/search.png" mode="aspectFit" /></view><input class="search" value="{{search}}" focus="{{searchFocused}}" placeholder="搜索赛事名称 / 城市" confirm-type="search" bindinput="onSearch" bindconfirm="submitSearch" /></view>
+  </view>
 
   <view class="filters">
-    <view class="search-row">
-      <input class="search" value="{{search}}" placeholder="搜索赛事名称 / 城市" confirm-type="search" bindinput="onSearch" bindconfirm="submitSearch" />
-      <button class="primary-button search-button" bindtap="submitSearch">搜索</button>
-    </view>
     <view class="filter-grid">
       <picker range="{{cities}}" value="{{cityIndex}}" bindchange="onCityChange">
-        <view class="filter-item">城市：{{cities[cityIndex]}}</view>
+        <view class="filter-item"><text class="filter-text">城市：{{cities[cityIndex]}}</text><image class="filter-chevron" src="/assets/icons/chevron-down.png" mode="aspectFit" /></view>
       </picker>
       <picker range="{{distances}}" value="{{distanceIndex}}" bindchange="onDistanceChange">
-        <view class="filter-item">距离：{{distances[distanceIndex]}}</view>
+        <view class="filter-item"><text class="filter-text">距离：{{distances[distanceIndex]}}</text><image class="filter-chevron" src="/assets/icons/chevron-down.png" mode="aspectFit" /></view>
       </picker>
       <picker range="{{signupLabels}}" value="{{signupIndex}}" bindchange="onSignupChange">
-        <view class="filter-item">报名：{{signupLabels[signupIndex]}}</view>
+        <view class="filter-item"><text class="filter-text">报名：{{signupLabels[signupIndex]}}</text><image class="filter-chevron" src="/assets/icons/chevron-down.png" mode="aspectFit" /></view>
       </picker>
       <picker range="{{judgementLabels}}" value="{{judgementIndex}}" bindchange="onJudgementChange">
-        <view class="filter-item">判断：{{judgementLabels[judgementIndex]}}</view>
+        <view class="filter-item"><text class="filter-text">判断：{{judgementLabels[judgementIndex]}}</text><image class="filter-chevron" src="/assets/icons/chevron-down.png" mode="aspectFit" /></view>
       </picker>
     </view>
-    <view class="filter-actions">
-      <button class="secondary-button reset-button" bindtap="resetFilters">重置筛选</button>
+    <view wx:if="{{hasActiveFilter}}" class="filter-actions">
+      <button class="reset-button" bindtap="resetFilters"><image class="reset-icon" src="/assets/icons/rotate-ccw.png" mode="aspectFit" /><text>重置筛选</text></button>
     </view>
   </view>
 
@@ -53,3 +54,4 @@
     <view wx:elif="{{events.length && !hasMore}}" class="load-more">没有更多了</view>
   </block>
 </view>
+</theme-shell>

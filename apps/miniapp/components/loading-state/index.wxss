@@ -1,9 +1,9 @@
 .loading {
-  border: 1rpx solid #e2e8f0;
-  border-radius: 18rpx;
-  background: #ffffff;
+  border: 1rpx solid var(--wr-border, #e2e8f0);
+  border-radius: 24rpx;
+  background: var(--wr-surface, #ffffff);
   padding: 38rpx 24rpx;
-  color: #64748b;
+  color: var(--wr-muted, #6b7a8d);
   font-size: 28rpx;
   text-align: center;
 }

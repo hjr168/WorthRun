@@ -1,3 +1,4 @@
+<theme-shell title="我的收藏" show-back="{{true}}">
 <view class="page favorites-page">
   <page-header title="我的收藏" subtitle="把想跑、待确认的赛事先收在这里。" />
 
@@ -21,3 +22,4 @@
     </view>
   </block>
 </view>
+</theme-shell>

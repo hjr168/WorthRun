@@ -8,6 +8,7 @@ declare function setTimeout(handler: (...args: any[]) => void, timeout?: number)
 declare function App<T extends object = Record<string, unknown>>(options: T): void;
 declare function Page(options: Record<string, any> & ThisType<any>): void;
 declare function Component(options: Record<string, any> & ThisType<any>): void;
+declare function getCurrentPages(): any[];
 
 declare namespace WechatMiniprogram {
   namespace CanvasContext {

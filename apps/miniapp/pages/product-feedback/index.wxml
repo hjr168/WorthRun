@@ -1,3 +1,4 @@
+<theme-shell title="产品反馈" show-back="{{true}}">
 <view class="page product-feedback-page">
   <page-header title="产品反馈" subtitle="告诉我们哪里不好用，或你希望增加什么。" />
 
@@ -66,3 +67,4 @@
     <button class="primary-button submit {{submitting || !canSubmit ? 'is-disabled' : ''}}" loading="{{submitting}}" disabled="{{submitting || !canSubmit}}" bindtap="submit">提交反馈</button>
   </block>
 </view>
+</theme-shell>

@@ -16,5 +16,9 @@ Component({
       type: Boolean,
       value: true,
     },
+    plain: {
+      type: Boolean,
+      value: false,
+    },
   },
 });

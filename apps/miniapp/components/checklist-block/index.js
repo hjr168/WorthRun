@@ -11,7 +11,9 @@ Component({
     observers: {
         items(value) {
             this.setData({
-                rows: (value || []).map((item) => (Object.assign(Object.assign({}, item), { statusText: (0, format_1.labelOf)(format_1.infoStatusLabels, item.itemStatus) }))),
+                rows: (value || []).map((item) => (Object.assign(Object.assign({}, item), { statusText: (0, format_1.labelOf)(format_1.infoStatusLabels, item.itemStatus), statusIcon: item.itemStatus === 'confirmed'
+                        ? '/assets/icons/circle-check-orange.png'
+                        : '/assets/icons/circle.png' }))),
             });
         },
     },

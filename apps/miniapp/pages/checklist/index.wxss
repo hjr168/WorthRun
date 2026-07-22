@@ -9,11 +9,26 @@
   align-items: center;
   min-height: 88rpx;
   margin-top: 20rpx;
-  border: 1rpx solid #e2e8f0;
-  border-radius: 14rpx;
-  background: #ffffff;
+  justify-content: space-between;
+  gap: 16rpx;
+  border: 2rpx solid var(--wr-card-border, rgba(15, 25, 35, 0.08));
+  border-radius: 24rpx;
+  background: var(--wr-surface, #ffffff);
   padding: 16rpx 20rpx;
-  color: #1e293b;
+  color: var(--wr-text, #0f1923);
   font-size: 28rpx;
-  box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
+  box-shadow: none;
+}
+
+.picker-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-chevron {
+  flex: 0 0 28rpx;
+  width: 28rpx;
+  height: 28rpx;
 }

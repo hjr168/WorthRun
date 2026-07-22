@@ -1,3 +1,4 @@
+<theme-shell title="我的">
 <view class="page mine-page">
   <loading-state wx:if="{{loading}}" text="正在加载我的信息" />
   <block wx:elif="{{error}}">
@@ -15,58 +16,75 @@
       <view class="identity-chip">{{shortUserKey}}</view>
     </view>
 
-    <view class="summary-grid">
-      <view class="summary-card" bindtap="openPreferences">
-        <view class="summary-label">偏好摘要</view>
-        <view class="summary-value">{{preferenceText}}</view>
+    <view class="summary-panel">
+      <view class="summary-row" bindtap="openPreferences">
+        <view class="summary-copy">
+          <view class="summary-label">偏好摘要</view>
+          <view class="summary-value">{{preferenceText}}</view>
+        </view>
         <view class="summary-action">调整偏好</view>
       </view>
 
-      <view class="summary-card highlight" bindtap="openNextEvent">
-        <view class="summary-label">我的下一场</view>
-        <view wx:if="{{nextEvent}}">
-          <view class="next-name">{{nextEvent.eventName}}</view>
-          <view class="summary-value">{{nextEvent.city}} · {{nextEventDate}}</view>
+      <view class="summary-row" bindtap="openNextEvent">
+        <view class="summary-copy">
+          <view class="summary-label">我的下一场</view>
+          <view wx:if="{{nextEvent}}">
+            <view class="next-name">{{nextEvent.eventName}}</view>
+            <view class="summary-value">{{nextEvent.city}} · {{nextEventDate}}</view>
+          </view>
+          <view wx:else class="summary-value">先收藏一场赛事</view>
         </view>
-        <view wx:else class="summary-value">先收藏一场赛事</view>
         <view class="summary-action">{{nextEvent ? '查看详情' : '去看看'}}</view>
       </view>
     </view>
 
+    <view class="choice-stats">
+      <view class="choice-stat"><text class="choice-stat-value interested">{{choiceCounts.interested}}</text><text class="choice-stat-label">想跑</text></view>
+      <view class="choice-stat"><text class="choice-stat-value considering">{{choiceCounts.considering}}</text><text class="choice-stat-label">观望</text></view>
+      <view class="choice-stat"><text class="choice-stat-value registered">{{choiceCounts.registered}}</text><text class="choice-stat-label">已报名</text></view>
+    </view>
+
     <view class="menu">
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openChoices" aria-label="打开我的选择">
+        <view class="menu-icon-box"><image class="menu-icon" src="/assets/icons/star-orange.png" mode="aspectFit" /></view>
         <view class="menu-copy">
           <text class="menu-title">我的选择</text>
           <text class="menu-summary">想跑 {{choiceCounts.interested}} · 观望 {{choiceCounts.considering}} · 已报名 {{choiceCounts.registered}}</text>
         </view>
-        <text class="menu-action">查看</text>
+        <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openFavorites" aria-label="打开我的收藏">
+        <view class="menu-icon-box"><image class="menu-icon" src="/assets/icons/heart-orange.png" mode="aspectFit" /></view>
         <view class="menu-copy"><text class="menu-title">我的收藏</text><text class="menu-summary">集中查看已收藏赛事</text></view>
-        <text class="menu-action">查看</text>
+        <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openFeedback" aria-label="打开赛事纠错">
+        <view class="menu-icon-box"><image class="menu-icon" src="/assets/icons/circle-alert-orange.png" mode="aspectFit" /></view>
         <view class="menu-copy"><text class="menu-title">赛事纠错</text><text class="menu-summary">提交赛事信息变化</text></view>
-        <text class="menu-action">打开</text>
+        <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openProductFeedback" aria-label="打开产品反馈">
+        <view class="menu-icon-box"><image class="menu-icon" src="/assets/icons/message-square-orange.png" mode="aspectFit" /></view>
         <view class="menu-copy"><text class="menu-title">产品反馈</text><text class="menu-summary">反馈功能建议或使用问题</text></view>
-        <text class="menu-action">打开</text>
+        <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openPreferences" aria-label="打开偏好设置">
+        <view class="menu-icon-box"><image class="menu-icon" src="/assets/icons/settings-orange.png" mode="aspectFit" /></view>
         <view class="menu-copy"><text class="menu-title">偏好设置</text><text class="menu-summary">调整城市、距离和关注点</text></view>
-        <text class="menu-action">调整</text>
+        <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openTools" aria-label="打开跑前工具">
+        <view class="menu-icon-box"><image class="menu-icon" src="/assets/icons/calculator-orange.png" mode="aspectFit" /></view>
         <view class="menu-copy"><text class="menu-title">跑前工具</text><text class="menu-summary">配速估算与赛前清单</text></view>
-        <text class="menu-action">打开</text>
+        <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
       <view class="menu-button" role="button" tabindex="0" hover-class="menu-button-hover" bindtap="openReleaseNotes" aria-label="打开版本更新">
+        <view class="menu-icon-box"><image class="menu-icon" src="/assets/icons/history-orange.png" mode="aspectFit" /></view>
         <view class="menu-copy">
           <view class="menu-title-line"><text class="menu-title">版本更新</text><text wx:if="{{hasNewRelease}}" class="new-badge">新</text></view>
           <text class="menu-summary">查看更新时间线和功能说明</text>
         </view>
-        <text class="menu-action">查看</text>
+        <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
     </view>
 
@@ -94,3 +112,4 @@
     </view>
   </block>
 </view>
+</theme-shell>

@@ -2,7 +2,11 @@
   <view class="event-head">
     <view class="event-main">
       <view class="event-name">{{event.eventName}}</view>
-      <view class="event-meta">{{event.city}} · {{dateText}} · {{distanceText}}</view>
+      <view class="event-meta">
+        <view class="meta-item"><image class="meta-icon" src="/assets/icons/map-pin.png" mode="aspectFit" /><text>{{event.city}}</text></view>
+        <view class="meta-item meta-date"><image class="meta-icon" src="/assets/icons/calendar-orange.png" mode="aspectFit" /><text>{{dateText}}</text></view>
+        <view class="meta-item"><image class="meta-icon" src="/assets/icons/activity.png" mode="aspectFit" /><text>{{distanceText}}</text></view>
+      </view>
     </view>
   </view>
   <view class="status-row">
@@ -18,6 +22,7 @@
       <text wx:for="{{tags}}" wx:key="*this" class="tag">{{item}}</text>
     </view>
     <button wx:if="{{showFavorite}}" class="favorite {{event.isFavorite ? 'active' : ''}}" catchtap="onFavorite" aria-label="{{event.isFavorite ? '取消收藏' : '收藏赛事'}}">
+      <image class="favorite-icon" src="{{event.isFavorite ? '/assets/icons/heart-orange.png' : '/assets/icons/heart.png'}}" mode="aspectFit" />
       <text class="favorite-label">{{event.isFavorite ? '已收藏' : '收藏'}}</text>
     </button>
   </view>

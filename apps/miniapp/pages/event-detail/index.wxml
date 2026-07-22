@@ -1,3 +1,4 @@
+<theme-shell title="赛事详情" show-back="{{true}}">
 <view class="page detail-page">
   <loading-state wx:if="{{loading}}" text="正在加载详情" />
   <block wx:elif="{{error}}">
@@ -33,21 +34,23 @@
       {{eventNotice.text}}
     </view>
 
-    <view class="section card info-card">
+    <view class="section info-section">
       <view class="section-title">赛事基础信息</view>
-      <view class="info-row"><text class="info-label">起点</text><text class="info-value">{{event.startPoint || '待确认'}}</text></view>
-      <view class="info-row"><text class="info-label">终点</text><text class="info-value">{{event.endPoint || '待确认'}}</text></view>
-      <view class="info-row"><text class="info-label">数据来源</text><text class="info-value">{{event.sourceName || '待确认'}}</text></view>
-      <view class="info-row"><text class="info-label">最近检查</text><text class="info-value">{{sourceCheckedAtText}}</text></view>
+      <view class="card info-card">
+        <view class="info-row"><text class="info-label">起点</text><text class="info-value">{{event.startPoint || '待确认'}}</text></view>
+        <view class="info-row"><text class="info-label">终点</text><text class="info-value">{{event.endPoint || '待确认'}}</text></view>
+        <view class="info-row"><text class="info-label">数据来源</text><text class="info-value">{{event.sourceName || '待确认'}}</text></view>
+        <view class="info-row"><text class="info-label">最近检查</text><text class="info-value">{{sourceCheckedAtText}}</text></view>
 
-      <view wx:if="{{event.hasSourceSummary}}" class="source-summary-entry" role="button" tabindex="0" hover-class="detail-entry-hover" bindtap="openSourceSummary" aria-label="查看来源详情">
-        <view class="source-summary-copy">
-          <text class="source-summary-title">查看来源详情</text>
-          <text class="source-summary-desc">阅读已核对的来源内容摘要</text>
-        </view>
-        <view class="source-summary-side">
-          <text wx:if="{{event.sourceSummaryStale}}" class="source-summary-stale">待复核</text>
-          <text class="source-summary-action">查看</text>
+        <view wx:if="{{event.hasSourceSummary}}" class="source-summary-entry" role="button" tabindex="0" hover-class="detail-entry-hover" bindtap="openSourceSummary" aria-label="查看来源详情">
+          <view class="source-summary-copy">
+            <text class="source-summary-title">查看来源详情</text>
+            <text class="source-summary-desc">阅读已核对的来源内容摘要</text>
+          </view>
+          <view class="source-summary-side">
+            <text wx:if="{{event.sourceSummaryStale}}" class="source-summary-stale">待复核</text>
+            <text class="source-summary-action">查看</text>
+          </view>
         </view>
       </view>
 
@@ -67,19 +70,16 @@
       <view wx:if="{{!hasChoiceCounts}}" class="choice-empty">暂时还没有人标记，成为第一个吧</view>
       <view class="choice-options">
         <button class="choice-option {{viewerChoice === 'interested' ? 'active' : ''}} {{choiceUpdating ? 'is-disabled' : ''}}" data-choice="interested" bindtap="onChoiceTap" disabled="{{choiceUpdating}}" aria-label="想跑{{hasChoiceCounts ? '，' + event.choiceCounts.interested + '人' : ''}}{{viewerChoice === 'interested' ? '，已选中' : ''}}">
-          <text class="choice-label">想跑</text>
-          <text wx:if="{{viewerChoice === 'interested'}}" class="choice-selected">已选</text>
           <text wx:if="{{hasChoiceCounts}}" class="choice-count">{{event.choiceCounts.interested}}</text>
+          <text class="choice-label">想跑</text>
         </button>
         <button class="choice-option {{viewerChoice === 'considering' ? 'active' : ''}} {{choiceUpdating ? 'is-disabled' : ''}}" data-choice="considering" bindtap="onChoiceTap" disabled="{{choiceUpdating}}" aria-label="观望{{hasChoiceCounts ? '，' + event.choiceCounts.considering + '人' : ''}}{{viewerChoice === 'considering' ? '，已选中' : ''}}">
-          <text class="choice-label">观望</text>
-          <text wx:if="{{viewerChoice === 'considering'}}" class="choice-selected">已选</text>
           <text wx:if="{{hasChoiceCounts}}" class="choice-count">{{event.choiceCounts.considering}}</text>
+          <text class="choice-label">观望</text>
         </button>
         <button class="choice-option {{viewerChoice === 'registered' ? 'active' : ''}} {{choiceUpdating ? 'is-disabled' : ''}}" data-choice="registered" bindtap="onChoiceTap" disabled="{{choiceUpdating}}" aria-label="已报名{{hasChoiceCounts ? '，' + event.choiceCounts.registered + '人' : ''}}{{viewerChoice === 'registered' ? '，已选中' : ''}}">
-          <text class="choice-label">已报名</text>
-          <text wx:if="{{viewerChoice === 'registered'}}" class="choice-selected">已选</text>
           <text wx:if="{{hasChoiceCounts}}" class="choice-count">{{event.choiceCounts.registered}}</text>
+          <text class="choice-label">已报名</text>
         </button>
       </view>
       <view class="choice-note">匿名意向统计，不代表官方报名人数；“已报名”为用户自报。</view>
@@ -149,8 +149,9 @@
   </block>
 
   <view wx:if="{{event}}" class="bottom-bar">
-    <button class="bottom-secondary bottom-favorite {{isFavorite ? 'favorite-active' : 'favorite-idle'}}" bindtap="toggleFavorite" aria-label="{{isFavorite ? '取消收藏赛事' : '收藏赛事'}}">{{isFavorite ? '取消收藏' : '收藏'}}</button>
-    <button class="secondary-button bottom-secondary" bindtap="openShareCard" aria-label="生成赛事分享卡">分享</button>
+    <button class="bottom-secondary bottom-favorite {{isFavorite ? 'favorite-active' : 'favorite-idle'}}" bindtap="toggleFavorite" aria-label="{{isFavorite ? '取消收藏赛事' : '收藏赛事'}}"><image class="bottom-action-icon" src="{{isFavorite ? '/assets/icons/heart-orange.png' : '/assets/icons/heart.png'}}" mode="aspectFit" /><text>收藏</text></button>
+    <button class="secondary-button bottom-secondary" bindtap="openShareCard" aria-label="生成赛事分享卡"><image class="bottom-action-icon" src="/assets/icons/share.png" mode="aspectFit" /><text>分享</text></button>
     <button class="primary-button bottom-primary" bindtap="openOfficial" aria-label="前往官方确认赛事信息">{{officialActionText}}</button>
   </view>
 </view>
+</theme-shell>

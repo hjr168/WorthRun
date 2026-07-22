@@ -1,3 +1,4 @@
+<theme-shell title="配速计算器" show-back="{{true}}">
 <view class="page pace-page">
   <page-header title="配速计算器" subtitle="输入距离和目标时间，快速估算平均配速。" />
 
@@ -30,3 +31,4 @@
     <view wx:for="{{splits}}" wx:key="*this" class="split">{{item}}</view>
   </view>
 </view>
+</theme-shell>

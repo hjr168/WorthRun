@@ -1,3 +1,4 @@
+<theme-shell title="我的选择" show-back="{{true}}">
 <view class="page choices-page">
   <page-header title="我的选择" subtitle="管理想跑、观望和已报名赛事。具体选择仅你自己可见。" />
 
@@ -36,3 +37,4 @@
 
   <view class="choices-note">匿名意向统计，不代表官方报名人数。</view>
 </view>
+</theme-shell>

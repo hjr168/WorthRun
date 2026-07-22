@@ -1,5 +1,18 @@
+<theme-shell title="哪场值得跑" show-search="{{true}}" bind:search="openSearch">
 <view class="page home-page">
-  <page-header kicker="WorthRun" title="哪场值得跑" subtitle="大湾区未来赛事，先判断，再去官方确认。" compact="{{false}}" />
+  <view class="home-hero">
+    <view class="hero-accent"></view>
+    <view class="hero-content">
+      <view class="hero-kicker">大湾区跑者指南</view>
+      <view class="hero-title">未来赛事，<text class="hero-emphasis">先判断</text></view>
+      <view class="hero-title">再去官方确认。</view>
+      <view class="hero-copy">选好城市和距离，帮你筛出值得优先关注的赛事</view>
+      <view class="actions">
+        <button class="primary-button" bindtap="openPreference">设置跑赛偏好</button>
+        <button class="secondary-button" bindtap="openEvents">先随便看看</button>
+      </view>
+    </view>
+  </view>
 
   <loading-state wx:if="{{loading}}" text="正在加载赛事" />
   <block wx:elif="{{error}}">
@@ -9,14 +22,7 @@
   </block>
 
   <block wx:else>
-    <view wx:if="{{!preference}}" class="preference-strip preference-empty">
-      <view class="preference-title">先选择城市和距离，帮你筛出更适合的赛事</view>
-      <view class="actions">
-        <button class="primary-button" bindtap="openPreference">设置跑赛偏好</button>
-        <button class="secondary-button" bindtap="openEvents">先随便看看</button>
-      </view>
-    </view>
-    <view wx:else class="preference-strip" bindtap="openPreference">
+    <view wx:if="{{preference}}" class="preference-strip" bindtap="openPreference">
       <view>
         <view class="preference-label">当前偏好</view>
         <view class="preference-value">{{preferenceText}}</view>
@@ -26,7 +32,10 @@
     <view wx:if="{{fallbackNotice}}" class="fallback-notice">{{fallbackNotice}}</view>
 
     <view wx:if="{{priorityEvents.length}}" class="section">
-      <view class="section-title">优先关注</view>
+      <view class="section-heading">
+        <view class="section-title">优先关注</view>
+        <view class="section-link" role="button" bindtap="openEvents" aria-label="查看全部赛事"><text>全部赛事</text><image class="section-link-icon" src="/assets/icons/chevron-right-orange.png" mode="aspectFit" /></view>
+      </view>
       <event-card
         wx:for="{{priorityEvents}}"
         wx:key="id"
@@ -62,6 +71,6 @@
     </view>
 
     <empty-state wx:if="{{!priorityEvents.length && !closingEvents.length && !recentEvents.length}}" title="暂无赛事" description="后台发布赛事后会出现在这里" />
-    <button class="secondary-button all-events-button" bindtap="openEvents">查看全部赛事</button>
   </block>
 </view>
+</theme-shell>

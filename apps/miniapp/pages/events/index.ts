@@ -64,12 +64,19 @@ Page({
     didInitialLoad: false,
     activeFilterText: '全部未来赛事',
     resultText: '',
+    searchFocused: false,
+    hasActiveFilter: false,
   },
   onLoad() {
     enablePublicShare();
     this.load(true);
   },
   onShow() {
+    if (wx.getStorageSync('worthrun_focus_event_search')) {
+      wx.removeStorageSync('worthrun_focus_event_search');
+      this.setData({ searchFocused: true });
+      setTimeout(() => this.setData({ searchFocused: false }), 500);
+    }
     if (!this.data.didInitialLoad) return;
     this.load(true);
   },
@@ -120,6 +127,7 @@ Page({
         total: eventRes.total,
         resultText: `找到 ${eventRes.total} 场赛事`,
         activeFilterText: activeFilters.join(' · ') || '全部未来赛事',
+        hasActiveFilter: activeFilters.length > 0,
         hasMore: events.length < eventRes.total,
         events,
       });
@@ -161,6 +169,7 @@ Page({
       distanceIndex: 0,
       signupIndex: 0,
       judgementIndex: 0,
+      hasActiveFilter: false,
     });
     this.load(true);
   },

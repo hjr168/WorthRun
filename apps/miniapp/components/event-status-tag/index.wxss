@@ -2,24 +2,24 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1rpx solid transparent;
+  border: 2rpx solid transparent;
   border-radius: 999rpx;
-  padding: 7rpx 16rpx;
-  font-size: 24rpx;
+  padding: 4rpx 16rpx;
+  font-size: 22rpx;
   font-weight: 700;
   line-height: 1.3;
 }
 
 .tone-positive {
-  border-color: #b8e5de;
-  background: #dff5f1;
-  color: #176f66;
+  border-color: var(--wr-tag-positive-border, #a7f3d0);
+  background: var(--wr-tag-positive-bg, #ecfdf5);
+  color: var(--wr-tag-positive-text, #059669);
 }
 
 .tone-urgent {
-  border-color: #f2c8bc;
-  background: #fff0eb;
-  color: #a34830;
+  border-color: var(--wr-tag-primary-border, #fed7aa);
+  background: var(--wr-tag-primary-bg, #fff7ed);
+  color: var(--wr-tag-primary-text, #ea580c);
 }
 
 .tone-neutral {

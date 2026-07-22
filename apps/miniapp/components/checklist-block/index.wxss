@@ -1,7 +1,7 @@
 .checklist {
-  border: 1rpx solid #e2e8f0;
-  border-radius: 18rpx;
-  background: #ffffff;
+  border: 2rpx solid var(--wr-card-border, rgba(15, 25, 35, 0.08));
+  border-radius: 32rpx;
+  background: var(--wr-surface, #ffffff);
 }
 
 .check-row {
@@ -10,11 +10,19 @@
   justify-content: space-between;
   gap: 20rpx;
   min-height: 92rpx;
-  border-bottom: 1rpx solid #e2e8f0;
+  border-bottom: 2rpx solid var(--wr-card-border, rgba(15, 25, 35, 0.08));
   padding: 18rpx 22rpx;
 }
 
+.check-icon {
+  flex: 0 0 36rpx;
+  width: 36rpx;
+  height: 36rpx;
+  margin-top: 3rpx;
+}
+
 .item-copy {
+  flex: 1;
   min-width: 0;
 }
 
@@ -23,7 +31,7 @@
 }
 
 .item-name {
-  color: #111827;
+  color: var(--wr-text, #0f1923);
   font-size: 28rpx;
   font-weight: 600;
   line-height: 1.45;
@@ -33,15 +41,15 @@
 
 .group-name {
   margin-top: 6rpx;
-  color: #64748b;
+  color: var(--wr-muted, #6b7a8d);
   font-size: 24rpx;
 }
 
 .status {
   flex-shrink: 0;
   border-radius: 999rpx;
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--wr-surface-soft, #eef0f3);
+  color: var(--wr-muted, #6b7a8d);
   padding: 6rpx 14rpx;
   font-size: 24rpx;
   line-height: 1.35;

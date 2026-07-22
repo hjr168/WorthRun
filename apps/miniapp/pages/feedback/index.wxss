@@ -118,7 +118,8 @@
 }
 
 .submit,
-.success-actions button {
+.success-actions .primary-button,
+.success-actions .secondary-button {
   display: flex;
   align-items: center;
   justify-content: center;

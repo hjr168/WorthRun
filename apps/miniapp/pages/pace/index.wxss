@@ -7,9 +7,9 @@
 .input-card,
 .result-card {
   margin-top: 20rpx;
-  border-color: #e5edf0;
-  border-radius: 18rpx;
-  box-shadow: 0 6rpx 18rpx rgba(15, 23, 42, 0.04);
+  border-color: var(--wr-card-border, rgba(15, 25, 35, 0.08));
+  border-radius: 32rpx;
+  box-shadow: 0 3rpx 8rpx rgba(15, 25, 35, 0.035);
 }
 
 .field {
@@ -21,9 +21,9 @@
   height: 88rpx;
   min-height: 88rpx;
   padding: 0 20rpx;
-  border-radius: 12rpx;
-  background: #f8fafc;
-  color: #111827;
+  border-radius: 24rpx;
+  background: var(--wr-surface-soft, #eef0f3);
+  color: var(--wr-text, #0f1923);
   font-size: 34rpx;
   font-weight: 700;
   line-height: 88rpx;
@@ -59,8 +59,8 @@
 }
 
 .pace {
-  color: #2a9d8f;
-  font-size: 44rpx;
+  color: var(--wr-primary, #ff5c1a);
+  font-size: 62rpx;
   font-weight: 800;
 }
 
@@ -69,9 +69,9 @@
 }
 
 .split {
-  border-bottom: 1rpx solid #e2e8f0;
+  border-bottom: 1rpx solid var(--wr-border, #e2e8f0);
   padding: 14rpx 0;
-  color: #64748b;
+  color: var(--wr-muted, #6b7a8d);
   font-size: 28rpx;
   line-height: 1.5;
 }

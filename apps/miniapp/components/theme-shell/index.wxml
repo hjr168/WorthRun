@@ -1,0 +1,20 @@
+<view
+  class="theme-shell {{theme === 'dark' ? 'theme-dark' : 'theme-light'}}"
+  style="--wr-nav-height: {{navHeight}}px; --wr-capsule-top: {{capsuleTop}}px; --wr-nav-action-right: {{navActionRight}}px; --wr-search-action-right: {{searchActionRight}}px;"
+>
+  <view class="custom-nav" style="height: {{navHeight}}px;">
+    <view class="custom-nav-title {{showBack ? 'custom-nav-title-with-back' : ''}} {{showSearch ? 'custom-nav-title-with-search' : ''}}">{{title}}</view>
+    <button wx:if="{{showBack}}" class="nav-back" bindtap="goBack" aria-label="返回上一页">
+      <image class="nav-icon nav-back-light" src="/assets/icons/arrow-left.png" mode="aspectFit" />
+      <image class="nav-icon nav-back-dark" src="/assets/icons/arrow-left-light.png" mode="aspectFit" />
+    </button>
+    <button wx:if="{{showSearch}}" class="nav-search" bindtap="openSearch" aria-label="搜索赛事">
+      <image class="nav-icon" src="/assets/icons/search.png" mode="aspectFit" />
+    </button>
+    <button class="theme-toggle" bindtap="toggleTheme" aria-label="{{theme === 'dark' ? '切换到白天模式' : '切换到黑夜模式'}}">
+      <image class="nav-icon" src="{{theme === 'dark' ? '/assets/icons/sun.png' : '/assets/icons/moon.png'}}" mode="aspectFit" />
+    </button>
+  </view>
+  <view class="custom-nav-spacer" style="height: {{navHeight}}px;"></view>
+  <slot />
+</view>
