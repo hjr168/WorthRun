@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateV053Environment } from './v053ReleasePreflight.js';
+import {
+  evaluateV053Environment,
+  evaluateV053WechatTemplates,
+} from './v053ReleasePreflight.js';
 
 const readyEnv = {
   NODE_ENV: 'production',
@@ -78,5 +81,30 @@ describe('V0.5.3 release preflight', () => {
     );
     expect(checks.find((item) => item.id === 'reminder_feature')?.status).toBe('pass');
     expect(checks.find((item) => item.id === 'miniprogram_state')?.status).toBe('pass');
+  });
+
+  it('blocks reminder template ids that do not exist in the current mini program', () => {
+    const checks = evaluateV053WechatTemplates(readyEnv, [
+      {
+        priTmplId: 'signup-template',
+        content: '{{thing9.DATA}} {{time2.DATA}} {{thing3.DATA}}',
+      },
+    ]);
+    expect(checks.find((item) => item.id === 'wechat_signup_template')?.status).toBe('pass');
+    expect(checks.find((item) => item.id === 'wechat_race_template')?.status).toBe('blocker');
+  });
+
+  it('checks the fields exposed by both WeChat templates', () => {
+    const checks = evaluateV053WechatTemplates(readyEnv, [
+      {
+        priTmplId: 'signup-template',
+        content: '{{thing9.DATA}} {{time2.DATA}} {{thing3.DATA}}',
+      },
+      {
+        priTmplId: 'race-template',
+        content: '{{thing1.DATA}} {{time11.DATA}} {{thing5.DATA}}',
+      },
+    ]);
+    expect(checks.every((item) => item.status === 'pass')).toBe(true);
   });
 });

@@ -23,4 +23,12 @@ describe('getSubscribeMessageError', () => {
       '微信订阅授权未完成，请稍后重试',
     );
   });
+
+  it('explains an invalid template without exposing its id', () => {
+    expect(
+      getSubscribeMessageError({
+        errMsg: 'requestSubscribeMessage:fail template id does not exist',
+      }),
+    ).toBe('提醒模板配置异常，请稍后再试');
+  });
 });

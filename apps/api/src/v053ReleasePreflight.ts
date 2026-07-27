@@ -12,6 +12,11 @@ export interface PreflightCheck {
   message: string;
 }
 
+interface WechatTemplate {
+  priTmplId?: string;
+  content?: string;
+}
+
 function check(id: string, passed: boolean, message: string): PreflightCheck {
   return { id, status: passed ? 'pass' : 'blocker', message };
 }
@@ -238,6 +243,71 @@ export function evaluateV053Repository(input: {
     );
   }
   return checks;
+}
+
+export function evaluateV053WechatTemplates(
+  env: NodeJS.ProcessEnv,
+  templates: WechatTemplate[],
+): PreflightCheck[] {
+  const signupId = env.WX_SIGNUP_REMINDER_TEMPLATE_ID?.trim() || '';
+  const raceId = env.WX_RACE_REMINDER_TEMPLATE_ID?.trim() || '';
+  const signup = templates.find((item) => item.priTmplId === signupId);
+  const race = templates.find((item) => item.priTmplId === raceId);
+  const hasFields = (template: WechatTemplate | undefined, fields: Array<string | undefined>) =>
+    Boolean(
+      template &&
+        fields.every((field) => field?.trim() && template.content?.includes(`{{${field.trim()}.DATA}}`)),
+    );
+
+  return [
+    check('wechat_signup_template', Boolean(signup), '报名提醒模板必须存在于当前微信小程序'),
+    check('wechat_race_template', Boolean(race), '赛前提醒模板必须存在于当前微信小程序'),
+    check(
+      'wechat_signup_fields',
+      hasFields(signup, [
+        env.WX_SIGNUP_REMINDER_EVENT_FIELD,
+        env.WX_SIGNUP_REMINDER_DATE_FIELD,
+        env.WX_SIGNUP_REMINDER_NOTICE_FIELD,
+      ]),
+      '微信报名提醒模板字段必须与服务端配置一致',
+    ),
+    check(
+      'wechat_race_fields',
+      hasFields(race, [
+        env.WX_RACE_REMINDER_EVENT_FIELD,
+        env.WX_RACE_REMINDER_DATE_FIELD,
+        env.WX_RACE_REMINDER_NOTICE_FIELD,
+      ]),
+      '微信赛前提醒模板字段必须与服务端配置一致',
+    ),
+  ];
+}
+
+export async function fetchV053WechatTemplates(
+  env: NodeJS.ProcessEnv,
+): Promise<WechatTemplate[]> {
+  const appid = env.WX_APPID?.trim();
+  const secret = env.WX_APPSECRET?.trim();
+  if (!appid || !secret) throw new Error('微信 AppID 或 AppSecret 未配置');
+  const tokenResponse = await fetch(
+    `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(appid)}&secret=${encodeURIComponent(secret)}`,
+  );
+  const tokenResult = (await tokenResponse.json()) as {
+    access_token?: string;
+    errcode?: number;
+  };
+  if (!tokenResult.access_token) throw new Error(`微信 access token 获取失败 ${tokenResult.errcode ?? ''}`);
+  const templateResponse = await fetch(
+    `https://api.weixin.qq.com/wxaapi/newtmpl/gettemplate?access_token=${encodeURIComponent(tokenResult.access_token)}`,
+  );
+  const templateResult = (await templateResponse.json()) as {
+    data?: WechatTemplate[];
+    errcode?: number;
+  };
+  if (templateResult.errcode !== 0 || !Array.isArray(templateResult.data)) {
+    throw new Error(`微信模板列表读取失败 ${templateResult.errcode ?? ''}`);
+  }
+  return templateResult.data;
 }
 
 export async function evaluateV053Database(

@@ -17,5 +17,7 @@ function getSubscribeMessageError(error) {
     if (detail.includes('no permission') || detail.includes('not authorized')) {
         return '当前微信账号暂无法订阅提醒';
     }
+    if (detail.includes('template'))
+        return '提醒模板配置异常，请稍后再试';
     return '微信订阅授权未完成，请稍后重试';
 }

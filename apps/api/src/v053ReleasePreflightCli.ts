@@ -5,6 +5,8 @@ import {
   evaluateV053Database,
   evaluateV053Environment,
   evaluateV053Repository,
+  evaluateV053WechatTemplates,
+  fetchV053WechatTemplates,
   type PreflightCheck,
   type PreflightMode,
   type PreflightPhase,
@@ -33,12 +35,19 @@ const checks: PreflightCheck[] = [
 ];
 
 try {
+  if (phase === 'reminders') {
+    const templates = await fetchV053WechatTemplates(process.env);
+    checks.push(...evaluateV053WechatTemplates(process.env, templates));
+  }
   if (!skipDatabase) checks.push(...(await evaluateV053Database(phase)));
-} catch {
+} catch (error) {
   checks.push({
-    id: 'database_connection',
+    id: phase === 'reminders' ? 'external_readiness' : 'database_connection',
     status: 'blocker',
-    message: '无法连接数据库或读取迁移状态',
+    message:
+      phase === 'reminders'
+        ? `无法完成微信模板或数据库检查：${error instanceof Error ? error.message : '未知错误'}`
+        : '无法连接数据库或读取迁移状态',
   });
 } finally {
   await prisma.$disconnect();
