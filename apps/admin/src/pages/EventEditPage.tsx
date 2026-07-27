@@ -443,6 +443,66 @@ function SourceSummaryPanel({ eventId }: { eventId: string }) {
     });
   };
 
+  const reverify = (item: EventSourceSummaryItem) => {
+    let note = '';
+    Modal.confirm({
+      title: '复核用户端来源摘要',
+      width: 720,
+      okText: '确认内容仍准确',
+      cancelText: '取消',
+      content: (
+        <Space direction="vertical" size={12} style={{ width: '100%', marginTop: 12 }}>
+          <Alert
+            type="warning"
+            showIcon
+            message="仅在原摘要仍与来源一致时恢复"
+            description="如果来源内容已经变化，请取消并使用“抓取并生成草稿”，核对新草稿后再发布。存在开放变更时必须先完成变更复核。"
+          />
+          <Descriptions bordered size="small" column={1}>
+            <Descriptions.Item label="来源">
+              <Typography.Link href={item.sourceUrl} target="_blank" rel="noreferrer">
+                {item.sourceTitle || item.sourceName || '查看原始来源'}
+              </Typography.Link>
+            </Descriptions.Item>
+            <Descriptions.Item label="摘要">{item.summary}</Descriptions.Item>
+            <Descriptions.Item label="关键点">
+              <Space direction="vertical" size={4}>
+                {item.keyPoints.map((point, index) => (
+                  <span key={`${index}-${point}`}>
+                    {index + 1}. {point}
+                  </span>
+                ))}
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="限制说明">
+              {item.limitations || '无'}
+            </Descriptions.Item>
+          </Descriptions>
+          <Input.TextArea
+            rows={3}
+            maxLength={500}
+            placeholder="填写 4-500 字复核备注，例如：已对照官方页面，摘要仍准确"
+            onChange={(event) => {
+              note = event.target.value;
+            }}
+          />
+        </Space>
+      ),
+      onOk: async () => {
+        if (note.trim().length < 4) {
+          message.warning('请填写至少 4 个字的复核备注');
+          throw new Error('复核备注不足');
+        }
+        await apiSend('POST', `/api/admin/source-summaries/${item.id}/reverify`, {
+          expectedUpdatedAt: item.updatedAt,
+          note: note.trim(),
+        });
+        message.success('来源摘要已完成复核');
+        await load();
+      },
+    });
+  };
+
   return (
     <Section title="用户端来源摘要">
       <Space direction="vertical" size={14} style={{ width: '100%' }}>
@@ -506,10 +566,23 @@ function SourceSummaryPanel({ eventId }: { eventId: string }) {
             },
             {
               title: '操作',
-              width: 180,
+              width: 210,
               fixed: 'right',
-              render: (_, record) =>
-                can('edit_event') && record.status === 'draft' ? (
+              render: (_, record) => {
+                if (!can('edit_event')) return null;
+                if (record.status === 'published' && record.staleAt) {
+                  return (
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<FileDoneOutlined />}
+                      onClick={() => reverify(record)}
+                    >
+                      复核摘要
+                    </Button>
+                  );
+                }
+                return record.status === 'draft' ? (
                   <Space>
                     <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
                       编辑
@@ -523,7 +596,8 @@ function SourceSummaryPanel({ eventId }: { eventId: string }) {
                       发布
                     </Button>
                   </Space>
-                ) : null,
+                ) : null;
+              },
             },
           ]}
         />

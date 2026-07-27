@@ -115,6 +115,7 @@ import {
   getPublicSourceSummary,
   listSourceSummaries,
   publishSourceSummary,
+  reverifyPublishedSourceSummary,
   updateSourceSummaryDraft,
 } from './sourceSummaryWorkflow.js';
 import {
@@ -1929,6 +1930,24 @@ app.post(
     const input = validateBody(sourceSummaryPublishSchema, req.body);
     try {
       res.json(await publishSourceSummary(req.params.id, { ...input, adminUserId: admin.id }));
+    } catch (error) {
+      sourceSummaryHttpError(error);
+    }
+  }),
+);
+
+app.post(
+  '/api/admin/source-summaries/:id/reverify',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(sourceSummaryPublishSchema, req.body);
+    try {
+      res.json(
+        await reverifyPublishedSourceSummary(req.params.id, {
+          ...input,
+          adminUserId: admin.id,
+        }),
+      );
     } catch (error) {
       sourceSummaryHttpError(error);
     }

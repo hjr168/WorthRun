@@ -128,6 +128,84 @@ export async function publishSourceSummary(
   });
 }
 
+export function assertSourceSummaryReverifyEligible(
+  summary: {
+    status: string;
+    staleAt: Date | null;
+    sourceUrl: string;
+    openChangeAlerts: number;
+  },
+  note: string,
+) {
+  if (note.trim().length < 4 || note.trim().length > 500) {
+    throw new SourceSummaryValidationError('复核备注需为 4-500 字');
+  }
+  if (summary.status !== 'published') {
+    throw new SourceSummaryValidationError('只能复核已发布的来源摘要');
+  }
+  if (!summary.staleAt) throw new SourceSummaryValidationError('该来源摘要当前无需复核');
+  if (!isHttpUrl(summary.sourceUrl)) {
+    throw new SourceSummaryValidationError('来源摘要链接不可用');
+  }
+  if (summary.openChangeAlerts > 0) {
+    throw new SourceSummaryValidationError('请先处理该赛事的开放变更，再复核来源摘要');
+  }
+}
+
+export async function reverifyPublishedSourceSummary(
+  id: string,
+  input: { expectedUpdatedAt: string; note: string; adminUserId: string },
+) {
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.eventSourceSummary.findUnique({
+      where: { id },
+      include: {
+        event: {
+          select: {
+            changeAlerts: {
+              where: { status: 'open' },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+    if (!current) throw new SourceSummaryNotFoundError('来源摘要不存在');
+    if (current.updatedAt.toISOString() !== input.expectedUpdatedAt) {
+      throw new SourceSummaryConflictError('摘要已发生变化，请刷新后重试');
+    }
+    assertSourceSummaryReverifyEligible(
+      {
+        status: current.status,
+        staleAt: current.staleAt,
+        sourceUrl: current.sourceUrl,
+        openChangeAlerts: current.event.changeAlerts.length,
+      },
+      input.note,
+    );
+    const reviewed = await tx.eventSourceSummary.update({
+      where: { id },
+      data: {
+        staleAt: null,
+        reviewedBy: input.adminUserId,
+      },
+    });
+    await tx.adminOperationLog.create({
+      data: {
+        adminUserId: input.adminUserId,
+        action: 'source_summary.reverify',
+        targetType: 'event_source_summaries',
+        targetId: id,
+        beforeValue: summarySnapshot(current) as Prisma.InputJsonObject,
+        afterValue: summarySnapshot(reviewed) as Prisma.InputJsonObject,
+        note: input.note.trim(),
+      },
+    });
+    return reviewed;
+  });
+}
+
 export async function getPublicSourceSummary(eventId: string) {
   const event = await prisma.event.findFirst({
     where: { id: eventId, ...buildPublicEventWhere() },
