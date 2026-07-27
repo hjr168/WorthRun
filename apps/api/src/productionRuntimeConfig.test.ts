@@ -19,6 +19,6 @@ describe('production runtime config', () => {
 
     expect(api?.cwd).toBeTruthy();
     expect(api?.node_args?.split(/\s+/)).toContain('--env-file=.env');
-    expect(api?.env_production?.APP_RELEASE).toBeUndefined();
+    expect(api?.env_production?.APP_RELEASE).toBeTruthy();
   });
 });
