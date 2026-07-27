@@ -263,3 +263,39 @@ pnpm source-summary:backfill -- --apply --expected <预览数量>
 `POST /api/feedback` 支持 `event_correction` 与 `product_feedback`。旧请求未传 `scope` 时仍按赛事纠错处理并要求公开赛事；产品反馈不接受 `eventId`，可携带固定页面标识、小程序版本和关联 API 问题编号。两类反馈均要求 6-500 字正文并执行异常探测、24 小时重复保护和频率限制。
 
 所有 API 错误响应返回 `{ message, requestId }`，响应头同时提供 `X-Request-Id`。`GET /health` 保留原字段并增加 `release` 与 `databaseLatencyMs`。
+
+## V0.5.4 赛事可信核验与提醒
+
+赛事核验是 V0.5.4 的核心闭环：人工核验通过后赛事才会被标记为可信，并解锁赛前/报名提醒订阅。所有接口仅限后台管理员访问，复用 `Authorization: Bearer <admin token>`。
+
+赛事核验：
+
+- `GET /api/admin/event-verification/summary`：返回待核验、可核验、缺摘要、摘要待复核、开放告警、可订阅等摘要卡片数量，用于后台顶部统计。
+- `GET /api/admin/event-verification`：核验列表分页，支持 `city`、`issue`（核验问题码）、`reminderEligible`（提醒资格）筛选；`readonly` 角色可读。
+- `POST /api/admin/events/bulk-verify`：核验预览与应用。请求体 `{ eventIds: string[], dryRun?: boolean, expected?: Record<id, updatedAtISO>, note?: string }`，`eventIds` 最多 20 场，`dryRun` 缺省为 `true`。预览返回每场的问题码和字段快照；应用时校验 `expected` 快照（乐观并发），事务内写入 `infoStatus=verified`、`sourceCheckedAt`、字段可信状态和 `event.verify` 操作日志。`readonly` 角色不可写。
+
+核验只接受未来大湾区、官方或可信来源、来源摘要已发布且未过期、无开放变更告警的赛事。普通赛事编辑禁止直接升级为已核实；关键字段（日期、城市、距离、官方入口、来源、报名状态/时间）变化会自动把赛事降级为 `pending_verify` 并把相关未发送提醒置为 `review_required`。
+
+提醒发送与测试：
+
+- 发送使用一次性 CLI，不新增 PM2 常驻进程，Node heap 上限 96MB：
+
+  ```bash
+  pnpm reminder:send-due                              # dry-run 查看到期提醒
+  pnpm reminder:send-due -- --apply                   # 实际发送（要求 REMINDER_FEATURE_ENABLED=true）
+  ```
+
+- 测试发送仅限体验版，强制 `WX_MINIPROGRAM_STATE=trial`，必须显式 `--apply`：
+
+  ```bash
+  pnpm reminder:test-send -- --user-id <id> --event-id <id> --type signup|race_week --apply
+  ```
+
+提醒资格：赛前 7 天提醒要求真实 `eventStartAt`（北京时间 09:00 触发），报名未开始要求真实 `signupStartAt`，报名中/即将截止要求真实 `signupDeadline`（截止前 3 天 09:00 触发）。缺少时间、信息降级、来源冲突、赛事下架、用户禁用或临近比赛时不发送。已发送记录永久保持 `sent`，同一用户、赛事和提醒类型最多发送一次。发送运行写入 `reminder_delivery_runs`（含 `mode`/`status`/计数/`release`），不保存 OpenID 或消息正文。
+
+提醒灰度开关：`REMINDER_FEATURE_ENABLED` 是硬门，`false` 时完全不发送；`WX_MINIPROGRAM_STATE` 在体验版灰度时设为 `trial`、正式启用后设为 `formal`。上线预检复用 V0.5.3 预检命令：
+
+```bash
+pnpm release:preflight-v0.5.3 -- --phase=reminders --mode=ready   # 体验版，trial
+pnpm release:preflight-v0.5.3 -- --phase=reminders --mode=live    # 正式版，formal
+```

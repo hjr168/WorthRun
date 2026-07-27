@@ -1,6 +1,6 @@
-# 哪场值得跑 V0.5.2
+# 哪场值得跑 V0.5.4
 
-面向粤港澳大湾区跑者的跑步赛事决策工具。本仓库已完成 V0.1 核心闭环、V0.1 后台收口（系统设置/内容配置/操作日志/归档/角色化 UI/清单接口联动）和 V0.2 分享传播版（微信页面分享、赛事决策卡 Canvas 分享图、小程序码、分享数据统计）。
+面向粤港澳大湾区跑者的跑步赛事决策工具。本仓库已完成 V0.1 核心闭环、V0.1 后台收口（系统设置/内容配置/操作日志/归档/角色化 UI/清单接口联动）、V0.2 分享传播版（微信页面分享、赛事决策卡 Canvas 分享图、小程序码、分享数据统计）、V0.3 AI 辅助赛事源、V0.4 赛事源运营与数据治理闭环、V0.5 匿名选择/来源摘要/分享与版本更新中心，以及 V0.5.3 用户体系与增长基线、V0.5.4 赛事可信核验与提醒灰度。
 
 公开赛事发布仍坚持人工核验：AI 赛事源对新赛事只生成后台候选草稿，对已发布赛事只刷新检查时间或生成变更告警，不做自动修改或发布，也不做官方报名闭环。赛事信息统一提示：
 
@@ -21,10 +21,10 @@
 - monorepo 工程骨架与共享类型。
 - PostgreSQL + Prisma 数据结构、迁移和种子数据。
 - 后端 API：赛事、偏好、收藏、反馈、清单模板、分享记录、后台管理。
-- React + Vite 后台：工作台、赛事库、发布管理、质量反馈、分享中心、版本更新、操作日志、系统与内容配置。
+- React + Vite 后台：工作台、赛事库、发布管理、赛事核验、AI 赛事源、赛事变更监测、选择统计、质量反馈、分享中心、分享统计、版本更新、增长与提醒、用户管理、操作日志、系统与内容配置。
 - 后台登录与 Bearer token 鉴权，按角色矩阵控制操作权限。
 - 小程序公开 API：赛事列表、赛事详情、偏好、收藏、反馈、清单模板、分享记录上报。
-- 微信小程序页面：首页、赛事列表、赛事详情、偏好设置、我的、我的收藏、反馈、工具、配速计算器、赛前清单、分享卡片、版本更新。
+- 微信小程序页面：首页、赛事列表、赛事详情、偏好设置、我的、我的收藏、我的选择、来源摘要、个人资料、我的提醒、反馈、产品反馈、工具、配速计算器、赛前清单、分享卡片、版本更新。
 - 小程序 API baseUrl 配置化。
 - 首页按用户偏好展示赛事，偏好无完全匹配时兜底展示近期赛事。
 - 赛事列表分页加载。
@@ -48,6 +48,8 @@
 - **V0.4.5 赛事变更监测**：官方或可信来源再次命中已发布赛事时，系统刷新来源检查时间或创建去重告警；管理员预览确认后才能应用变更，自动任务不会修改或发布赛事。
 - **V0.5.0 匿名选择与来源摘要**：赛事详情公开展示“想跑 / 观望 / 已报名”匿名聚合数量，不公开参与者；后台可抓取已核验来源并生成 AI 摘要草稿，经人工发布后在原生小程序页面展示。
 - **V0.5.2 分享与版本更新中心**：公共页面统一接入好友/朋友圈分享，支持全局模板和单赛事覆盖；“我的”新增本机未读红点与版本更新时间线，后台提供草稿、发布、下线和审计。
+- **V0.5.3 用户体系、增长基线与赛事提醒基础**：小程序通过 `wx.login` 静默绑定微信用户，失败时保留匿名浏览和旧版 `userKey` 兼容；OpenID 使用 AES-256-GCM 密文加 HMAC 哈希保存，不保存 `session_key`；首次绑定幂等合并偏好、收藏、赛事选择、反馈和分享数据。头像使用 UniCloud 支付宝云 URL 化函数直传，ECS 只签发一次性凭证并接收签名回调。后台新增“用户管理”和“增长与提醒”（仅 `super_admin` 可见）；增长基线从 V0.5.3 开始记录日活、新用户、D1/D7、行为漏斗和分享归因，不回填历史留存。报名与赛前提醒通过一次性任务发送，默认 `REMINDER_FEATURE_ENABLED=false`，不新增 PM2 常驻进程。
+- **V0.5.4 赛事可信核验与提醒灰度**：为赛事增加可选精确开赛时间 `eventStartAt`，新增赛事核验预览、列表、摘要和最多 20 场批量应用接口；核验只接受未来大湾区、官方或可信来源、来源摘要已发布且未过期、无开放变更告警的赛事，成功写入 `infoStatus=verified`、`sourceCheckedAt`、字段可信状态和管理员操作日志。普通编辑禁止直接升级为已核实，关键字段变化自动降级并暂停未发送提醒。赛前提醒要求真实 `eventStartAt`（赛前 7 天北京时间 09:00 触发），报名类提醒要求真实报名时间；缺少时间、信息降级、来源冲突、赛事下架、用户禁用或临近比赛时不发送，已发送记录永久保持 `sent`。新增轻量 `ReminderDeliveryRun` 审计记录，不保存 OpenID 或消息正文；后台新增“赛事核验”入口与提醒列表，小程序新增“我的提醒”页和赛事详情订阅面板。提醒功能按 trial 体验版先灰度，观察 48 小时并预检通过后再切正式版与安装 cron。
 
 ## 目录说明
 
@@ -154,6 +156,18 @@ export const config = testConfig;
 - `AI_INGEST_BASE_URL`：兼容 OpenAI SDK 的模型服务地址；留空时按 provider 使用默认值：GLM 为 `https://open.bigmodel.cn/api/paas/v4/`，DeepSeek 为 `https://api.deepseek.com`。
 - `AI_INGEST_USER_AGENT`：抓取来源页使用的 User-Agent，默认 `WorthRunBot/0.1`。上线前建议改成带联系方式的标识。
 - `EVENT_SOURCE_MIN_AVAILABLE_MB`：一次性赛事源任务启动所需的最低可用内存，默认 256MB，有效范围 128 到 512MB。
+
+V0.5.3 用户体系与 V0.5.4 提醒灰度相关配置（功能开关默认关闭，密钥必须人工配置）：
+
+- `USER_SYSTEM_ENABLED`：V0.5.3 微信用户体系开关。UniCloud 头像函数、OpenID 加解密密钥和隐私配置完成前保持 `false`，开启时公开赛事与旧版匿名接口继续可用。
+- `USER_TOKEN_SECRET` / `USER_OPENID_HASH_SECRET`：分别用于 30 天用户会话和 OpenID/alias HMAC，必须使用不同的强随机值（各 ≥32 字符）。
+- `USER_OPENID_ENCRYPTION_KEY`：OpenID 的 AES-256-GCM 密钥，用 `openssl rand -base64 32` 生成；丢失后无法恢复已绑定 OpenID。
+- `REMINDER_FEATURE_ENABLED`：V0.5.4 赛事提醒开关。订阅消息模板和真机验收完成前保持 `false`；代码里有硬门，关闭时提醒完全不发送。
+- `WX_MINIPROGRAM_STATE`：微信订阅消息环境，`trial` 用于体验版灰度验收，`formal` 用于正式启用。
+- `WX_SIGNUP_REMINDER_TEMPLATE_ID` / `WX_RACE_REMINDER_TEMPLATE_ID`：报名与赛前 7 天订阅消息模板 ID，两者必须不同。
+- `WX_SIGNUP_REMINDER_EVENT_FIELD` / `NOTICE_FIELD` / `DATE_FIELD`（及 `WX_RACE_REMINDER_*` 对应项）：两个模板中赛事名称、提醒说明和日期对应的字段键，必须按微信公众平台显示的 `thing1`、`time3` 等实际键填写。
+- `UNICLOUD_AVATAR_BASE_URL` / `UNICLOUD_AVATAR_SHARED_SECRET`：UniCloud 支付宝云 URL 化头像函数地址与共享密钥（≥32 字符，与云函数一致）。
+- `UNICLOUD_PROVIDER` / `UNICLOUD_SPACE_ID` / `UNICLOUD_SPACE_EXPIRES_AT`：记录头像空间供应商、空间 ID 和有效期，供上线预检阻断错误空间或临近到期（剩余需 >30 天）。
 
 中国田协赛事目录适配器按单个大湾区内地城市查询，每页最多 20 条、每次最多 2 页。世界田联和社区发现来源不需要 AI Key；澳门、香港官方单页仍由配置的 GLM/DeepSeek/OpenAI 模型抽取。所有来源只生成候选，不覆盖已采纳或已驳回结果。
 
@@ -272,6 +286,10 @@ pnpm format
 pnpm admin:reset-password -- admin "new-strong-password"
 pnpm db:import-events -- ./docs/real-events.local.csv --dry-run
 pnpm db:import-events -- ./docs/real-events.local.csv
+pnpm reminder:send-due                              # dry-run 查看到期提醒；加 -- --apply 发送
+pnpm reminder:test-send -- --user-id <id> --event-id <id> --type signup|race_week --apply  # 仅 trial 环境
+pnpm release:preflight-v0.5.3 -- --phase=foundation|users|reminders --mode=ready|live     # V0.5.3/V0.5.4 上线预检
+pnpm release-notes:bootstrap                        # dry-run；加 -- --apply 创建历史草稿
 ```
 
 ## API 调试示例
@@ -326,6 +344,9 @@ curl -s http://localhost:4000/api/feedback \
 - 赛前清单：通用、5K、10K、半马、全马，从后端按距离类型读取模板，接口失败本地兜底。
 - 赛事详情页微信转发给朋友 / 分享到朋友圈，分享标题自动生成"这场值得跑吗？{赛事名称}"。
 - 赛事决策卡分享图：详情页点"分享图"进入，Canvas 绘制含品牌头/赛事名/城市日期距离/报名状态胶囊/跑者标签/跑者摘要/小程序码/合规提示，可保存到相册或分享给好友。
+- V0.5.3 微信登录与个人资料：`wx.login` 静默绑定微信用户，昵称头像可编辑（头像经 UniCloud 直传，ECS 只签发凭证），失败时保留匿名浏览与旧版 `userKey` 兼容；跨设备登录幂等合并偏好、收藏、选择、反馈与分享。
+- V0.5.4 赛事提醒：赛事详情展示提醒预计时间、已开启状态和不可用原因，可调起一次性订阅授权（报名开始 / 报名截止前 3 天 / 赛前 7 天）；"我的提醒"展示计划时间、赛事与复核状态，支持取消。
+- 增长行为上报：详情查看、官方入口复制、收藏、设置选择、发起分享、查看提醒、调起/接受订阅授权等按用户和北京时间日期匿名去重记录，用于增长漏斗与分享归因。
 
 ## 明确未做
 

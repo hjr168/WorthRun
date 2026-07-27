@@ -165,6 +165,51 @@
 - [ ] 提醒任务使用一次性 cron，PM2 仍只有一个 API 进程；API RSS < 220MB，提醒任务峰值 < 120MB。
 - [ ] 后台生产资产不含 `localhost:4000`，“用户管理”和“增长与提醒”仅超级管理员可见；工作台显示用户、头像和提醒均已就绪。
 
+## 15. V0.5.4 赛事可信核验与提醒灰度
+
+本阶段在 V0.5.3 用户体系基础上打通“人工核验赛事 → 用户订阅 → 微信发送 → 后台审计 → 失败处理”，并保持单个 PM2 API 进程、提醒任务 Node heap 上限 96MB。提醒按体验版灰度、观察、正式版三步开启，禁止提前安装提醒 cron。
+
+### 数据库与代码部署
+
+- [ ] 已备份 PostgreSQL 并记录备份路径与 SHA-256，原有赛事、用户与提醒数据数量已核对。
+- [ ] `prisma migrate status` 已确认线上状态；应用 `20260727110000_event_verification_reminders` 迁移（加列 `events.event_start_at`、`user_activity_daily` 提醒漏斗布尔字段、新增 `ReminderDeliveryRunMode` 枚举，非破坏性）。
+- [ ] 严禁执行 down migration；迁移后核对 `events`、`event_reminders`、`reminder_delivery_runs` 记录数。
+- [ ] `pnpm install --frozen-lockfile`、`pnpm db:generate`、`pnpm build` 已在服务器完成；`apps/api/dist/apps/api/src/reminderDeliveryCli.js`、`reminderTestDeliveryCli.js` 产物存在。
+- [ ] `pm2 startOrReload ecosystem.config.cjs --only worth-running-api --env production --update-env` 已带 `--update-env`；`APP_RELEASE` 已更新为本次版本号或 commit，`/health` 的 `release` 字段已确认。
+
+### 赛事人工核验
+
+- [ ] 后台“赛事核验”可显示摘要、问题筛选、城市筛选与提醒资格预览；预览带 `expected` 快照，应用前提示快照冲突。
+- [ ] 至少 8 场赛事完成可追溯人工核验，其中至少 2 场有真实 `eventStartAt`、2 场有真实 `signupStartAt` 或 `signupDeadline`。
+- [ ] 核验写入 `infoStatus=verified`、`sourceCheckedAt`、字段可信状态和 `event.verify` 操作日志；普通编辑无法直接升级为已核实。
+- [ ] 关键字段变化后已发布赛事自动降级为 `pending_verify`，相关未发送提醒置为 `review_required`。
+
+### 体验版灰度（ready）
+
+- [ ] `REMINDER_FEATURE_ENABLED=false` 保持，`WX_MINIPROGRAM_STATE=trial`，`UNICLOUD_SPACE_EXPIRES_AT` 已更新为续费后准确时间（剩余 >30 天）。
+- [ ] 两个订阅消息模板（报名 `thing9/time2/thing3`、赛前 `thing1/time11/thing5`）已按公众平台实际值配置，`time` 字段统一北京时间 `YYYY-MM-DD HH:mm`。
+- [ ] `pnpm release:preflight-v0.5.3 -- --phase=reminders --mode=ready` 通过，无 `BLOCK`。
+- [ ] 使用 2-3 个体验版账号完成报名与赛前两类真实发送：
+
+  ```bash
+  pnpm reminder:test-send -- --user-id <id> --event-id <id> --type signup|race_week --apply
+  ```
+
+- [ ] 发送记录写入 `reminder_delivery_runs`（`mode=test`），不含 OpenID 或消息正文。
+
+### 正式启用（live）
+
+- [ ] 连续观察 48 小时，确认无重复发送、模板格式错误和新增 5xx。
+- [ ] 设置 `WX_MINIPROGRAM_STATE=formal`、`REMINDER_FEATURE_ENABLED=true`，并通过 `--update-env` 重载 PM2。
+- [ ] `pnpm release:preflight-v0.5.3 -- --phase=reminders --mode=live` 通过，无 `BLOCK`。
+- [ ] 安装 `ops/cron/worth-running-reminders`（`7,22,37,52 * * * *`，flock 锁，heap 96MB），确认 `/var/log/worth-running-reminder.log` 已纳入 logrotate。
+- [ ] PM2 仍只有一个 API 进程，API RSS < 220MB，发送任务峰值 RSS < 120MB。
+
+### 回退
+
+- [ ] 回退时立即设置 `REMINDER_FEATURE_ENABLED=false` 并移除提醒 cron，不删除提醒或发送运行记录。
+- [ ] 已发送记录保持 `sent`，不重置、不重发。
+
 ## 注意事项
 
 - `urlCheck=false` 只允许开发调试，不能用于体验版上传、提审或正式发布。

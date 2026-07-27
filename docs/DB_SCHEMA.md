@@ -92,3 +92,21 @@ V0.5.2 分享与版本更新中心变更：
 - `event_share_overrides.event_id` 唯一，赛事删除时级联删除覆盖配置。
 - `release_notes.version` 唯一；`released_at` 是用户看到的业务更新时间，`published_at` 是首次发布时间，重新上线不重置。
 - 全局分享模板保存在 `system_configs.share_settings`，只通过强校验专用接口写入。
+
+V0.5.3 用户体系、增长基线与赛事提醒基础变更（`20260722160000_user_growth_reminders`）：
+
+- `users` 只保存 OpenID 的 AES-256-GCM 密文与 HMAC 哈希，不保存 `session_key`；按状态和注册时间、最近活跃、昵称建索引。
+- `user_aliases` 用 `user_key_hash` 唯一约束记录旧版匿名标识到用户的映射，首次绑定幂等合并偏好、收藏、选择、反馈和分享。
+- `user_activity_daily` 按 `(user_id, activity_date)` 去重记录日活、首入页面/渠道、分享归因和详情查看、官方入口复制、收藏、设置选择、发起分享等行为布尔位。
+- `avatar_upload_grants` 保存一次性头像上传凭证的哈希、状态和过期时间，头像文件不经 ECS。
+- `event_reminders` 用 `(user_id, event_id, reminder_type)` 唯一约束，保证同用户同赛事同类型最多一条；`scheduled_at` 与状态驱动发送，`sent` 永久保持。
+- 新增枚举 `UserStatus`、`AvatarUploadGrantStatus`、`EventReminderType`、`EventReminderTrigger`、`EventReminderStatus`（含 `review_required`）。
+- 既有偏好、收藏、选择、反馈、分享表新增可空 `user_id`，保留 `userKey` 以兼容匿名浏览。
+
+V0.5.4 赛事可信核验与提醒灰度变更（`20260727110000_event_verification_reminders`，非破坏性）：
+
+- `events.event_start_at` 新增可空精确开赛时间，不回填历史值；赛前 7 天提醒依赖此字段。
+- `user_activity_daily` 新增 `viewed_reminder`、`requested_reminder_permission`、`accepted_reminder_permission` 三个提醒漏斗布尔位。
+- 新增 `reminder_delivery_runs` 审计表，记录每次发送运行的 `mode`（`dry_run`/`apply`/`test`）、`status`、起止时间、计数和 `release`，不保存 OpenID 或消息正文。
+- 新增枚举 `ReminderDeliveryRunMode`、`ReminderDeliveryRunStatus`。
+- `infoStatus=verified` 通过人工核验写入，配合 `source_checked_at` 和 `field_confidence` 表达字段级可信状态；普通编辑不可直接置为已核实。

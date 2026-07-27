@@ -38,6 +38,9 @@
 - API 保持 `HOST=127.0.0.1`，仅由单层 Nginx 反向代理公开；Nginx 必须传递 `X-Forwarded-For` 与 `X-Forwarded-Proto`，不要把 API 端口直接暴露到公网。
 - 每日执行一次 `pnpm feedback:maintenance`，清理过期反馈指纹、48 小时以前的限流摘要、90 天以前的拦截聚合和 30 天以前的 5xx 聚合。该任务不会删除反馈正文或操作日志，Node heap 上限为 96MB。
 - V0.5.3 沿用上述维护任务清理过期头像凭证和分享 token，不增加维护 cron。提醒发送使用 `pnpm reminder:send-due`的一次性任务，Node heap 上限 96MB，不加入 PM2。
+- V0.5.4 提醒灰度：体验版先保持 `REMINDER_FEATURE_ENABLED=false`、`WX_MINIPROGRAM_STATE=trial`，通过 `pnpm reminder:test-send -- --user-id <id> --event-id <id> --type signup|race_week --apply`（强制 trial）做真实发送；连续观察 48 小时无异常后，再设 `WX_MINIPROGRAM_STATE=formal`、`REMINDER_FEATURE_ENABLED=true` 并通过 `--update-env` 重载 PM2。灰度顺序见 `docs/V0.5.4_REMINDER_ROLLOUT.md`。
+- V0.5.4 提醒 cron 仅在体验版观察 48 小时并 `pnpm release:preflight-v0.5.3 -- --phase=reminders --mode=live` 通过后才安装：将 `ops/cron/worth-running-reminders`（`7,22,37,52 * * * *`，flock 锁，heap 96MB）加入 crontab，日志 `/var/log/worth-running-reminder.log` 已由 `ops/logrotate/worth-running` 纳入。回退时只设 `REMINDER_FEATURE_ENABLED=false` 并移除 cron，不删除提醒或发送运行记录，不重置 `sent`。
+- V0.5.4 赛事核验：后台“赛事核验”入口用于人工核验已发布赛事，核验只接受未来大湾区、官方或可信来源、来源摘要已发布且未过期、无开放变更告警的赛事；关键字段变化会自动降级。提醒订阅要求核验通过且有真实开赛/报名时间，因此部署后需先完成至少 8 场人工核验（含真实 `eventStartAt` 与报名时间）再灰度提醒。
 - Nginx 使用仓库 `ops/nginx/worth-running.conf`；仅 `/api/feedback` 使用 16KB 请求体上限和每 IP 每分钟 6 次、burst 3 的限流，其他公开和后台接口不受影响。
 - 将 `ops/logrotate/worth-running` 安装到 `/etc/logrotate.d/worth-running`，统一轮转 API、赛事源和反馈维护日志；不要安装 PM2 常驻日志模块。
 - 生产 `DATABASE_URL` 建议追加 `connection_limit=2&pool_timeout=10`，降低 API 与短时赛事源任务并存时的数据库连接内存。
