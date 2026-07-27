@@ -11,3 +11,8 @@ apps/admin/.vite
 output/playwright/
 packages/database/prisma/dev.db
 docs/real-events.local.csv
+
+# 不提交的本地资产与微信私有配置
+apps/miniapp/project.private.config.json
+design/
+promo/
