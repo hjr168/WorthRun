@@ -9,6 +9,8 @@ const event_detail_1 = require("../../utils/event-detail");
 const product_feedback_1 = require("../../utils/product-feedback");
 const share_1 = require("../../utils/share");
 const account_1 = require("../../utils/account");
+const reminder_permission_1 = require("../../utils/reminder-permission");
+const user_session_1 = require("../../utils/user-session");
 const index_1 = require("../../config/index");
 Page({
     data: {
@@ -43,6 +45,7 @@ Page({
         (0, share_1.enablePublicShare)();
         this.setData({ id: (0, launch_1.resolveEventId)(query), userKey: (0, user_1.getUserKey)() });
         this.load();
+        (0, account_1.ensureWechatSession)().catch(() => { });
         if (query.shareToken) {
             (0, account_1.ensureWechatSession)()
                 .then((profile) => profile
@@ -249,13 +252,24 @@ Page({
         }
         this.setData({ reminderUpdating: type });
         try {
-            const profile = await (0, account_1.ensureWechatSession)(true);
-            if (!profile)
-                throw new Error('请稍后重试微信登录');
+            if (!(0, user_session_1.hasValidUserToken)()) {
+                const profile = await (0, account_1.ensureWechatSession)(true);
+                if (!profile)
+                    throw new Error('请稍后重试微信登录');
+                wx.showToast({ title: '登录完成，请再点一次开启', icon: 'none' });
+                return;
+            }
+            let permission;
+            try {
+                permission = await new Promise((resolve, reject) => {
+                    wx.requestSubscribeMessage({ tmplIds: [templateId], success: resolve, fail: reject });
+                });
+            }
+            catch (error) {
+                await (0, api_1.recordActivity)({ action: 'requestedReminderPermission' }).catch(() => { });
+                throw error;
+            }
             await (0, api_1.recordActivity)({ action: 'requestedReminderPermission' }).catch(() => { });
-            const permission = await new Promise((resolve, reject) => {
-                wx.requestSubscribeMessage({ tmplIds: [templateId], success: resolve, fail: reject });
-            });
             if (permission[templateId] !== 'accept')
                 throw new Error('需先允许本次消息提醒');
             await (0, api_1.recordActivity)({ action: 'acceptedReminderPermission' }).catch(() => { });
@@ -264,7 +278,10 @@ Page({
             wx.showToast({ title: '提醒已开启', icon: 'success' });
         }
         catch (error) {
-            wx.showToast({ title: error.message || '开启提醒失败', icon: 'none' });
+            const message = error instanceof Error && error.message
+                ? error.message
+                : (0, reminder_permission_1.getSubscribeMessageError)(error);
+            wx.showToast({ title: message, icon: 'none' });
         }
         finally {
             this.setData({ reminderUpdating: '' });

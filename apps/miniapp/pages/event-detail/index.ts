@@ -35,6 +35,8 @@ import {
 import { openProductFeedback } from '../../utils/product-feedback';
 import { enablePublicShare, getSharePayload, trackShare } from '../../utils/share';
 import { ensureWechatSession } from '../../utils/account';
+import { getSubscribeMessageError } from '../../utils/reminder-permission';
+import { hasValidUserToken } from '../../utils/user-session';
 import { config } from '../../config/index';
 
 Page({
@@ -70,6 +72,7 @@ Page({
     enablePublicShare();
     this.setData({ id: resolveEventId(query), userKey: getUserKey() });
     this.load();
+    ensureWechatSession().catch(() => {});
     if (query.shareToken) {
       ensureWechatSession()
         .then((profile) =>
@@ -273,19 +276,33 @@ Page({
     }
     this.setData({ reminderUpdating: type });
     try {
-      const profile = await ensureWechatSession(true);
-      if (!profile) throw new Error('请稍后重试微信登录');
+      if (!hasValidUserToken()) {
+        const profile = await ensureWechatSession(true);
+        if (!profile) throw new Error('请稍后重试微信登录');
+        wx.showToast({ title: '登录完成，请再点一次开启', icon: 'none' });
+        return;
+      }
+      let permission: Record<string, string>;
+      try {
+        permission = await new Promise<Record<string, string>>((resolve, reject) => {
+          wx.requestSubscribeMessage({ tmplIds: [templateId], success: resolve, fail: reject });
+        });
+      } catch (error) {
+        await recordActivity({ action: 'requestedReminderPermission' }).catch(() => {});
+        throw error;
+      }
       await recordActivity({ action: 'requestedReminderPermission' }).catch(() => {});
-      const permission = await new Promise<Record<string, string>>((resolve, reject) => {
-        wx.requestSubscribeMessage({ tmplIds: [templateId], success: resolve, fail: reject });
-      });
       if (permission[templateId] !== 'accept') throw new Error('需先允许本次消息提醒');
       await recordActivity({ action: 'acceptedReminderPermission' }).catch(() => {});
       await subscribeEventReminders(this.data.event.id, [type]);
       this.setData({ [`reminderSubscribed.${type}`]: true });
       wx.showToast({ title: '提醒已开启', icon: 'success' });
     } catch (error) {
-      wx.showToast({ title: (error as Error).message || '开启提醒失败', icon: 'none' });
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : getSubscribeMessageError(error);
+      wx.showToast({ title: message, icon: 'none' });
     } finally {
       this.setData({ reminderUpdating: '' });
     }
