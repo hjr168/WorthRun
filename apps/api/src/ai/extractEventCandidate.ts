@@ -57,8 +57,10 @@ export function eventCandidateJsonSchema() {
       'eventName',
       'city',
       'eventDate',
+      'eventStartAt',
       'distanceItems',
       'signupStatus',
+      'signupStartAt',
       'signupDeadline',
       'officialUrl',
       'sourceName',
@@ -77,8 +79,16 @@ export function eventCandidateJsonSchema() {
       eventName: { type: 'string', description: '赛事名称；无法确认时用来源中最接近的名称' },
       city: { type: 'string', description: '赛事城市；无法确认时参考城市提示或填写待确认' },
       eventDate: { type: ['string', 'null'], description: 'YYYY-MM-DD；无法确认时为 null' },
+      eventStartAt: {
+        type: ['string', 'null'],
+        description: '明确的比赛开始 ISO datetime；无法确认时为 null，禁止推测',
+      },
       distanceItems: { type: 'array', items: { type: 'string' } },
       signupStatus: { type: 'string', enum: [...signupStatusValues] },
+      signupStartAt: {
+        type: ['string', 'null'],
+        description: '明确的报名开始 ISO datetime；无法确认时为 null',
+      },
       signupDeadline: {
         type: ['string', 'null'],
         description: 'ISO datetime；无法确认时为 null',

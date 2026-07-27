@@ -203,6 +203,7 @@ describe('event change resolution', () => {
         count: vi.fn().mockResolvedValue(0),
       },
       event: { update: vi.fn().mockResolvedValue(updatedEvent) },
+      eventReminder: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       adminOperationLog: { create: vi.fn().mockResolvedValue({}) },
     };
     const store = { $transaction: (callback: (value: typeof tx) => unknown) => callback(tx) };
@@ -225,8 +226,13 @@ describe('event change resolution', () => {
 
     expect(tx.event.update).toHaveBeenCalledWith({
       where: { id: 'event-1' },
-      data: { eventDate: new Date('2026-12-27T00:00:00.000Z') },
+      data: {
+        eventDate: new Date('2026-12-27T00:00:00.000Z'),
+        infoStatus: 'pending_verify',
+        sourceCheckedAt: null,
+      },
     });
+    expect(tx.eventReminder.updateMany).toHaveBeenCalledOnce();
     expect(tx.eventChangeAlert.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'superseded' }) }),
     );

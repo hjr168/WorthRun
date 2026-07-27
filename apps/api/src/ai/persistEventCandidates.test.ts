@@ -72,6 +72,7 @@ function reviewedStore(sourceLevel: string, eventOverrides: Record<string, unkno
     },
     eventChangeAlert: { findUnique: vi.fn().mockResolvedValue(null), upsert: alertUpsert },
     eventSourceSummary: { updateMany: markSummaryStale },
+    eventReminder: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     $executeRaw: executeRaw,
   };
   return { store, executeRaw, alertUpsert, markSummaryStale };
@@ -215,6 +216,12 @@ describe('persistEventCandidates reviewed candidate monitoring', () => {
       where: { eventId: 'event-1', status: 'published' },
       data: { staleAt: now },
     });
+    expect(store.eventReminder.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ eventId: 'event-1' }),
+        data: expect.objectContaining({ status: 'review_required' }),
+      }),
+    );
     expect(store.eventCandidate.update).not.toHaveBeenCalled();
   });
 

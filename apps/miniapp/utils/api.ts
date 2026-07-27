@@ -13,6 +13,7 @@ export interface EventSummary {
   eventName: string;
   city: string;
   eventDate: string;
+  eventStartAt?: string | null;
   distanceItems: string[];
   signupStatus: SignupStatus;
   signupDeadline?: string | null;
@@ -69,6 +70,7 @@ export interface ReminderOption {
   reason?: string;
   trigger?: 'signup_open' | 'signup_deadline_3d' | 'race_week_7d';
   scheduledAt?: string | null;
+  scheduleText?: string;
 }
 
 export interface EventReminderItem {
@@ -170,12 +172,19 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
   if (options.loadingText) wx.showLoading({ title: options.loadingText, mask: true });
 
   return new Promise<T>((resolve, reject) => {
+    let envVersion = 'release';
+    try {
+      envVersion = wx.getAccountInfoSync().miniProgram.envVersion || 'release';
+    } catch {
+      // Older developer tools may not expose account information.
+    }
     wx.request({
       url,
       method,
       data: isGet ? undefined : options.data,
       header: {
         'content-type': 'application/json',
+        'X-WX-MiniProgram-Env': envVersion,
         ...(getUserToken() ? { Authorization: `Bearer ${getUserToken()}` } : {}),
       },
       success(res) {
@@ -426,6 +435,9 @@ export function recordActivity(data: {
     | 'addedFavorite'
     | 'setChoice'
     | 'startedShare'
+    | 'viewedReminder'
+    | 'requestedReminderPermission'
+    | 'acceptedReminderPermission'
     | 'subscribedReminder';
 }) {
   return request<{ recorded: true }>('/api/activity', { method: 'POST', data, silent: true });

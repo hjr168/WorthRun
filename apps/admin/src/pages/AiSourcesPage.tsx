@@ -50,6 +50,7 @@ import {
   formatScheduleInterval,
   runStatusLabel,
 } from '../utils/aiSources';
+import { beijingDateTimeToIso } from '../utils/form';
 import { showError } from '../utils/helpers';
 
 const sourceTypeOptions = [
@@ -120,8 +121,10 @@ interface CandidateFormValues {
   eventName: string;
   city: string;
   eventDate: string;
+  eventStartAt?: string;
   distanceItems?: string;
   signupStatus: string;
+  signupStartAt?: string;
   signupDeadline?: string;
   officialUrl: string;
   sourceName: string;
@@ -428,8 +431,10 @@ export function AiSourcesPage() {
       eventName: readString(extractedData, 'eventName') || candidate.eventName,
       city: readString(extractedData, 'city') || candidate.city,
       eventDate: formatDateInput(readString(extractedData, 'eventDate') || candidate.eventDate),
+      eventStartAt: readString(extractedData, 'eventStartAt') || '',
       distanceItems: joinList(readStringArray(extractedData, 'distanceItems')),
       signupStatus: readString(extractedData, 'signupStatus') || 'unknown',
+      signupStartAt: readString(extractedData, 'signupStartAt') || '',
       signupDeadline: readString(extractedData, 'signupDeadline') || '',
       officialUrl: readString(extractedData, 'officialUrl') || candidate.officialUrl || '',
       sourceName:
@@ -1315,6 +1320,12 @@ export function AiSourcesPage() {
             >
               <Select options={signupStatusOptions} />
             </Form.Item>
+            <Form.Item label="开赛时间" name="eventStartAt">
+              <Input placeholder="2026-10-04T07:30:00+08:00" />
+            </Form.Item>
+            <Form.Item label="报名开始时间" name="signupStartAt">
+              <Input placeholder="2026-08-01T10:00:00+08:00" />
+            </Form.Item>
             <Form.Item label="报名截止时间" name="signupDeadline">
               <Input placeholder="2026-09-01T23:59:59.000Z" />
             </Form.Item>
@@ -1366,9 +1377,11 @@ function buildExtractedData(candidate: EventCandidateItem, values: CandidateForm
     eventName: values.eventName.trim(),
     city: values.city.trim(),
     eventDate: values.eventDate.trim(),
+    eventStartAt: beijingDateTimeToIso(values.eventStartAt),
     distanceItems: splitList(values.distanceItems),
     signupStatus: values.signupStatus,
-    signupDeadline: normalizeOptionalString(values.signupDeadline),
+    signupStartAt: beijingDateTimeToIso(values.signupStartAt),
+    signupDeadline: beijingDateTimeToIso(values.signupDeadline),
     officialUrl: values.officialUrl.trim(),
     sourceName: values.sourceName.trim(),
     sourceUrl,

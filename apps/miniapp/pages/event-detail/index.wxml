@@ -19,6 +19,10 @@
           <text class="core-info-label">举办地点</text>
           <text class="core-info-value">{{event.city || '待确认'}}</text>
         </view>
+        <view wx:if="{{startTimeText}}" class="core-info-item core-info-wide">
+          <text class="core-info-label">开赛时间</text>
+          <text class="core-info-value">{{startTimeText}}</text>
+        </view>
         <view class="core-info-item core-info-wide">
           <text class="core-info-label">赛事距离</text>
           <text class="core-info-value">{{distanceText}}</text>
@@ -92,7 +96,7 @@
         <view wx:for="{{event.reminderOptions}}" wx:key="type" class="reminder-option">
           <view class="reminder-copy">
             <view class="reminder-name">{{item.type === 'signup' ? '报名提醒' : '赛前 7 天提醒'}}</view>
-            <view class="reminder-desc">{{item.available ? (item.type === 'signup' ? '报名开放或截止前 3 天提醒' : '比赛前 7 天 09:00 提醒') : item.reason}}</view>
+            <view class="reminder-desc">{{item.available ? (item.scheduleText ? '预计 ' + item.scheduleText + ' 提醒' : (item.type === 'signup' ? '报名节点提醒' : '比赛前 7 天 09:00 提醒')) : item.reason}}</view>
           </view>
           <button class="reminder-button {{reminderSubscribed[item.type] ? 'is-on' : ''}}" data-type="{{item.type}}" bindtap="subscribeReminder" disabled="{{!item.available || reminderSubscribed[item.type] || reminderUpdating}}">{{reminderSubscribed[item.type] ? '已开启' : (reminderUpdating === item.type ? '开启中' : '开启')}}</button>
         </view>

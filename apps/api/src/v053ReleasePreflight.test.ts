@@ -24,6 +24,7 @@ const readyEnv = {
   WX_RACE_REMINDER_EVENT_FIELD: 'thing1',
   WX_RACE_REMINDER_NOTICE_FIELD: 'thing5',
   WX_RACE_REMINDER_DATE_FIELD: 'time11',
+  WX_MINIPROGRAM_STATE: 'formal',
 };
 
 describe('V0.5.3 release preflight', () => {
@@ -63,5 +64,19 @@ describe('V0.5.3 release preflight', () => {
       'reminders',
     );
     expect(checks.find((item) => item.id === 'race_template_fields')?.status).toBe('blocker');
+  });
+
+  it('allows configured reminders to remain disabled during trial readiness checks', () => {
+    const checks = evaluateV053Environment(
+      {
+        ...readyEnv,
+        REMINDER_FEATURE_ENABLED: 'false',
+        WX_MINIPROGRAM_STATE: 'trial',
+      },
+      'reminders',
+      'ready',
+    );
+    expect(checks.find((item) => item.id === 'reminder_feature')?.status).toBe('pass');
+    expect(checks.find((item) => item.id === 'miniprogram_state')?.status).toBe('pass');
   });
 });

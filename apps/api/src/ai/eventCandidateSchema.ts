@@ -9,22 +9,28 @@ import { z } from 'zod';
 const nullableUrlSchema = z
   .union([
     z.string().trim().url(),
-    z.string().trim().length(0).transform(() => null),
+    z
+      .string()
+      .trim()
+      .length(0)
+      .transform(() => null),
     z.null(),
     z.undefined().transform(() => null),
   ])
   .transform((value): string | null => value ?? null);
 
-const nullableDatetimeSchema = z.preprocess(
-  (value) => {
-    if (typeof value !== 'string') return value;
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed}T15:59:59.999Z`;
-    return trimmed;
-  },
-  z.string().datetime({ offset: true }).nullable(),
-);
+const nullableDatetimeSchema = z
+  .preprocess(
+    (value) => {
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed}T15:59:59.999Z`;
+      return trimmed;
+    },
+    z.string().datetime({ offset: true }).nullable().optional(),
+  )
+  .transform((value): string | null => value ?? null);
 
 export const aiCandidateEvidenceSchema = z.object({
   field: z.string().trim().min(1),
@@ -35,9 +41,14 @@ export const aiCandidateEvidenceSchema = z.object({
 export const aiEventCandidateSchema = z.object({
   eventName: z.string().trim().min(1),
   city: z.string().trim().min(1),
-  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  eventDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
+  eventStartAt: nullableDatetimeSchema,
   distanceItems: z.array(z.string().trim().min(1)).default([]),
   signupStatus: z.enum(signupStatusValues).default('unknown'),
+  signupStartAt: nullableDatetimeSchema,
   signupDeadline: nullableDatetimeSchema,
   officialUrl: nullableUrlSchema,
   sourceName: z.string().trim().min(1),

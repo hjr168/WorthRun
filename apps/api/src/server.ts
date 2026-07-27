@@ -75,6 +75,12 @@ import {
 } from './candidateWorkflow.js';
 import { previewBulkAccept, runBulkAccept } from './candidateAcceptWorkflow.js';
 import { eventPublishIssues, previewBulkPublish, runBulkPublish } from './eventPublishWorkflow.js';
+import {
+  criticalEventFieldsChanged,
+  getEventVerificationPage,
+  getEventVerificationSummary,
+  runBulkVerify,
+} from './eventVerificationWorkflow.js';
 import { buildFeedbackSummary, feedbackDisposition, runFeedbackBulk } from './feedbackWorkflow.js';
 import { chinaDay } from './feedbackMaintenance.js';
 import { apiRouteGroup, buildApiErrorSummary, recordApiErrorMetric } from './apiStability.js';
@@ -126,7 +132,9 @@ import {
 import { createShareToken, getGrowthStats, recordUserActivity } from './growthAnalytics.js';
 import {
   buildReminderOptions,
+  getReminderReadiness,
   getReminderStats,
+  listAdminReminders,
   reminderOptionsForEvent,
   subscribeReminders,
 } from './reminderWorkflow.js';
@@ -170,6 +178,9 @@ const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'worth-running-dev-secret'
 const feedbackAbuseSecret = process.env.FEEDBACK_ABUSE_SECRET || tokenSecret;
 const userSystemEnabled = process.env.USER_SYSTEM_ENABLED === 'true';
 const reminderFeatureEnabled = process.env.REMINDER_FEATURE_ENABLED === 'true';
+const reminderRequestEnabled = (req: Request) =>
+  reminderFeatureEnabled ||
+  (process.env.WX_MINIPROGRAM_STATE === 'trial' && req.header('X-WX-MiniProgram-Env') === 'trial');
 const userTokenSecret = process.env.USER_TOKEN_SECRET || tokenSecret;
 const userHashSecret = process.env.USER_OPENID_HASH_SECRET || feedbackAbuseSecret;
 const avatarSharedSecret = process.env.UNICLOUD_AVATAR_SHARED_SECRET || '';
@@ -350,6 +361,7 @@ const eventSchema = z.object({
   eventName: z.string().trim().min(1, '赛事名称不能为空'),
   city: z.string().trim().min(1, '城市不能为空'),
   eventDate: dateOnlySchema,
+  eventStartAt: optionalDateTimeSchema,
   distanceItems: z.array(z.string().trim().min(1)).min(1, '距离项目不能为空'),
   startPoint: z.string().trim().optional().nullable(),
   endPoint: z.string().trim().optional().nullable(),
@@ -501,6 +513,9 @@ const activitySchema = z.object({
       'addedFavorite',
       'setChoice',
       'startedShare',
+      'viewedReminder',
+      'requestedReminderPermission',
+      'acceptedReminderPermission',
       'subscribedReminder',
     ])
     .optional(),
@@ -659,6 +674,14 @@ const paginationQuerySchema = z.object({
     .default(20),
 });
 
+const adminRemindersQuerySchema = paginationQuerySchema.extend({
+  status: z
+    .enum(['pending', 'sending', 'sent', 'cancelled', 'expired', 'failed', 'review_required'])
+    .optional(),
+  reminderType: z.enum(['signup', 'race_week']).optional(),
+  search: queryStringSchema,
+});
+
 const publicEventsQuerySchema = paginationQuerySchema.extend({
   search: queryStringSchema,
   city: queryStringSchema,
@@ -679,6 +702,32 @@ const adminEventsQuerySchema = paginationQuerySchema.extend({
     .transform((value) => value === 'true')
     .optional(),
 });
+
+const eventVerificationQuerySchema = paginationQuerySchema.extend({
+  city: queryStringSchema,
+  issue: queryStringSchema,
+  reminderEligible: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
+});
+
+const bulkVerifySchema = z
+  .object({
+    eventIds: z.array(z.string().trim().min(1)).min(1).max(20),
+    dryRun: z.boolean().default(true),
+    note: z.string().trim().min(4, '核验备注至少 4 个字').max(500),
+    expected: z.array(workflowSnapshotSchema).max(20).optional(),
+  })
+  .superRefine((input, context) => {
+    if (!input.dryRun && !input.expected) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expected'],
+        message: '应用核验必须携带预览快照',
+      });
+    }
+  });
 
 const eventChoiceStatsQuerySchema = paginationQuerySchema
   .extend({
@@ -848,6 +897,7 @@ function eventDataFromInput(input: Record<string, any>): Prisma.EventUncheckedCr
     eventName: input.eventName,
     city: input.city,
     eventDate: parseEventDate(input.eventDate),
+    eventStartAt: parseDate(input.eventStartAt as string | null),
     distanceItems: input.distanceItems,
     startPoint: input.startPoint || null,
     endPoint: input.endPoint || null,
@@ -1280,7 +1330,7 @@ app.post(
   '/api/users/me/reminders',
   asyncHandler(async (req, res) => {
     requireUserFeature();
-    if (!reminderFeatureEnabled) throw new HttpError(503, '赛事提醒尚未启用');
+    if (!reminderRequestEnabled(req)) throw new HttpError(503, '赛事提醒尚未启用');
     const user = await getRequestUser(req, true);
     const input = validateBody(reminderSubscriptionSchema, req.body);
     const result = await subscribeReminders({ userId: user!.id, ...input });
@@ -1681,6 +1731,29 @@ app.get(
 );
 
 app.get(
+  '/api/admin/reminder-readiness',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    res.json(await getReminderReadiness());
+  }),
+);
+
+app.get(
+  '/api/admin/reminders',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = validateQuery(adminRemindersQuerySchema, req.query) as {
+      page: number;
+      pageSize: number;
+      status?: string;
+      reminderType?: string;
+      search?: string;
+    };
+    res.json(await listAdminReminders(query));
+  }),
+);
+
+app.get(
   '/api/admin/workflow-stats',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
@@ -1784,6 +1857,38 @@ app.get(
   }),
 );
 
+app.get(
+  '/api/admin/event-verification/summary',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    res.json(await getEventVerificationSummary());
+  }),
+);
+
+app.get(
+  '/api/admin/event-verification',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = eventVerificationQuerySchema.parse(req.query);
+    res.json(await getEventVerificationPage(query));
+  }),
+);
+
+app.post(
+  '/api/admin/events/bulk-verify',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(bulkVerifySchema, req.body);
+    res.json(
+      await runBulkVerify({
+        ...input,
+        dryRun: input.dryRun ?? true,
+        adminUserId: admin.id,
+      }),
+    );
+  }),
+);
+
 app.post(
   '/api/admin/events/:id/source-summaries/generate',
   asyncHandler(async (req, res) => {
@@ -1851,6 +1956,9 @@ app.post(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator']);
     const input = validateBody(eventSchema, req.body);
+    if (input.infoStatus === 'verified') {
+      throw new HttpError(400, '请先保存赛事，再通过赛事核验流程标记为已核实');
+    }
     if (input.publishStatus === 'published') {
       validatePublish({
         ...input,
@@ -1923,14 +2031,24 @@ app.put(
       include: { checklistItems: true, eventTags: true },
     });
     if (!before) throw new HttpError(404, '赛事不存在');
+    if (input.infoStatus === 'verified' && before.infoStatus !== 'verified') {
+      throw new HttpError(400, '请通过赛事核验流程标记为已核实');
+    }
+    const nextData = eventDataFromInput(input);
+    const invalidatesVerification = criticalEventFieldsChanged(
+      before as unknown as Record<string, unknown>,
+      nextData as unknown as Record<string, unknown>,
+    );
+    if (invalidatesVerification) nextData.infoStatus = 'pending_verify';
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.eventChecklistItem.deleteMany({ where: { eventId: req.params.id } });
       await tx.eventTag.deleteMany({ where: { eventId: req.params.id } });
-      return tx.event.update({
+      const event = await tx.event.update({
         where: { id: req.params.id },
         data: {
-          ...eventDataFromInput(input),
+          ...nextData,
+          sourceCheckedAt: invalidatesVerification ? null : before.sourceCheckedAt,
           checklistItems: {
             create: (input.checklistItems || []).map((item, index) => ({
               groupName: item.groupName,
@@ -1949,6 +2067,21 @@ app.put(
         },
         include: { checklistItems: true, eventTags: true },
       });
+      if (invalidatesVerification) {
+        await tx.eventReminder.updateMany({
+          where: {
+            eventId: req.params.id,
+            status: { in: ['pending', 'sending', 'review_required'] },
+          },
+          data: {
+            status: 'review_required',
+            lockedAt: null,
+            lockToken: null,
+            lastErrorCode: 'event_verification_invalidated',
+          },
+        });
+      }
+      return event;
     });
 
     await writeOperationLog({
@@ -1958,7 +2091,7 @@ app.put(
       targetId: updated.id,
       beforeValue: before,
       afterValue: updated,
-      note: '编辑赛事',
+      note: invalidatesVerification ? '编辑关键字段，赛事核验已失效' : '编辑赛事',
     });
 
     res.json(updated);
@@ -1980,13 +2113,30 @@ async function changePublishStatus(
   if (!before) throw new HttpError(404, '赛事不存在');
   if (status === 'published') validatePublish(before);
 
-  const updated = await prisma.event.update({
-    where: { id: req.params.id },
-    data: {
-      publishStatus: status,
-      publishedAt: status === 'published' ? new Date() : before.publishedAt,
-      archivedAt: status === 'archived' ? new Date() : before.archivedAt,
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    const event = await tx.event.update({
+      where: { id: req.params.id },
+      data: {
+        publishStatus: status,
+        publishedAt: status === 'published' ? new Date() : before.publishedAt,
+        archivedAt: status === 'archived' ? new Date() : before.archivedAt,
+      },
+    });
+    if (status !== 'published') {
+      await tx.eventReminder.updateMany({
+        where: {
+          eventId: before.id,
+          status: { in: ['pending', 'sending', 'review_required'] },
+        },
+        data: {
+          status: 'review_required',
+          lockedAt: null,
+          lockToken: null,
+          lastErrorCode: 'event_unpublished',
+        },
+      });
+    }
+    return event;
   });
 
   await writeOperationLog({
@@ -2887,6 +3037,7 @@ app.get(
           eventName: true,
           city: true,
           eventDate: true,
+          eventStartAt: true,
           publishStatus: true,
           shareOverride: true,
         },
@@ -3206,6 +3357,7 @@ app.get(
           eventName: true,
           city: true,
           eventDate: true,
+          eventStartAt: true,
           distanceItems: true,
           signupStatus: true,
           signupDeadline: true,
@@ -3268,7 +3420,7 @@ app.get(
     const [choiceCounts, shareSettings, reminderOptions] = await Promise.all([
       getEventChoiceCounts(event.id),
       getPublicShareSettings(),
-      reminderFeatureEnabled ? reminderOptionsForEvent(event.id) : Promise.resolve(null),
+      reminderRequestEnabled(req) ? reminderOptionsForEvent(event.id) : Promise.resolve(null),
     ]);
     const resolvedShare = resolveShareSetting(
       shareSettings,

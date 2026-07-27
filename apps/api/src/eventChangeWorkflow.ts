@@ -97,7 +97,14 @@ export async function getEventChangeAlertSummary(now = new Date(), store: typeof
         where: { status: 'applied', reviewedAt: { gte: thirtyDaysAgo } },
       }),
     ]);
-  return { open, critical, important, stalePublishedEvents, checkedWithin7Days, appliedWithin30Days };
+  return {
+    open,
+    critical,
+    important,
+    stalePublishedEvents,
+    checkedWithin7Days,
+    appliedWithin30Days,
+  };
 }
 
 const alertInclude = {
@@ -113,7 +120,10 @@ export async function previewEventChangeResolution(
   now = new Date(),
   store: typeof prisma = prisma,
 ) {
-  const alert = await store.eventChangeAlert.findUnique({ where: { id: alertId }, include: alertInclude });
+  const alert = await store.eventChangeAlert.findUnique({
+    where: { id: alertId },
+    include: alertInclude,
+  });
   if (!alert) throw new EventChangeNotFoundError('变更告警不存在');
   return previewFromAlert(alert, input, now);
 }
@@ -217,7 +227,26 @@ export async function resolveEventChangeAlert(
     } else if (input.action === 'archive_event') {
       updatedEvent = await tx.event.update({
         where: { id: alert.event.id },
-        data: { publishStatus: 'archived', archivedAt: now },
+        data: {
+          publishStatus: 'archived',
+          archivedAt: now,
+          infoStatus: 'pending_verify',
+          sourceCheckedAt: null,
+        },
+      });
+    }
+    if (input.action !== 'dismiss') {
+      await tx.eventReminder.updateMany({
+        where: {
+          eventId: alert.event.id,
+          status: { in: ['pending', 'sending', 'review_required'] },
+        },
+        data: {
+          status: 'review_required',
+          lockedAt: null,
+          lockToken: null,
+          lastErrorCode: 'event_change_applied',
+        },
       });
     }
 
@@ -315,8 +344,12 @@ function applyValues<T extends AlertWithEvent['event']>(
 }
 
 function eventUpdateData(changes: Record<string, { before: unknown; after: unknown }>) {
-  const data: Prisma.EventUpdateInput = {};
-  if (changes.eventDate) data.eventDate = new Date(`${String(changes.eventDate.after)}T00:00:00.000Z`);
+  const data: Prisma.EventUpdateInput = {
+    infoStatus: 'pending_verify',
+    sourceCheckedAt: null,
+  };
+  if (changes.eventDate)
+    data.eventDate = new Date(`${String(changes.eventDate.after)}T00:00:00.000Z`);
   if (changes.distanceItems) data.distanceItems = changes.distanceItems.after as string[];
   if (changes.signupStatus) data.signupStatus = changes.signupStatus.after as SignupStatus;
   if (changes.signupDeadline) data.signupDeadline = new Date(String(changes.signupDeadline.after));

@@ -18,29 +18,32 @@ async function accessToken(appId: string, appSecret: string) {
   return result.access_token;
 }
 
-function formatChinaDate(value: Date | null) {
+export function formatChinaTime(value: Date | null) {
   if (!value) return '待官方确认';
   const parts = new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   }).formatToParts(value);
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((item) => item.type === type)?.value || '';
-  return `${part('year')}年${part('month')}月${part('day')}日`;
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`;
 }
 
 export function reminderMessageDate(input: {
   reminderType: 'signup' | 'race_week';
   trigger: 'signup_open' | 'signup_deadline_3d' | 'race_week_7d';
+  signupStartAt: Date | null;
   signupDeadline: Date | null;
-  eventDate: Date;
-  now: Date;
+  eventStartAt: Date | null;
 }) {
-  if (input.reminderType === 'race_week') return input.eventDate;
-  if (input.trigger === 'signup_open') return input.now;
-  return input.signupDeadline || input.eventDate;
+  if (input.reminderType === 'race_week') return input.eventStartAt;
+  if (input.trigger === 'signup_open') return input.signupStartAt;
+  return input.signupDeadline;
 }
 
 type ReminderFieldConfig = {
@@ -71,9 +74,20 @@ function reminderData(input: {
 }) {
   return {
     [input.fields.event]: { value: input.eventName.slice(0, 20) },
-    [input.fields.notice]: { value: input.notice },
-    [input.fields.date]: { value: formatChinaDate(input.date) },
+    [input.fields.notice]: { value: input.notice.slice(0, 20) },
+    [input.fields.date]: { value: formatChinaTime(input.date) },
   };
+}
+
+export function reminderDeliveryError(error: unknown) {
+  const value = error instanceof Error ? error.message : 'send_failed';
+  if (/wechat_send_(?:-1|5\d\d)$/.test(value)) {
+    return { code: value, retryable: true };
+  }
+  if (/timeout|fetch failed|network/i.test(value)) {
+    return { code: 'network_error', retryable: true };
+  }
+  return { code: value.slice(0, 100), retryable: false };
 }
 
 export function assertReminderDeliveryEnabled(env: NodeJS.ProcessEnv = process.env) {
@@ -82,153 +96,221 @@ export function assertReminderDeliveryEnabled(env: NodeJS.ProcessEnv = process.e
   }
 }
 
-export async function deliverDueReminders(input: { dryRun: boolean; now?: Date; limit?: number }) {
+export function assertTrialReminderDelivery(env: NodeJS.ProcessEnv = process.env) {
+  if (env.WX_MINIPROGRAM_STATE !== 'trial') {
+    throw new Error('测试发送只允许 WX_MINIPROGRAM_STATE=trial');
+  }
+}
+
+export async function deliverDueReminders(input: {
+  dryRun: boolean;
+  now?: Date;
+  limit?: number;
+  testReminderId?: string;
+}) {
   const now = input.now ?? new Date();
   const limit = Math.min(30, Math.max(1, input.limit ?? 30));
-  if (!input.dryRun) {
-    assertReminderDeliveryEnabled();
-    await prisma.eventReminder.updateMany({
-      where: {
-        status: 'sending',
-        lockedAt: { lt: new Date(now.getTime() - 10 * 60_000) },
-      },
-      data: { status: 'pending', lockedAt: null, lockToken: null },
-    });
-    await refreshPendingReminderSchedules(now);
-  }
-  const due = await prisma.eventReminder.findMany({
-    where: {
-      status: 'pending',
-      OR: [
-        { scheduledAt: { lte: now } },
-        {
-          trigger: 'signup_open',
-          scheduledAt: null,
-          event: { signupStatus: { in: ['signup_open', 'closing_soon'] } },
-        },
-      ],
+  const testMode = Boolean(input.testReminderId);
+  const run = await prisma.reminderDeliveryRun.create({
+    data: {
+      mode: testMode ? 'test' : input.dryRun ? 'dry_run' : 'apply',
+      release: process.env.APP_RELEASE?.trim() || null,
     },
-    include: {
-      user: true,
-      event: { include: { changeAlerts: { where: { status: 'open' }, take: 1 } } },
-    },
-    orderBy: { createdAt: 'asc' },
-    take: limit,
   });
-  if (input.dryRun) {
-    return { due: due.length, sent: 0, failed: 0, ids: due.map((item) => item.id) };
-  }
 
-  const appId = process.env.WX_APPID || '';
-  const appSecret = process.env.WX_APPSECRET || '';
-  const signupTemplate = process.env.WX_SIGNUP_REMINDER_TEMPLATE_ID || '';
-  const raceTemplate = process.env.WX_RACE_REMINDER_TEMPLATE_ID || '';
-  const signupFields = reminderFields('SIGNUP');
-  const raceFields = reminderFields('RACE');
-  const encryptionValue = process.env.USER_OPENID_ENCRYPTION_KEY || '';
-  if (
-    !appId ||
-    !appSecret ||
-    !signupTemplate ||
-    !raceTemplate ||
-    !encryptionValue ||
-    !validReminderFields(signupFields) ||
-    !validReminderFields(raceFields)
-  ) {
-    throw new Error('提醒发送配置不完整');
-  }
-  const key = secretKey(encryptionValue);
-  const token = await accessToken(appId, appSecret);
-  let sent = 0;
-  let failed = 0;
-  for (const reminder of due) {
-    const options = buildReminderOptions(reminder.event, now);
-    const option = options.find((item) => item.type === reminder.reminderType);
-    if (!option?.available || reminder.user.status !== 'active') {
-      await prisma.eventReminder.update({
-        where: { id: reminder.id },
-        data: {
-          status: option?.available ? 'cancelled' : 'review_required',
-          lastErrorCode: option?.reason || 'user_disabled',
+  try {
+    if (!input.dryRun) {
+      if (testMode) assertTrialReminderDelivery();
+      else assertReminderDeliveryEnabled();
+      await prisma.eventReminder.updateMany({
+        where: {
+          status: 'sending',
+          lockedAt: { lt: new Date(now.getTime() - 10 * 60_000) },
         },
+        data: { status: 'pending', lockedAt: null, lockToken: null },
       });
-      continue;
+      if (!testMode) await refreshPendingReminderSchedules(now);
     }
-    const lockToken = randomUUID();
-    const locked = await prisma.eventReminder.updateMany({
-      where: { id: reminder.id, status: 'pending' },
-      data: { status: 'sending', lockedAt: now, lockToken, attempts: { increment: 1 } },
+
+    const due = await prisma.eventReminder.findMany({
+      where: testMode
+        ? { id: input.testReminderId, status: 'pending' }
+        : { status: 'pending', scheduledAt: { lte: now } },
+      include: {
+        user: true,
+        event: { include: { changeAlerts: { where: { status: 'open' }, take: 1 } } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
     });
-    if (!locked.count) continue;
-    try {
-      const openId = decryptOpenId(
-        {
-          ciphertext: reminder.user.openIdCiphertext,
-          iv: reminder.user.openIdIv,
-          authTag: reminder.user.openIdAuthTag,
-        },
-        key,
-      );
-      const templateId = reminder.reminderType === 'signup' ? signupTemplate : raceTemplate;
-      const fields = reminder.reminderType === 'signup' ? signupFields : raceFields;
-      const response = await fetch(
-        `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${encodeURIComponent(token)}`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            touser: openId,
-            template_id: templateId,
-            page: `pages/event-detail/index?id=${reminder.eventId}`,
-            miniprogram_state: process.env.WX_MINIPROGRAM_STATE || 'formal',
-            lang: 'zh_CN',
-            data: reminderData({
-              fields,
-              eventName: reminder.event.eventName,
-              notice:
-                reminder.reminderType === 'signup'
-                  ? '报名信息请前往官方确认'
-                  : '比赛将于一周后进行',
-              date: reminderMessageDate({
-                reminderType: reminder.reminderType,
-                trigger: reminder.trigger,
-                signupDeadline: reminder.event.signupDeadline,
-                eventDate: reminder.event.eventDate,
-                now,
-              }),
-            }),
-          }),
-          signal: AbortSignal.timeout(8_000),
-        },
-      );
-      const result = (await response.json()) as WeChatSendResult;
-      if (!response.ok || result.errcode) {
-        throw new Error(`wechat_send_${result.errcode || response.status}`);
-      }
-      await prisma.eventReminder.update({
-        where: { id: reminder.id },
-        data: {
-          status: 'sent',
-          sentAt: now,
-          lockedAt: null,
-          lockToken: null,
-          lastErrorCode: null,
-        },
+
+    if (input.dryRun || !due.length) {
+      await prisma.reminderDeliveryRun.update({
+        where: { id: run.id },
+        data: { status: 'succeeded', dueCount: due.length, finishedAt: new Date() },
       });
-      sent += 1;
-    } catch (error) {
-      const errorCode = error instanceof Error ? error.message.slice(0, 100) : 'send_failed';
-      await prisma.eventReminder.update({
-        where: { id: reminder.id },
-        data: {
-          status: reminder.attempts + 1 >= 3 ? 'failed' : 'pending',
-          lastErrorCode: errorCode,
-          lockedAt: null,
-          lockToken: null,
-        },
-      });
-      failed += 1;
+      return { due: due.length, sent: 0, failed: 0, skipped: 0, ids: due.map((item) => item.id) };
     }
+
+    const appId = process.env.WX_APPID || '';
+    const appSecret = process.env.WX_APPSECRET || '';
+    const signupTemplate = process.env.WX_SIGNUP_REMINDER_TEMPLATE_ID || '';
+    const raceTemplate = process.env.WX_RACE_REMINDER_TEMPLATE_ID || '';
+    const signupFields = reminderFields('SIGNUP');
+    const raceFields = reminderFields('RACE');
+    const encryptionValue = process.env.USER_OPENID_ENCRYPTION_KEY || '';
+    if (
+      !appId ||
+      !appSecret ||
+      !signupTemplate ||
+      !raceTemplate ||
+      !encryptionValue ||
+      !validReminderFields(signupFields) ||
+      !validReminderFields(raceFields)
+    ) {
+      throw new Error('提醒发送配置不完整');
+    }
+
+    const key = secretKey(encryptionValue);
+    let token = await accessToken(appId, appSecret);
+    let sent = 0;
+    let failed = 0;
+    let skipped = 0;
+    const errorCategories = new Set<string>();
+
+    for (const reminder of due) {
+      const options = buildReminderOptions(reminder.event, now);
+      const option = options.find((item) => item.type === reminder.reminderType);
+      if (!option?.available || reminder.user.status !== 'active') {
+        await prisma.eventReminder.update({
+          where: { id: reminder.id },
+          data: {
+            status: option?.available ? 'cancelled' : 'review_required',
+            lastErrorCode: option?.reason || 'user_disabled',
+          },
+        });
+        skipped += 1;
+        continue;
+      }
+
+      const lockToken = randomUUID();
+      const locked = await prisma.eventReminder.updateMany({
+        where: { id: reminder.id, status: 'pending' },
+        data: { status: 'sending', lockedAt: now, lockToken, attempts: { increment: 1 } },
+      });
+      if (!locked.count) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        const openId = decryptOpenId(
+          {
+            ciphertext: reminder.user.openIdCiphertext,
+            iv: reminder.user.openIdIv,
+            authTag: reminder.user.openIdAuthTag,
+          },
+          key,
+        );
+        const templateId = reminder.reminderType === 'signup' ? signupTemplate : raceTemplate;
+        const fields = reminder.reminderType === 'signup' ? signupFields : raceFields;
+        const send = () =>
+          fetch(
+            `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${encodeURIComponent(token)}`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                touser: openId,
+                template_id: templateId,
+                page: `pages/event-detail/index?id=${reminder.eventId}`,
+                miniprogram_state: process.env.WX_MINIPROGRAM_STATE || 'formal',
+                lang: 'zh_CN',
+                data: reminderData({
+                  fields,
+                  eventName: reminder.event.eventName,
+                  notice:
+                    reminder.reminderType === 'signup'
+                      ? '报名信息请前往官方确认'
+                      : '比赛将于一周后进行',
+                  date: reminderMessageDate({
+                    reminderType: reminder.reminderType,
+                    trigger: reminder.trigger,
+                    signupStartAt: reminder.event.signupStartAt,
+                    signupDeadline: reminder.event.signupDeadline,
+                    eventStartAt: reminder.event.eventStartAt,
+                  }),
+                }),
+              }),
+              signal: AbortSignal.timeout(8_000),
+            },
+          );
+
+        let response = await send();
+        let result = (await response.json().catch(() => ({
+          errcode: response.ok ? undefined : response.status,
+        }))) as WeChatSendResult;
+        if (result.errcode === 42001) {
+          token = await accessToken(appId, appSecret);
+          response = await send();
+          result = (await response.json().catch(() => ({
+            errcode: response.ok ? undefined : response.status,
+          }))) as WeChatSendResult;
+        }
+        if (!response.ok || result.errcode) {
+          throw new Error(`wechat_send_${result.errcode || response.status}`);
+        }
+
+        await prisma.eventReminder.update({
+          where: { id: reminder.id },
+          data: {
+            status: 'sent',
+            sentAt: now,
+            lockedAt: null,
+            lockToken: null,
+            lastErrorCode: null,
+          },
+        });
+        sent += 1;
+      } catch (error) {
+        const deliveryError = reminderDeliveryError(error);
+        errorCategories.add(deliveryError.code);
+        const exhausted = reminder.attempts + 1 >= 3;
+        await prisma.eventReminder.update({
+          where: { id: reminder.id },
+          data: {
+            status: deliveryError.retryable && !exhausted ? 'pending' : 'failed',
+            lastErrorCode: deliveryError.code,
+            lockedAt: null,
+            lockToken: null,
+          },
+        });
+        failed += 1;
+      }
+    }
+
+    await prisma.reminderDeliveryRun.update({
+      where: { id: run.id },
+      data: {
+        status: failed ? 'partial' : 'succeeded',
+        dueCount: due.length,
+        sentCount: sent,
+        failedCount: failed,
+        skippedCount: skipped,
+        errorCategory: errorCategories.size ? [...errorCategories].join(',').slice(0, 200) : null,
+        finishedAt: new Date(),
+      },
+    });
+    return { due: due.length, sent, failed, skipped, ids: due.map((item) => item.id) };
+  } catch (error) {
+    await prisma.reminderDeliveryRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'failed',
+        errorCategory: reminderDeliveryError(error).code,
+        finishedAt: new Date(),
+      },
+    });
+    throw error;
   }
-  return { due: due.length, sent, failed, ids: due.map((item) => item.id) };
 }

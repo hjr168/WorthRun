@@ -18,7 +18,19 @@ Page({
             await (0, account_1.ensureWechatSession)(true);
             const result = await (0, api_1.getMyReminders)();
             this.setData({
-                items: result.items.map((item) => (Object.assign(Object.assign({}, item), { dateText: (0, format_1.formatDate)(item.event.eventDate), scheduleText: item.scheduledAt ? (0, format_1.formatDateTime)(item.scheduledAt) : '待官方核验报名开放', typeText: item.reminderType === 'signup' ? '报名提醒' : '赛前 7 天提醒' }))),
+                items: result.items.map((item) => (Object.assign(Object.assign({}, item), { dateText: (0, format_1.formatDate)(item.event.eventDate), scheduleText: item.status === 'review_required'
+                        ? '赛事信息待重新核验'
+                        : item.scheduledAt
+                            ? (0, format_1.formatDateTime)(item.scheduledAt)
+                            : '等待已核实的提醒时间', typeText: item.reminderType === 'signup' ? '报名提醒' : '赛前 7 天提醒', statusText: item.status === 'sent'
+                        ? '已发送'
+                        : item.status === 'review_required'
+                            ? '待复核'
+                            : item.status === 'failed'
+                                ? '发送失败'
+                                : item.status === 'cancelled'
+                                    ? '已取消'
+                                    : '待发送', cancellable: ['pending', 'review_required'].includes(item.status) }))),
             });
         }
         catch (error) {

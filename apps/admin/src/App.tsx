@@ -14,6 +14,7 @@ import {
   RocketOutlined,
   TeamOutlined,
   LineChartOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import {
@@ -44,6 +45,7 @@ import { ShareCenterPage } from './pages/ShareCenterPage';
 import { ReleaseNotesPage } from './pages/ReleaseNotesPage';
 import { UsersPage } from './pages/UsersPage';
 import { GrowthPage } from './pages/GrowthPage';
+import { EventVerificationPage } from './pages/EventVerificationPage';
 
 const { Content, Sider } = Layout;
 
@@ -89,31 +91,33 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
   const location = useLocation();
   const selectedKey = location.pathname.startsWith('/events')
     ? '/events'
-    : location.pathname.startsWith('/event-changes')
-      ? '/event-changes'
-      : location.pathname.startsWith('/ai-sources')
-        ? '/ai-sources'
-        : location.pathname.startsWith('/content')
-          ? '/content'
-          : location.pathname.startsWith('/settings')
-            ? '/settings'
-            : location.pathname.startsWith('/quality')
-              ? '/quality'
-              : location.pathname.startsWith('/share-stats')
-                ? '/share'
-                : location.pathname.startsWith('/share')
+    : location.pathname.startsWith('/event-verification')
+      ? '/event-verification'
+      : location.pathname.startsWith('/event-changes')
+        ? '/event-changes'
+        : location.pathname.startsWith('/ai-sources')
+          ? '/ai-sources'
+          : location.pathname.startsWith('/content')
+            ? '/content'
+            : location.pathname.startsWith('/settings')
+              ? '/settings'
+              : location.pathname.startsWith('/quality')
+                ? '/quality'
+                : location.pathname.startsWith('/share-stats')
                   ? '/share'
-                  : location.pathname.startsWith('/release-notes')
-                    ? '/release-notes'
-                    : location.pathname.startsWith('/choice-stats')
-                      ? '/choice-stats'
-                      : location.pathname.startsWith('/users')
-                        ? '/users'
-                        : location.pathname.startsWith('/growth')
-                          ? '/growth'
-                          : location.pathname.startsWith('/logs')
-                            ? '/logs'
-                            : '/workbench';
+                  : location.pathname.startsWith('/share')
+                    ? '/share'
+                    : location.pathname.startsWith('/release-notes')
+                      ? '/release-notes'
+                      : location.pathname.startsWith('/choice-stats')
+                        ? '/choice-stats'
+                        : location.pathname.startsWith('/users')
+                          ? '/users'
+                          : location.pathname.startsWith('/growth')
+                            ? '/growth'
+                            : location.pathname.startsWith('/logs')
+                              ? '/logs'
+                              : '/workbench';
 
   return (
     <Layout className="app-shell">
@@ -133,6 +137,11 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
               key: '/events',
               icon: <DatabaseOutlined />,
               label: <Link to="/events">赛事库</Link>,
+            },
+            {
+              key: '/event-verification',
+              icon: <SafetyCertificateOutlined />,
+              label: <Link to="/event-verification">赛事核验</Link>,
             },
             {
               key: '/ai-sources',
@@ -210,6 +219,7 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/edit" element={<EventEditPage />} />
             <Route path="/events/edit/:id" element={<EventEditPage />} />
+            <Route path="/event-verification" element={<EventVerificationPage />} />
             <Route path="/ai-sources" element={<AiSourcesPage />} />
             <Route path="/event-changes" element={<EventChangesPage />} />
             <Route path="/quality" element={<QualityPage />} />

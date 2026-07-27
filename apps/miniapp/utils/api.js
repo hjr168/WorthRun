@@ -60,11 +60,18 @@ function request(path, options = {}) {
     if (options.loadingText)
         wx.showLoading({ title: options.loadingText, mask: true });
     return new Promise((resolve, reject) => {
+        let envVersion = 'release';
+        try {
+            envVersion = wx.getAccountInfoSync().miniProgram.envVersion || 'release';
+        }
+        catch (_a) {
+            // Older developer tools may not expose account information.
+        }
         wx.request({
             url,
             method,
             data: isGet ? undefined : options.data,
-            header: Object.assign({ 'content-type': 'application/json' }, ((0, user_session_1.getUserToken)() ? { Authorization: `Bearer ${(0, user_session_1.getUserToken)()}` } : {})),
+            header: Object.assign({ 'content-type': 'application/json', 'X-WX-MiniProgram-Env': envVersion }, ((0, user_session_1.getUserToken)() ? { Authorization: `Bearer ${(0, user_session_1.getUserToken)()}` } : {})),
             success(res) {
                 var _a, _b;
                 const data = res.data;

@@ -64,6 +64,7 @@ Page({
     officialActionText,
     reminderUpdating: '',
     reminderSubscribed: { signup: false, race_week: false },
+    startTimeText: '',
   },
   onLoad(query: EventLaunchQuery) {
     enablePublicShare();
@@ -109,11 +110,16 @@ Page({
         detail.event.infoStatus,
         detail.event.checklistItems,
       );
+      detail.event.reminderOptions = (detail.event.reminderOptions || []).map((item) => ({
+        ...item,
+        scheduleText: item.scheduledAt ? formatDateTime(item.scheduledAt) : '',
+      }));
       this.setData({
         event: detail.event,
         isFavorite: favorites.items.some((item) => item.eventId === this.data.id),
         viewerChoice: viewerChoice.choice,
         dateText: formatDate(detail.event.eventDate),
+        startTimeText: detail.event.eventStartAt ? formatDateTime(detail.event.eventStartAt) : '',
         distanceText: formatDistance(detail.event.distanceItems),
         sourceCheckedAtText: detail.event.sourceCheckedAt
           ? formatDateTime(detail.event.sourceCheckedAt)
@@ -143,6 +149,9 @@ Page({
         eventId: detail.event.id,
         action: 'event_detail_view',
       }).catch(() => {});
+      if (detail.event.reminderOptions.length) {
+        recordActivity({ action: 'viewedReminder' }).catch(() => {});
+      }
     } catch (error) {
       this.setData({
         loading: false,
@@ -266,10 +275,12 @@ Page({
     try {
       const profile = await ensureWechatSession(true);
       if (!profile) throw new Error('请稍后重试微信登录');
+      await recordActivity({ action: 'requestedReminderPermission' }).catch(() => {});
       const permission = await new Promise<Record<string, string>>((resolve, reject) => {
         wx.requestSubscribeMessage({ tmplIds: [templateId], success: resolve, fail: reject });
       });
       if (permission[templateId] !== 'accept') throw new Error('需先允许本次消息提醒');
+      await recordActivity({ action: 'acceptedReminderPermission' }).catch(() => {});
       await subscribeEventReminders(this.data.event.id, [type]);
       this.setData({ [`reminderSubscribed.${type}`]: true });
       wx.showToast({ title: '提醒已开启', icon: 'success' });

@@ -68,6 +68,7 @@ export interface EventInput {
   eventName: string;
   city: string;
   eventDate: string;
+  eventStartAt?: string | null;
   distanceItems: string[];
   startPoint?: string;
   endPoint?: string;

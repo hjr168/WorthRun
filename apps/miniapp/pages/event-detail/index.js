@@ -37,6 +37,7 @@ Page({
         officialActionText: format_1.officialActionText,
         reminderUpdating: '',
         reminderSubscribed: { signup: false, race_week: false },
+        startTimeText: '',
     },
     onLoad(query) {
         (0, share_1.enablePublicShare)();
@@ -78,11 +79,13 @@ Page({
                 (0, api_1.getMyReminders)().catch(() => ({ items: [] })),
             ]);
             const verification = (0, event_detail_1.buildVerificationGroups)(detail.event.infoStatus, detail.event.checklistItems);
+            detail.event.reminderOptions = (detail.event.reminderOptions || []).map((item) => (Object.assign(Object.assign({}, item), { scheduleText: item.scheduledAt ? (0, format_1.formatDateTime)(item.scheduledAt) : '' })));
             this.setData({
                 event: detail.event,
                 isFavorite: favorites.items.some((item) => item.eventId === this.data.id),
                 viewerChoice: viewerChoice.choice,
                 dateText: (0, format_1.formatDate)(detail.event.eventDate),
+                startTimeText: detail.event.eventStartAt ? (0, format_1.formatDateTime)(detail.event.eventStartAt) : '',
                 distanceText: (0, format_1.formatDistance)(detail.event.distanceItems),
                 sourceCheckedAtText: detail.event.sourceCheckedAt
                     ? (0, format_1.formatDateTime)(detail.event.sourceCheckedAt)
@@ -108,6 +111,9 @@ Page({
                 eventId: detail.event.id,
                 action: 'event_detail_view',
             }).catch(() => { });
+            if (detail.event.reminderOptions.length) {
+                (0, api_1.recordActivity)({ action: 'viewedReminder' }).catch(() => { });
+            }
         }
         catch (error) {
             this.setData({
@@ -246,11 +252,13 @@ Page({
             const profile = await (0, account_1.ensureWechatSession)(true);
             if (!profile)
                 throw new Error('请稍后重试微信登录');
+            await (0, api_1.recordActivity)({ action: 'requestedReminderPermission' }).catch(() => { });
             const permission = await new Promise((resolve, reject) => {
                 wx.requestSubscribeMessage({ tmplIds: [templateId], success: resolve, fail: reject });
             });
             if (permission[templateId] !== 'accept')
                 throw new Error('需先允许本次消息提醒');
+            await (0, api_1.recordActivity)({ action: 'acceptedReminderPermission' }).catch(() => { });
             await (0, api_1.subscribeEventReminders)(this.data.event.id, [type]);
             this.setData({ [`reminderSubscribed.${type}`]: true });
             wx.showToast({ title: '提醒已开启', icon: 'success' });

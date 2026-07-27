@@ -16,6 +16,7 @@ export function buildFeedbackMaintenanceCutoffs(now: Date) {
     metricBefore: new Date(chinaDay(now).getTime() - 90 * DAY_MS),
     apiMetricBefore: new Date(now.getTime() - 30 * DAY_MS),
     credentialBefore: new Date(now.getTime() - 7 * DAY_MS),
+    reminderRunBefore: new Date(now.getTime() - 90 * DAY_MS),
   };
 }
 
@@ -29,7 +30,7 @@ export async function recordBlockedFeedback(reason: FeedbackRiskReason, now: Dat
 
 export async function runFeedbackMaintenance(now: Date = new Date()) {
   const cutoffs = buildFeedbackMaintenanceCutoffs(now);
-  const [fingerprints, rateLimits, metrics, apiMetrics, avatarGrants, shareTokens] =
+  const [fingerprints, rateLimits, metrics, apiMetrics, avatarGrants, shareTokens, reminderRuns] =
     await prisma.$transaction([
       prisma.feedbackFingerprint.deleteMany({
         where: { expiresAt: { lte: cutoffs.fingerprintExpiresAt } },
@@ -53,6 +54,9 @@ export async function runFeedbackMaintenance(now: Date = new Date()) {
         where: { tokenExpiresAt: { lt: now }, shareToken: { not: null } },
         data: { shareToken: null, tokenExpiresAt: null },
       }),
+      prisma.reminderDeliveryRun.deleteMany({
+        where: { startedAt: { lt: cutoffs.reminderRunBefore } },
+      }),
     ]);
   return {
     deletedFingerprints: fingerprints.count,
@@ -61,5 +65,6 @@ export async function runFeedbackMaintenance(now: Date = new Date()) {
     deletedApiErrorMetrics: apiMetrics.count,
     deletedAvatarUploadGrants: avatarGrants.count,
     expiredShareTokens: shareTokens.count,
+    deletedReminderDeliveryRuns: reminderRuns.count,
   };
 }

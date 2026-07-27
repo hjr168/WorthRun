@@ -102,6 +102,19 @@ enum EventReminderStatus {
   review_required
 }
 
+enum ReminderDeliveryRunMode {
+  dry_run
+  apply
+  test
+}
+
+enum ReminderDeliveryRunStatus {
+  running
+  succeeded
+  partial
+  failed
+}
+
 enum EventSourceType {
   page_url
   chinaath_api
@@ -185,6 +198,7 @@ model Event {
   eventName        String        @map("event_name")
   city             String
   eventDate        DateTime      @map("event_date") @db.Date
+  eventStartAt     DateTime?     @map("event_start_at")
   distanceItems    String[]      @map("distance_items")
   startPoint       String?       @map("start_point")
   endPoint         String?       @map("end_point")
@@ -370,6 +384,9 @@ model UserActivityDaily {
   addedFavorite      Boolean  @default(false) @map("added_favorite")
   setChoice          Boolean  @default(false) @map("set_choice")
   startedShare       Boolean  @default(false) @map("started_share")
+  viewedReminder     Boolean  @default(false) @map("viewed_reminder")
+  requestedReminderPermission Boolean @default(false) @map("requested_reminder_permission")
+  acceptedReminderPermission Boolean @default(false) @map("accepted_reminder_permission")
   subscribedReminder Boolean  @default(false) @map("subscribed_reminder")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
@@ -423,6 +440,25 @@ model EventReminder {
   @@index([status, scheduledAt])
   @@index([eventId, status])
   @@map("event_reminders")
+}
+
+model ReminderDeliveryRun {
+  id            String                    @id @default(cuid())
+  mode          ReminderDeliveryRunMode
+  status        ReminderDeliveryRunStatus @default(running)
+  startedAt     DateTime                  @default(now()) @map("started_at")
+  finishedAt    DateTime?                 @map("finished_at")
+  dueCount      Int                       @default(0) @map("due_count")
+  sentCount     Int                       @default(0) @map("sent_count")
+  failedCount   Int                       @default(0) @map("failed_count")
+  skippedCount  Int                       @default(0) @map("skipped_count")
+  errorCategory String?                   @map("error_category")
+  release       String?
+  createdAt     DateTime                  @default(now()) @map("created_at")
+
+  @@index([startedAt])
+  @@index([status, startedAt])
+  @@map("reminder_delivery_runs")
 }
 
 model EventSourceSummary {

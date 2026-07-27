@@ -3,8 +3,10 @@ import { buildReminderOptions, canReactivateReminder } from './reminderWorkflow.
 
 const event = {
   id: 'event-1',
-  eventDate: new Date('2026-12-20T00:00:00.000Z'),
+  eventDate: new Date('2026-12-21T00:00:00.000Z'),
+  eventStartAt: new Date('2026-12-20T23:30:00.000Z'),
   signupStatus: 'not_started',
+  signupStartAt: new Date('2026-08-01T02:00:00.000Z'),
   signupDeadline: null,
   publishStatus: 'published',
   infoStatus: 'verified',
@@ -13,14 +15,14 @@ const event = {
 };
 
 describe('reminder options', () => {
-  it('waits for signup opening and schedules race week at Beijing 09:00', () => {
+  it('schedules signup opening and race week from verified precise times', () => {
     const options = buildReminderOptions(event, new Date('2026-07-22T00:00:00.000Z'));
     expect(options[0]).toMatchObject({
       available: true,
       trigger: 'signup_open',
-      scheduledAt: null,
+      scheduledAt: event.signupStartAt,
     });
-    expect(options[1].scheduledAt?.toISOString()).toBe('2026-12-13T01:00:00.000Z');
+    expect(options[1].scheduledAt?.toISOString()).toBe('2026-12-14T01:00:00.000Z');
   });
 
   it('blocks unverified events', () => {
@@ -40,6 +42,19 @@ describe('reminder options', () => {
       new Date('2026-08-01T00:00:00.000Z'),
     );
     expect(options[0].scheduledAt?.toISOString()).toBe('2026-08-07T01:00:00.000Z');
+  });
+
+  it('requires precise signup and race start times', () => {
+    const options = buildReminderOptions(
+      { ...event, eventStartAt: null, signupStartAt: null },
+      new Date('2026-07-22T00:00:00.000Z'),
+    );
+    expect(options).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'signup', available: false }),
+        expect.objectContaining({ type: 'race_week', available: false }),
+      ]),
+    );
   });
 
   it('never reactivates a reminder that was already sent', () => {

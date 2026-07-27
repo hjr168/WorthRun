@@ -1,34 +1,48 @@
-import { Alert, Button, Card, Segmented, Statistic } from 'antd';
+import { Alert, Button, Card, Input, Segmented, Select, Space, Statistic, Table, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet } from '../api';
-import type { GrowthStats, SystemHealth } from '../types';
+import type { AdminReminderItem, GrowthStats, ReminderReadiness, SystemHealth } from '../types';
 
 export function GrowthPage() {
   const [days, setDays] = useState<7 | 30>(7);
   const [data, setData] = useState<GrowthStats>();
   const [reminders, setReminders] = useState<Record<string, number>>({});
   const [systemHealth, setSystemHealth] = useState<SystemHealth>();
+  const [readiness, setReadiness] = useState<ReminderReadiness>();
+  const [reminderItems, setReminderItems] = useState<AdminReminderItem[]>([]);
+  const [reminderStatus, setReminderStatus] = useState('');
+  const [reminderType, setReminderType] = useState('');
+  const [reminderSearch, setReminderSearch] = useState('');
+  const [reminderSearchDraft, setReminderSearchDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [growth, reminderStats, health] = await Promise.all([
+      const reminderParams = new URLSearchParams({ page: '1', pageSize: '50' });
+      if (reminderStatus) reminderParams.set('status', reminderStatus);
+      if (reminderType) reminderParams.set('reminderType', reminderType);
+      if (reminderSearch.trim()) reminderParams.set('search', reminderSearch.trim());
+      const [growth, reminderStats, health, readinessResult, reminderList] = await Promise.all([
         apiGet<GrowthStats>(`/api/admin/growth-stats?days=${days}`),
         apiGet<Record<string, number>>('/api/admin/reminder-stats'),
         apiGet<SystemHealth>('/api/admin/system-health'),
+        apiGet<ReminderReadiness>('/api/admin/reminder-readiness'),
+        apiGet<{ items: AdminReminderItem[] }>(`/api/admin/reminders?${reminderParams.toString()}`),
       ]);
       setData(growth);
       setReminders(reminderStats);
       setSystemHealth(health);
+      setReadiness(readinessResult);
+      setReminderItems(reminderList.items);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '增长数据加载失败');
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [days, reminderSearch, reminderStatus, reminderType]);
   useEffect(() => void load(), [load]);
   const funnel = data?.funnel;
   return (
@@ -149,6 +163,131 @@ export function GrowthPage() {
           />
         </Card>
       </div>
+      <h2 className="section-title">提醒资格与授权</h2>
+      <div className="stat-grid growth-summary">
+        <Card>
+          <Statistic title="可订阅赛事" value={readiness?.eligibleEvents ?? 0} />
+        </Card>
+        <Card>
+          <Statistic title="报名提醒可用" value={readiness?.signupEligibleEvents ?? 0} />
+        </Card>
+        <Card>
+          <Statistic title="赛前提醒可用" value={readiness?.raceEligibleEvents ?? 0} />
+        </Card>
+        <Card>
+          <Statistic title="缺少开赛时间" value={readiness?.missingEventStartAt ?? 0} />
+        </Card>
+        <Card>
+          <Statistic title="看到提醒" value={data?.reminderFunnel.viewed ?? 0} />
+        </Card>
+        <Card>
+          <Statistic
+            title="调起授权"
+            value={data?.reminderFunnel.requested ?? 0}
+            suffix={` / ${data?.reminderFunnel.viewToRequestRate ?? 0}%`}
+          />
+        </Card>
+        <Card>
+          <Statistic
+            title="微信允许"
+            value={data?.reminderFunnel.accepted ?? 0}
+            suffix={` / ${data?.reminderFunnel.requestToAcceptRate ?? 0}%`}
+          />
+        </Card>
+        <Card>
+          <Statistic
+            title="订阅成功"
+            value={data?.reminderFunnel.subscribed ?? 0}
+            suffix={` / ${data?.reminderFunnel.acceptToSubscribeRate ?? 0}%`}
+          />
+        </Card>
+      </div>
+      {readiness?.latestRun && (
+        <Alert
+          style={{ marginTop: 16 }}
+          type={readiness.latestRun.status === 'succeeded' ? 'success' : 'warning'}
+          showIcon
+          message={`最近提醒任务：${readiness.latestRun.status}`}
+          description={`模式 ${readiness.latestRun.mode} · 到期 ${readiness.latestRun.dueCount} · 发送 ${readiness.latestRun.sentCount} · 失败 ${readiness.latestRun.failedCount} · 跳过 ${readiness.latestRun.skippedCount}`}
+        />
+      )}
+      <h2 className="section-title">提醒记录</h2>
+      <Space wrap style={{ marginBottom: 16 }}>
+        <Input
+          allowClear
+          placeholder="搜索赛事"
+          style={{ width: 220 }}
+          value={reminderSearchDraft}
+          onChange={(event) => setReminderSearchDraft(event.target.value)}
+          onPressEnter={() => setReminderSearch(reminderSearchDraft.trim())}
+        />
+        <Select
+          allowClear
+          placeholder="提醒类型"
+          style={{ width: 140 }}
+          value={reminderType || undefined}
+          onChange={(value) => setReminderType(value || '')}
+          options={[
+            { value: 'signup', label: '报名提醒' },
+            { value: 'race_week', label: '赛前提醒' },
+          ]}
+        />
+        <Select
+          allowClear
+          placeholder="提醒状态"
+          style={{ width: 150 }}
+          value={reminderStatus || undefined}
+          onChange={(value) => setReminderStatus(value || '')}
+          options={[
+            { value: 'pending', label: '待发送' },
+            { value: 'sending', label: '发送中' },
+            { value: 'sent', label: '已发送' },
+            { value: 'failed', label: '失败' },
+            { value: 'review_required', label: '待复核' },
+            { value: 'cancelled', label: '已取消' },
+          ]}
+        />
+        <Button onClick={() => setReminderSearch(reminderSearchDraft.trim())}>查询</Button>
+      </Space>
+      <Table<AdminReminderItem>
+        rowKey="id"
+        size="small"
+        dataSource={reminderItems}
+        pagination={false}
+        scroll={{ x: 980 }}
+        columns={[
+          { title: '赛事', dataIndex: ['event', 'eventName'] },
+          {
+            title: '类型',
+            dataIndex: 'reminderType',
+            width: 110,
+            render: (value) => (value === 'signup' ? '报名提醒' : '赛前提醒'),
+          },
+          {
+            title: '状态',
+            dataIndex: 'status',
+            width: 110,
+            render: (value) => (
+              <Tag color={value === 'sent' ? 'green' : value === 'failed' ? 'red' : 'blue'}>
+                {value}
+              </Tag>
+            ),
+          },
+          {
+            title: '计划时间',
+            dataIndex: 'scheduledAt',
+            width: 190,
+            render: (value) => value || '-',
+          },
+          { title: '尝试次数', dataIndex: 'attempts', width: 100 },
+          {
+            title: '最近错误',
+            dataIndex: 'lastErrorCode',
+            width: 220,
+            render: (value) => value || '-',
+          },
+        ]}
+      />
     </main>
   );
 }

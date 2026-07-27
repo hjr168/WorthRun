@@ -29,7 +29,7 @@ import {
   sourceLevelOptions,
 } from '../constants';
 import { showError } from '../utils/helpers';
-import { defaultChecklist, splitComma, splitLines } from '../utils/form';
+import { beijingDateTimeToIso, defaultChecklist, splitComma, splitLines } from '../utils/form';
 import { Section } from '../components/Section';
 import { OperationLogTable } from '../components/OperationLogTable';
 import { MiniappPublishChecks } from '../components/MiniappPublishChecks';
@@ -56,6 +56,9 @@ export function EventEditPage() {
           ...event,
           city: event.city ? [event.city] : [],
           eventDate: event.eventDate ? dayjs(event.eventDate).format('YYYY-MM-DD') : undefined,
+          eventStartAt: event.eventStartAt
+            ? dayjs(event.eventStartAt).format('YYYY-MM-DDTHH:mm')
+            : undefined,
           signupStartAt: event.signupStartAt
             ? dayjs(event.signupStartAt).format('YYYY-MM-DDTHH:mm')
             : undefined,
@@ -85,6 +88,9 @@ export function EventEditPage() {
     const body = {
       ...values,
       city: Array.isArray(values.city) ? values.city[0] : values.city,
+      eventStartAt: beijingDateTimeToIso(values.eventStartAt),
+      signupStartAt: beijingDateTimeToIso(values.signupStartAt),
+      signupDeadline: beijingDateTimeToIso(values.signupDeadline),
       distanceItems: values.distanceItems || [],
       judgementReasons: splitLines(values.judgementReasons),
       suitableFor: splitLines(values.suitableFor),
@@ -93,7 +99,10 @@ export function EventEditPage() {
       checklistItems: values.checklistItems || [],
       eventTags: splitComma(values.tags).map((tagName) => ({ tagName, tagType: 'experience' })),
       fieldConfidence: {
-        signupDeadline: values.signupDeadline ? 'verified' : 'pending_verify',
+        ...(values.fieldConfidence || {}),
+        eventStartAt: values.eventStartAt ? 'pending_verify' : undefined,
+        signupStartAt: values.signupStartAt ? 'pending_verify' : undefined,
+        signupDeadline: values.signupDeadline ? 'pending_verify' : undefined,
         route: 'pending_verify',
         weather: 'pending_verify',
       },
@@ -166,6 +175,9 @@ export function EventEditPage() {
                         </Form.Item>
                         <Form.Item label="比赛日期" name="eventDate" rules={[{ required: true }]}>
                           <Input type="date" />
+                        </Form.Item>
+                        <Form.Item label="开赛时间" name="eventStartAt">
+                          <Input type="datetime-local" />
                         </Form.Item>
                         <Form.Item
                           label="距离项目"
@@ -262,7 +274,12 @@ export function EventEditPage() {
                           <Select options={sourceLevelOptions} />
                         </Form.Item>
                         <Form.Item label="信息状态" name="infoStatus" rules={[{ required: true }]}>
-                          <Select options={infoStatusOptions} />
+                          <Select
+                            options={infoStatusOptions.map((option) => ({
+                              ...option,
+                              disabled: option.value === 'verified',
+                            }))}
+                          />
                         </Form.Item>
                       </div>
                     </Section>
@@ -279,6 +296,9 @@ export function EventEditPage() {
                     </Descriptions>
                     <Form.Item shouldUpdate noStyle>
                       {() => <MiniappPublishChecks values={form.getFieldsValue(true)} />}
+                    </Form.Item>
+                    <Form.Item name="fieldConfidence" hidden>
+                      <Input />
                     </Form.Item>
                   </>
                 ),

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { prisma } from '@worth-running/database';
 
 export type PreflightPhase = 'foundation' | 'users' | 'reminders';
+export type PreflightMode = 'ready' | 'live';
 export type PreflightStatus = 'pass' | 'warning' | 'blocker';
 
 export interface PreflightCheck {
@@ -26,6 +27,7 @@ function isTemplateField(value: string | undefined) {
 export function evaluateV053Environment(
   env: NodeJS.ProcessEnv,
   phase: PreflightPhase,
+  mode: PreflightMode = 'live',
 ): PreflightCheck[] {
   const checks: PreflightCheck[] = [];
   const usersRequired = phase === 'users' || phase === 'reminders';
@@ -114,8 +116,15 @@ export function evaluateV053Environment(
     checks.push(
       check(
         'reminder_feature',
-        env.REMINDER_FEATURE_ENABLED === 'true',
-        '提醒灰度阶段必须开启 REMINDER_FEATURE_ENABLED=true',
+        mode === 'ready' || env.REMINDER_FEATURE_ENABLED === 'true',
+        '正式启用阶段必须开启 REMINDER_FEATURE_ENABLED=true',
+      ),
+      check(
+        'miniprogram_state',
+        env.WX_MINIPROGRAM_STATE === (mode === 'ready' ? 'trial' : 'formal'),
+        mode === 'ready'
+          ? '体验验收必须设置 WX_MINIPROGRAM_STATE=trial'
+          : '正式启用必须设置 WX_MINIPROGRAM_STATE=formal',
       ),
       check(
         'signup_template',
@@ -231,13 +240,23 @@ export function evaluateV053Repository(input: {
   return checks;
 }
 
-export async function evaluateV053Database(): Promise<PreflightCheck[]> {
+export async function evaluateV053Database(
+  phase: PreflightPhase = 'foundation',
+): Promise<PreflightCheck[]> {
   const migrationName = '20260722160000_user_growth_reminders';
-  const [migrationRows, tableRows] = await Promise.all([
+  const v054MigrationName = '20260727110000_event_verification_reminders';
+  const [migrationRows, v054MigrationRows, tableRows] = await Promise.all([
     prisma.$queryRaw<Array<{ migration_name: string }>>`
       SELECT migration_name
       FROM "_prisma_migrations"
       WHERE migration_name = ${migrationName}
+        AND finished_at IS NOT NULL
+        AND rolled_back_at IS NULL
+    `,
+    prisma.$queryRaw<Array<{ migration_name: string }>>`
+      SELECT migration_name
+      FROM "_prisma_migrations"
+      WHERE migration_name = ${v054MigrationName}
         AND finished_at IS NOT NULL
         AND rolled_back_at IS NULL
     `,
@@ -259,7 +278,7 @@ export async function evaluateV053Database(): Promise<PreflightCheck[]> {
     `,
   ]);
   const tables = tableRows[0];
-  return [
+  const checks = [
     check(
       'database_migration',
       migrationRows.length === 1,
@@ -273,4 +292,45 @@ export async function evaluateV053Database(): Promise<PreflightCheck[]> {
       'V0.5.3 用户、别名、活动、头像凭证和提醒表必须存在',
     ),
   ];
+  if (phase === 'reminders') {
+    const eligibleRows = await prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(DISTINCT e.id)::bigint AS count
+      FROM events e
+      WHERE e.publish_status = 'published'
+        AND e.info_status = 'verified'
+        AND e.source_level IN ('official', 'trusted')
+        AND e.event_date >= CURRENT_DATE
+        AND (
+          e.event_start_at IS NOT NULL
+          OR e.signup_start_at IS NOT NULL
+          OR e.signup_deadline IS NOT NULL
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM event_source_summaries s
+          WHERE s.event_id = e.id
+            AND s.status = 'published'
+            AND s.stale_at IS NULL
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM event_change_alerts a
+          WHERE a.event_id = e.id
+            AND a.status = 'open'
+        )
+    `;
+    checks.push(
+      check(
+        'v054_database_migration',
+        v054MigrationRows.length === 1,
+        `数据库必须已完成迁移 ${v054MigrationName}`,
+      ),
+      check(
+        'eligible_reminder_event',
+        Number(eligibleRows[0]?.count || 0) > 0,
+        '至少需要一场已核实且具备真实提醒时间的未来赛事',
+      ),
+    );
+  }
+  return checks;
 }

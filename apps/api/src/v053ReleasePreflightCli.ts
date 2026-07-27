@@ -6,6 +6,7 @@ import {
   evaluateV053Environment,
   evaluateV053Repository,
   type PreflightCheck,
+  type PreflightMode,
   type PreflightPhase,
 } from './v053ReleasePreflight.js';
 
@@ -19,15 +20,20 @@ if (!['foundation', 'users', 'reminders'].includes(phase)) {
   process.stderr.write('phase 必须是 foundation、users 或 reminders\n');
   process.exit(2);
 }
+const mode = (option('mode') || 'live') as PreflightMode;
+if (!['ready', 'live'].includes(mode)) {
+  process.stderr.write('mode 必须是 ready 或 live\n');
+  process.exit(2);
+}
 const skipDatabase = process.argv.includes('--skip-database');
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const checks: PreflightCheck[] = [
-  ...evaluateV053Environment(process.env, phase),
+  ...evaluateV053Environment(process.env, phase, mode),
   ...evaluateV053Repository({ repoRoot, env: process.env, phase }),
 ];
 
 try {
-  if (!skipDatabase) checks.push(...(await evaluateV053Database()));
+  if (!skipDatabase) checks.push(...(await evaluateV053Database(phase)));
 } catch {
   checks.push({
     id: 'database_connection',
@@ -44,6 +50,6 @@ for (const item of checks) {
 }
 const blockers = checks.filter((item) => item.status === 'blocker');
 process.stdout.write(
-  `${JSON.stringify({ phase, checks: checks.length, blockers: blockers.length })}\n`,
+  `${JSON.stringify({ phase, mode, checks: checks.length, blockers: blockers.length })}\n`,
 );
 if (blockers.length) process.exitCode = 1;

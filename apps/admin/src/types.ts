@@ -41,6 +41,7 @@ export interface AdminEvent {
   eventName: string;
   city: string;
   eventDate: string;
+  eventStartAt?: string | null;
   distanceItems: string[];
   startPoint?: string;
   endPoint?: string;
@@ -591,4 +592,71 @@ export interface GrowthStats {
     referralDetailUsers: number;
     referralToDetailRate: number;
   };
+  reminderFunnel: {
+    viewed: number;
+    requested: number;
+    accepted: number;
+    subscribed: number;
+    viewToRequestRate: number;
+    requestToAcceptRate: number;
+    acceptToSubscribeRate: number;
+  };
+}
+
+export interface EventVerificationItem extends AdminEvent {
+  ready: boolean;
+  reminderEligible: boolean;
+  issues: string[];
+}
+
+export interface EventVerificationSummary {
+  pending: number;
+  ready: number;
+  missingSummary: number;
+  staleSummary: number;
+  openAlerts: number;
+  reminderEligible: number;
+}
+
+export interface ReminderReadiness {
+  configured: boolean;
+  enabled: boolean;
+  miniprogramState: string;
+  eligibleEvents: number;
+  signupEligibleEvents: number;
+  raceEligibleEvents: number;
+  missingEventStartAt: number;
+  missingSignupTime: number;
+  statuses: Record<string, number>;
+  latestRun?: {
+    id: string;
+    status: string;
+    mode: string;
+    startedAt: string;
+    finishedAt?: string | null;
+    dueCount: number;
+    sentCount: number;
+    failedCount: number;
+    skippedCount: number;
+    errorCategory?: string | null;
+    release?: string | null;
+  } | null;
+}
+
+export interface AdminReminderItem {
+  id: string;
+  eventId: string;
+  reminderType: 'signup' | 'race_week';
+  trigger: string;
+  status: string;
+  scheduledAt?: string | null;
+  sentAt?: string | null;
+  attempts: number;
+  lastErrorCode?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  event: Pick<
+    AdminEvent,
+    'eventName' | 'city' | 'eventDate' | 'eventStartAt' | 'infoStatus' | 'publishStatus'
+  >;
 }

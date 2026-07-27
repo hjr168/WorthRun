@@ -8,9 +8,10 @@
       <view class="reminder-main" data-event-id="{{item.eventId}}" bindtap="openEvent">
         <view class="reminder-name">{{item.event.eventName}}</view>
         <view class="reminder-meta">{{item.event.city}} · {{item.dateText}}</view>
-        <view class="reminder-type">{{item.typeText}} · {{item.scheduleText}}</view>
+        <view class="reminder-type">{{item.typeText}} · {{item.statusText}}</view>
+        <view class="reminder-meta">{{item.scheduleText}}</view>
       </view>
-      <button class="cancel-button" data-event-id="{{item.eventId}}" data-type="{{item.reminderType}}" bindtap="cancel">取消</button>
+      <button wx:if="{{item.cancellable}}" class="cancel-button" data-event-id="{{item.eventId}}" data-type="{{item.reminderType}}" bindtap="cancel">取消</button>
     </view>
   </view>
 </view>

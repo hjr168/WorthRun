@@ -24,6 +24,7 @@
     "feedback:maintenance": "pnpm --filter @worth-running/api feedback:maintenance",
     "source-summary:backfill": "pnpm --filter @worth-running/api source-summary:backfill",
     "reminder:send-due": "pnpm --filter @worth-running/api reminder:send-due",
+    "reminder:test-send": "pnpm --filter @worth-running/api reminder:test-send",
     "release:preflight-v0.5.3": "pnpm --filter @worth-running/api release:preflight-v0.5.3",
     "release-notes:bootstrap": "pnpm --filter @worth-running/database release-notes:bootstrap"
   },

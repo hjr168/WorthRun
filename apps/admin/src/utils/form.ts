@@ -32,6 +32,17 @@ export function splitLines(value?: string) {
     .filter(Boolean);
 }
 
+export function beijingDateTimeToIso(value?: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) return null;
+  const localMatch = normalized.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(:\d{2})?$/);
+  if (localMatch) {
+    return new Date(`${localMatch[1]}${localMatch[2] || ':00'}+08:00`).toISOString();
+  }
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? normalized : parsed.toISOString();
+}
+
 export function toTextList(value: unknown) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean);
@@ -62,7 +73,9 @@ export interface MiniappPublishChecksResult {
   summary: PublishCheckSummary;
 }
 
-export function buildMiniappPublishChecks(values: Record<string, unknown>): MiniappPublishChecksResult {
+export function buildMiniappPublishChecks(
+  values: Record<string, unknown>,
+): MiniappPublishChecksResult {
   const judgementReasons = toTextList(values.judgementReasons);
   const checklistItems = Array.isArray(values.checklistItems) ? values.checklistItems : [];
   const textForRiskCheck = [

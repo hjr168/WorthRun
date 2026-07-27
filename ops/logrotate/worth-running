@@ -1,4 +1,4 @@
-/root/.pm2/logs/worth-running-api-*.log /var/log/worth-running-event-source.log /var/log/worth-running-feedback-maintenance.log {
+/root/.pm2/logs/worth-running-api-*.log /var/log/worth-running-event-source.log /var/log/worth-running-feedback-maintenance.log /var/log/worth-running-reminder.log {
   weekly
   su root root
   rotate 4

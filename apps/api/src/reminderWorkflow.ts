@@ -1,5 +1,5 @@
 import { prisma } from '@worth-running/database';
-import type { EventReminderType } from '@worth-running/database';
+import type { EventReminderStatus, EventReminderType } from '@worth-running/database';
 import { chinaDateOnly } from '@worth-running/shared';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -7,7 +7,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 type ReminderEvent = {
   id: string;
   eventDate: Date;
+  eventStartAt: Date | null;
   signupStatus: string;
+  signupStartAt: Date | null;
   signupDeadline: Date | null;
   publishStatus: string;
   infoStatus: string;
@@ -50,8 +52,17 @@ export function buildReminderOptions(event: ReminderEvent, now = new Date()): Re
   }
 
   let signup: ReminderOption;
-  if (event.signupStatus === 'not_started') {
-    signup = { type: 'signup', available: true, trigger: 'signup_open', scheduledAt: null };
+  if (
+    event.signupStatus === 'not_started' &&
+    event.signupStartAt &&
+    event.signupStartAt.getTime() > now.getTime()
+  ) {
+    signup = {
+      type: 'signup',
+      available: true,
+      trigger: 'signup_open',
+      scheduledAt: event.signupStartAt,
+    };
   } else if (
     ['signup_open', 'closing_soon'].includes(event.signupStatus) &&
     event.signupDeadline &&
@@ -65,19 +76,22 @@ export function buildReminderOptions(event: ReminderEvent, now = new Date()): Re
       scheduledAt: target < now ? now : target,
     };
   } else {
-    signup = { type: 'signup', available: false, reason: '报名时间待官方核实' };
+    signup = { type: 'signup', available: false, reason: '报名开始或截止时间待官方核实' };
   }
 
-  const raceTarget = new Date(chinaNineOnDate(event.eventDate).getTime() - 7 * DAY_MS);
-  const untilRace = event.eventDate.getTime() - now.getTime();
-  const race: ReminderOption =
-    untilRace <= DAY_MS
+  const untilRace = event.eventStartAt ? event.eventStartAt.getTime() - now.getTime() : 0;
+  const raceTarget = event.eventStartAt
+    ? new Date(chinaNineOnDate(event.eventStartAt).getTime() - 7 * DAY_MS)
+    : null;
+  const race: ReminderOption = !event.eventStartAt
+    ? { type: 'race_week', available: false, reason: '开赛时间待官方核实' }
+    : untilRace <= DAY_MS
       ? { type: 'race_week', available: false, reason: '距离比赛不足 24 小时' }
       : {
           type: 'race_week',
           available: true,
           trigger: 'race_week_7d',
-          scheduledAt: raceTarget < now ? now : raceTarget,
+          scheduledAt: raceTarget! < now ? now : raceTarget,
         };
   return [signup, race];
 }
@@ -88,7 +102,9 @@ export async function reminderOptionsForEvent(eventId: string, now = new Date())
     select: {
       id: true,
       eventDate: true,
+      eventStartAt: true,
       signupStatus: true,
+      signupStartAt: true,
       signupDeadline: true,
       publishStatus: true,
       infoStatus: true,
@@ -157,6 +173,108 @@ export async function subscribeReminders(input: {
 export async function getReminderStats() {
   const grouped = await prisma.eventReminder.groupBy({ by: ['status'], _count: { _all: true } });
   return Object.fromEntries(grouped.map((row) => [row.status, row._count._all]));
+}
+
+export async function getReminderReadiness(now = new Date()) {
+  const [events, grouped, latestRun] = await Promise.all([
+    prisma.event.findMany({
+      where: { publishStatus: 'published', eventDate: { gte: now } },
+      select: {
+        id: true,
+        eventDate: true,
+        eventStartAt: true,
+        signupStatus: true,
+        signupStartAt: true,
+        signupDeadline: true,
+        publishStatus: true,
+        infoStatus: true,
+        sourceLevel: true,
+        changeAlerts: { where: { status: 'open' }, take: 1, select: { id: true } },
+      },
+      take: 200,
+    }),
+    prisma.eventReminder.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.reminderDeliveryRun.findFirst({ orderBy: { startedAt: 'desc' } }),
+  ]);
+  const options = events.map((event) => buildReminderOptions(event, now));
+  return {
+    configured: Boolean(
+      process.env.WX_SIGNUP_REMINDER_TEMPLATE_ID &&
+      process.env.WX_RACE_REMINDER_TEMPLATE_ID &&
+      process.env.WX_SIGNUP_REMINDER_EVENT_FIELD &&
+      process.env.WX_SIGNUP_REMINDER_NOTICE_FIELD &&
+      process.env.WX_SIGNUP_REMINDER_DATE_FIELD &&
+      process.env.WX_RACE_REMINDER_EVENT_FIELD &&
+      process.env.WX_RACE_REMINDER_NOTICE_FIELD &&
+      process.env.WX_RACE_REMINDER_DATE_FIELD,
+    ),
+    enabled: process.env.REMINDER_FEATURE_ENABLED === 'true',
+    miniprogramState: process.env.WX_MINIPROGRAM_STATE || 'formal',
+    eligibleEvents: options.filter((items) => items.some((item) => item.available)).length,
+    signupEligibleEvents: options.filter(
+      (items) => items.find((item) => item.type === 'signup')?.available,
+    ).length,
+    raceEligibleEvents: options.filter(
+      (items) => items.find((item) => item.type === 'race_week')?.available,
+    ).length,
+    missingEventStartAt: events.filter((event) => !event.eventStartAt).length,
+    missingSignupTime: events.filter(
+      (event) =>
+        (event.signupStatus === 'not_started' && !event.signupStartAt) ||
+        (['signup_open', 'closing_soon'].includes(event.signupStatus) && !event.signupDeadline),
+    ).length,
+    statuses: Object.fromEntries(grouped.map((row) => [row.status, row._count._all])),
+    latestRun,
+  };
+}
+
+export async function listAdminReminders(input: {
+  page: number;
+  pageSize: number;
+  status?: string;
+  reminderType?: string;
+  search?: string;
+}) {
+  const where = {
+    ...(input.status ? { status: input.status as EventReminderStatus } : {}),
+    ...(input.reminderType ? { reminderType: input.reminderType as EventReminderType } : {}),
+    ...(input.search
+      ? { event: { eventName: { contains: input.search, mode: 'insensitive' as const } } }
+      : {}),
+  };
+  const [items, total] = await Promise.all([
+    prisma.eventReminder.findMany({
+      where,
+      select: {
+        id: true,
+        eventId: true,
+        reminderType: true,
+        trigger: true,
+        status: true,
+        scheduledAt: true,
+        sentAt: true,
+        attempts: true,
+        lastErrorCode: true,
+        createdAt: true,
+        updatedAt: true,
+        event: {
+          select: {
+            eventName: true,
+            city: true,
+            eventDate: true,
+            eventStartAt: true,
+            infoStatus: true,
+            publishStatus: true,
+          },
+        },
+      },
+      orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
+      skip: (input.page - 1) * input.pageSize,
+      take: input.pageSize,
+    }),
+    prisma.eventReminder.count({ where }),
+  ]);
+  return { items, total, page: input.page, pageSize: input.pageSize };
 }
 
 export async function refreshPendingReminderSchedules(now = new Date()) {

@@ -227,6 +227,18 @@ export async function persistEventCandidates(
                 }
                 summary.changeAlertsExisting += 1;
               }
+              await store.eventReminder.updateMany({
+                where: {
+                  eventId: event.id,
+                  status: { in: ['pending', 'sending'] },
+                },
+                data: {
+                  status: 'review_required',
+                  lockedAt: null,
+                  lockToken: null,
+                  lastErrorCode: 'event_change_alert_open',
+                },
+              });
             }
           }
         }

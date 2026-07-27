@@ -10,6 +10,9 @@ export type GrowthAction =
   | 'addedFavorite'
   | 'setChoice'
   | 'startedShare'
+  | 'viewedReminder'
+  | 'requestedReminderPermission'
+  | 'acceptedReminderPermission'
   | 'subscribedReminder';
 
 export function activityDate(now = new Date()) {
@@ -131,6 +134,9 @@ export async function getGrowthStats(days: 7 | 30, now = new Date()) {
   const favoriteUsers = unique((row) => row.addedFavorite);
   const choiceUsers = unique((row) => row.setChoice);
   const shareUsers = unique((row) => row.startedShare);
+  const reminderViewUsers = unique((row) => row.viewedReminder);
+  const reminderRequestUsers = unique((row) => row.requestedReminderPermission);
+  const reminderAcceptUsers = unique((row) => row.acceptedReminderPermission);
   const reminderUsers = unique((row) => row.subscribedReminder);
   return {
     days,
@@ -170,6 +176,15 @@ export async function getGrowthStats(days: 7 | 30, now = new Date()) {
       referralToDetailRate: referralVisitors
         ? Number(((referralDetailUsers / referralVisitors) * 100).toFixed(1))
         : 0,
+    },
+    reminderFunnel: {
+      viewed: reminderViewUsers,
+      requested: reminderRequestUsers,
+      accepted: reminderAcceptUsers,
+      subscribed: reminderUsers,
+      viewToRequestRate: rate(reminderRequestUsers, reminderViewUsers),
+      requestToAcceptRate: rate(reminderAcceptUsers, reminderRequestUsers),
+      acceptToSubscribeRate: rate(reminderUsers, reminderAcceptUsers),
     },
   };
 }

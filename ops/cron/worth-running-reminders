@@ -1,0 +1,3 @@
+# Install only after the 48-hour trial observation and live preflight pass.
+# Keeps the reminder sender outside PM2 and away from the event-source schedule.
+7,22,37,52 * * * * root flock -n /var/lock/worth-running-reminder.lock sh -c 'cd /opt/worth-running && set -a && . ./.env && set +a && node --max-old-space-size=96 apps/api/dist/apps/api/src/reminderDeliveryCli.js --apply >> /var/log/worth-running-reminder.log 2>&1'
