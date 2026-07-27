@@ -2,9 +2,9 @@
 
 const crypto = require('node:crypto');
 const Busboy = require('busboy');
+const { detectImageMime } = require('./imageMime');
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
-const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 function response(statusCode, body) {
   return {
@@ -83,23 +83,19 @@ function parseMultipart(event) {
   });
 }
 
-function matchesMime(buffer, mimeType) {
-  if (mimeType === 'image/jpeg') return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  if (mimeType === 'image/png') return buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  if (mimeType === 'image/webp') return buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP';
-  return false;
-}
-
 async function upload(event) {
   const { fields, file } = await parseMultipart(event);
   if (!fields.grantId || !fields.token) throw Object.assign(new Error('缺少上传凭证'), { statusCode: 400 });
-  if (!ALLOWED_MIME.has(file.mimeType)) throw Object.assign(new Error('仅支持 JPEG、PNG 或 WebP'), { statusCode: 400 });
-  if (!matchesMime(file.buffer, file.mimeType)) throw Object.assign(new Error('图片文件格式异常'), { statusCode: 400 });
+  // wx.uploadFile can label chooseAvatar temp files as application/octet-stream.
+  // Trust the actual magic bytes instead of the multipart metadata, then store
+  // the object with the detected extension.
+  const mimeType = detectImageMime(file.buffer);
+  if (!mimeType) throw Object.assign(new Error('仅支持 JPEG、PNG 或 WebP'), { statusCode: 400 });
   const grant = await callMainApi('/api/internal/avatar-upload/authorize', {
     grantId: fields.grantId,
     token: fields.token,
   });
-  const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[file.mimeType];
+  const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[mimeType];
   const uploaded = await uniCloud.uploadFile({
     cloudPath: `${grant.objectPath}.${extension}`,
     fileContent: file.buffer,

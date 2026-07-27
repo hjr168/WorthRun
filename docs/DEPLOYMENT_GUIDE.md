@@ -56,6 +56,8 @@ pnpm --filter @worth-running/api build
 pnpm --filter @worth-running/api start
 ```
 
+生产启动命令和 PM2 配置都会从仓库根目录的 `.env` 加载运行时变量；不要只在临时 shell 中 `export` 密钥。更新 `.env` 后需使用 `--update-env` 重载 PM2，并通过后台系统健康接口确认头像等依赖已配置。
+
 不足 1GB 运行内存的服务器使用仓库根目录 `ecosystem.config.cjs` 启动 API。赛事源自动运行不增加第二个 PM2 进程，而由系统 cron 启动一次性任务：
 
 ```bash
