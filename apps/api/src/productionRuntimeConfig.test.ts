@@ -6,6 +6,7 @@ type EcosystemConfig = {
     name: string;
     cwd?: string;
     node_args?: string;
+    env_production?: Record<string, string>;
   }>;
 };
 
@@ -18,5 +19,6 @@ describe('production runtime config', () => {
 
     expect(api?.cwd).toBeTruthy();
     expect(api?.node_args?.split(/\s+/)).toContain('--env-file=.env');
+    expect(api?.env_production?.APP_RELEASE).toBeUndefined();
   });
 });
