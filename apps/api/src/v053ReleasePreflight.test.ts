@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   evaluateV053Environment,
+  evaluateReminderRuntimeConfig,
   evaluateV053WechatTemplates,
 } from './v053ReleasePreflight.js';
 
@@ -81,6 +82,14 @@ describe('V0.5.3 release preflight', () => {
     );
     expect(checks.find((item) => item.id === 'reminder_feature')?.status).toBe('pass');
     expect(checks.find((item) => item.id === 'miniprogram_state')?.status).toBe('pass');
+  });
+
+  it('blocks a stale runtime reminder configuration', () => {
+    const checks = evaluateReminderRuntimeConfig(
+      { ...readyEnv, WX_RACE_REMINDER_TEMPLATE_ID: 'stale-template' },
+      readyEnv,
+    );
+    expect(checks.find((item) => item.id === 'runtime_config_match')?.status).toBe('blocker');
   });
 
   it('blocks reminder template ids that do not exist in the current mini program', () => {

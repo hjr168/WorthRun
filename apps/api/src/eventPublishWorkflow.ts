@@ -1,4 +1,5 @@
 import { Prisma, prisma } from '@worth-running/database';
+import { normalizeGreaterBayAreaCity } from '@worth-running/shared';
 import { publishBoundaryError } from './dataPolicy.js';
 import { hasOfficialEvidence } from './sourceAuthority.js';
 
@@ -22,6 +23,107 @@ export interface PublishWorkflowEvent {
   judgementReasons?: string[];
   updatedAt: Date;
   checklistItems?: unknown[];
+}
+
+type DuplicateComparableEvent = Pick<
+  PublishWorkflowEvent,
+  'id' | 'eventName' | 'city' | 'eventDate' | 'distanceItems' | 'officialUrl' | 'sourceUrl'
+>;
+
+const traditionalNameCharacters: Record<string, string> = {
+  銀: '银',
+  娛: '娱',
+  樂: '乐',
+  門: '门',
+  國: '国',
+  際: '际',
+  馬: '马',
+  賽: '赛',
+  廣: '广',
+  東: '东',
+  灣: '湾',
+};
+
+function normalizedEventName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(
+      /[銀娛樂門國際馬賽廣東灣]/g,
+      (character) => traditionalNameCharacters[character] || character,
+    )
+    .replace(/\b20\d{2}\b/g, '')
+    .replace(/[\s·•\-—_（）()]/g, '');
+}
+
+function normalizedDistance(value: string) {
+  if (/半|half/i.test(value)) return 'half';
+  if (/全|42|marathon|马拉松|馬拉松/i.test(value)) return 'marathon';
+  if (/10/.test(value)) return '10k';
+  if (/5/.test(value)) return '5k';
+  return value.trim().toLowerCase();
+}
+
+function eventDateOnly(value: Date | string) {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
+}
+
+function normalizedEvidenceUrl(value: string | null | undefined) {
+  if (!value) return '';
+  try {
+    const url = new URL(value);
+    return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return value.trim().toLowerCase().replace(/\/+$/, '');
+  }
+}
+
+export function arePotentialDuplicateEvents(
+  left: DuplicateComparableEvent,
+  right: DuplicateComparableEvent,
+) {
+  if (left.id && right.id && left.id === right.id) return false;
+  if (
+    normalizeGreaterBayAreaCity(left.city) !== normalizeGreaterBayAreaCity(right.city) ||
+    eventDateOnly(left.eventDate) !== eventDateOnly(right.eventDate)
+  ) {
+    return false;
+  }
+  const rightDistances = new Set(right.distanceItems.map(normalizedDistance));
+  if (!left.distanceItems.some((item) => rightDistances.has(normalizedDistance(item))))
+    return false;
+  const sameName = normalizedEventName(left.eventName) === normalizedEventName(right.eventName);
+  const leftUrls = new Set(
+    [left.officialUrl, left.sourceUrl].map(normalizedEvidenceUrl).filter(Boolean),
+  );
+  const sameEvidence = [right.officialUrl, right.sourceUrl]
+    .map(normalizedEvidenceUrl)
+    .filter(Boolean)
+    .some((url) => leftUrls.has(url));
+  return sameName || sameEvidence;
+}
+
+export async function findPublishedEventDuplicates(
+  event: DuplicateComparableEvent,
+  store: typeof prisma | Prisma.TransactionClient = prisma,
+) {
+  const eventDate = new Date(`${eventDateOnly(event.eventDate)}T00:00:00.000Z`);
+  const possible = await store.event.findMany({
+    where: {
+      publishStatus: 'published',
+      eventDate,
+      ...(event.id ? { id: { not: event.id } } : {}),
+    },
+    select: {
+      id: true,
+      eventName: true,
+      city: true,
+      eventDate: true,
+      distanceItems: true,
+      officialUrl: true,
+      sourceUrl: true,
+    },
+  });
+  return possible.filter((item) => arePotentialDuplicateEvents(event, item));
 }
 
 export function eventPublishIssues(event: PublishWorkflowEvent, now = new Date()) {
@@ -70,20 +172,24 @@ export async function previewBulkPublish(eventIds: string[], now = new Date()) {
     include: { checklistItems: { orderBy: { sortOrder: 'asc' } } },
   });
   const byId = new Map(events.map((event) => [event.id, event]));
-  return ids.map((id) => {
-    const event = byId.get(id);
-    if (!event)
-      return { id, eventName: '', ready: false, issues: ['event_not_found'], updatedAt: null };
-    const issues = eventPublishIssues(event, now);
-    if (event.publishStatus !== 'draft') issues.push('event_not_draft');
-    return {
-      id,
-      eventName: event.eventName,
-      ready: issues.length === 0,
-      issues,
-      updatedAt: event.updatedAt.toISOString(),
-    };
-  });
+  return Promise.all(
+    ids.map(async (id) => {
+      const event = byId.get(id);
+      if (!event)
+        return { id, eventName: '', ready: false, issues: ['event_not_found'], updatedAt: null };
+      const issues = eventPublishIssues(event, now);
+      if (event.publishStatus !== 'draft') issues.push('event_not_draft');
+      if ((await findPublishedEventDuplicates(event)).length)
+        issues.push('duplicate_published_event');
+      return {
+        id,
+        eventName: event.eventName,
+        ready: issues.length === 0,
+        issues,
+        updatedAt: event.updatedAt.toISOString(),
+      };
+    }),
+  );
 }
 
 export async function runBulkPublish(input: {
@@ -121,6 +227,9 @@ export async function runBulkPublish(input: {
         }
         const issues = eventPublishIssues(before, now);
         if (before.publishStatus !== 'draft') issues.push('event_not_draft');
+        if ((await findPublishedEventDuplicates(before, tx)).length) {
+          issues.push('duplicate_published_event');
+        }
         if (issues.length) throw new Error(issues.join(','));
         const updated = await tx.event.update({
           where: { id: before.id },

@@ -1,6 +1,7 @@
 import { Prisma, prisma } from '@worth-running/database';
 import { publishBoundaryError } from './dataPolicy.js';
-import { buildReminderOptions } from './reminderWorkflow.js';
+import { arePotentialDuplicateEvents } from './eventPublishWorkflow.js';
+import { buildReminderOptions, reminderIssueCodes } from './reminderWorkflow.js';
 
 type VerificationSummary = { status: string; staleAt: Date | null };
 type VerificationAlert = { id: string };
@@ -249,22 +250,49 @@ export async function getEventVerificationPage(input: {
     orderBy: [{ eventDate: 'asc' }, { updatedAt: 'desc' }],
     take: 200,
   });
+  const duplicateCandidates = new Map(
+    events.map((event) => [
+      event.id,
+      events.filter((item) => arePotentialDuplicateEvents(event, item)),
+    ]),
+  );
+  const score = (event: (typeof events)[number]) =>
+    (event.sourceLevel === 'official' ? 20 : event.sourceLevel === 'trusted' ? 10 : 0) +
+    (event.eventStartAt ? 4 : 0) +
+    (event.signupStartAt ? 2 : 0) +
+    (event.signupDeadline ? 2 : 0) +
+    (event.sourceSummaries.length ? 3 : 0);
   const classified = events.map((event) => {
     const issues = eventVerificationIssues(event);
+    const duplicates = duplicateCandidates.get(event.id) || [];
+    if (duplicates.length) issues.push('duplicate_published_event');
+    const group = [event, ...duplicates].sort(
+      (left, right) => score(right) - score(left) || left.id.localeCompare(right.id),
+    );
+    const reminderOptions = buildReminderOptions(event);
     return {
       ...event,
       issues,
       ready: issues.length === 0,
+      availableReminderTypes: reminderOptions
+        .filter((option) => option.available)
+        .map((option) => option.type),
+      reminderIssues: reminderIssueCodes(event),
+      duplicatePublishedWith: duplicates.map((item) => ({
+        id: item.id,
+        eventName: item.eventName,
+      })),
+      suggestedPrimaryId: duplicates.length ? group[0].id : null,
       reminderEligible:
         event.infoStatus === 'verified' &&
         issues.length === 0 &&
-        buildReminderOptions(event).some((option) => option.available),
+        reminderOptions.some((option) => option.available),
     };
   });
   const actionable = classified.filter(
     (event) => event.infoStatus !== 'verified' || event.issues.length > 0,
   );
-  const baseRows = input.reminderEligible === true ? classified : actionable;
+  const baseRows = input.reminderEligible === undefined ? actionable : classified;
   const issueFiltered = input.issue
     ? baseRows.filter((event) => event.issues.includes(input.issue!))
     : baseRows;
@@ -291,6 +319,12 @@ export async function getEventVerificationSummary() {
     event,
     issues: eventVerificationIssues(event),
   }));
+  const duplicatePairs = new Set<string>();
+  for (const event of events) {
+    for (const duplicate of events.filter((item) => arePotentialDuplicateEvents(event, item))) {
+      duplicatePairs.add([event.id, duplicate.id].sort().join('|'));
+    }
+  }
   const actionable = rows.filter(
     ({ event, issues }) => event.infoStatus !== 'verified' || issues.length > 0,
   );
@@ -307,5 +341,6 @@ export async function getEventVerificationSummary() {
         issues.length === 0 &&
         buildReminderOptions(event).some((option) => option.available),
     ).length,
+    duplicatePublishedGroups: duplicatePairs.size,
   };
 }

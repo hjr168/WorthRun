@@ -38,7 +38,7 @@
 - API 保持 `HOST=127.0.0.1`，仅由单层 Nginx 反向代理公开；Nginx 必须传递 `X-Forwarded-For` 与 `X-Forwarded-Proto`，不要把 API 端口直接暴露到公网。
 - 每日执行一次 `pnpm feedback:maintenance`，清理过期反馈指纹、48 小时以前的限流摘要、90 天以前的拦截聚合和 30 天以前的 5xx 聚合。该任务不会删除反馈正文或操作日志，Node heap 上限为 96MB。
 - V0.5.3 沿用上述维护任务清理过期头像凭证和分享 token，不增加维护 cron。提醒发送使用 `pnpm reminder:send-due`的一次性任务，Node heap 上限 96MB，不加入 PM2。
-- V0.5.4 提醒灰度：体验版先保持 `REMINDER_FEATURE_ENABLED=false`、`WX_MINIPROGRAM_STATE=trial`，通过 `pnpm reminder:test-send -- --user-id <id> --event-id <id> --type signup|race_week --apply`（强制 trial）做真实发送；连续观察 48 小时无异常后，再设 `WX_MINIPROGRAM_STATE=formal`、`REMINDER_FEATURE_ENABLED=true` 并通过 `--update-env` 重载 PM2。灰度顺序见 `docs/V0.5.4_REMINDER_ROLLOUT.md`。
+- V0.5.4 提醒灰度：体验版先保持 `REMINDER_FEATURE_ENABLED=false`、`WX_MINIPROGRAM_STATE=trial`，通过 `pnpm reminder:test-send -- --user-id <id> --event-id <id> --type signup|race_week --apply`（强制 trial）做真实发送；连续观察 48 小时无异常后，再设 `WX_MINIPROGRAM_STATE=formal`、`REMINDER_FEATURE_ENABLED=true` 并通过清洁环境启动脚本重载 PM2。灰度顺序见 `docs/V0.5.4_REMINDER_ROLLOUT.md`。
 - V0.5.4 提醒 cron 仅在体验版观察 48 小时并 `pnpm release:preflight-v0.5.3 -- --phase=reminders --mode=live` 通过后才安装：将 `ops/cron/worth-running-reminders`（`7,22,37,52 * * * *`，flock 锁，heap 96MB）加入 crontab，日志 `/var/log/worth-running-reminder.log` 已由 `ops/logrotate/worth-running` 纳入。回退时只设 `REMINDER_FEATURE_ENABLED=false` 并移除 cron，不删除提醒或发送运行记录，不重置 `sent`。
 - V0.5.4 赛事核验：后台“赛事核验”入口用于人工核验已发布赛事，核验只接受未来大湾区、官方或可信来源、来源摘要已发布且未过期、无开放变更告警的赛事；关键字段变化会自动降级。提醒订阅要求核验通过且有真实开赛/报名时间，因此部署后需先完成至少 8 场人工核验（含真实 `eventStartAt` 与报名时间）再灰度提醒。
 - Nginx 使用仓库 `ops/nginx/worth-running.conf`；仅 `/api/feedback` 使用 16KB 请求体上限和每 IP 每分钟 6 次、burst 3 的限流，其他公开和后台接口不受影响。
@@ -59,7 +59,7 @@ pnpm --filter @worth-running/api build
 pnpm --filter @worth-running/api start
 ```
 
-生产启动命令和 PM2 配置都会从仓库根目录的 `.env` 加载运行时变量；不要只在临时 shell 中 `export` 密钥。更新 `.env` 后需使用 `--update-env` 重载 PM2，并通过后台系统健康接口确认头像等依赖已配置。
+生产 API 统一由 `ops/start-api-clean-env.sh` 启动。脚本会清空 PM2 daemon 继承的历史变量，再从仓库根目录 `.env` 加载运行配置；不要只在临时 shell 中 `export` 密钥。更新 `.env` 后重新执行 PM2 `startOrReload`，并在后台“增长与提醒”确认运行配置一致。
 
 不足 1GB 运行内存的服务器使用仓库根目录 `ecosystem.config.cjs` 启动 API。赛事源自动运行不增加第二个 PM2 进程，而由系统 cron 启动一次性任务：
 

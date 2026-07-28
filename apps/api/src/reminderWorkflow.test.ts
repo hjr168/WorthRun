@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildReminderOptions, canReactivateReminder } from './reminderWorkflow.js';
+import {
+  buildReminderOptions,
+  canReactivateReminder,
+  reminderIssueCodes,
+} from './reminderWorkflow.js';
 
 const event = {
   id: 'event-1',
@@ -55,6 +59,18 @@ describe('reminder options', () => {
         expect.objectContaining({ type: 'race_week', available: false }),
       ]),
     );
+  });
+
+  it('returns stable operation issue codes for missing verified times', () => {
+    expect(
+      reminderIssueCodes({
+        ...event,
+        signupStatus: 'signup_open',
+        signupStartAt: null,
+        signupDeadline: null,
+        eventStartAt: null,
+      }),
+    ).toEqual(['missing_signup_deadline', 'missing_event_start_at']);
   });
 
   it('never reactivates a reminder that was already sent', () => {

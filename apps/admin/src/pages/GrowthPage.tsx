@@ -2,7 +2,23 @@ import { Alert, Button, Card, Input, Segmented, Select, Space, Statistic, Table,
 import { ReloadOutlined } from '@ant-design/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet } from '../api';
-import type { AdminReminderItem, GrowthStats, ReminderReadiness, SystemHealth } from '../types';
+import type {
+  AdminReminderItem,
+  GrowthStats,
+  ReminderDeliveryRunItem,
+  ReminderReadiness,
+  SystemHealth,
+} from '../types';
+
+const reminderBlockerLabels: Record<string, string> = {
+  reminder_config_incomplete: '提醒模板配置不完整',
+  runtime_config_mismatch: '运行配置与服务器文件不一致',
+  unicloud_expiring: 'UniCloud 空间有效期不足 30 天',
+  formal_state_required: '正式提醒必须使用 formal 环境',
+  reminder_cron_stale: '提醒任务超过 30 分钟未运行',
+  overdue_pending: '存在逾期待发送提醒',
+  recent_delivery_failure: '近 24 小时存在发送失败',
+};
 
 export function GrowthPage() {
   const [days, setDays] = useState<7 | 30>(7);
@@ -11,6 +27,7 @@ export function GrowthPage() {
   const [systemHealth, setSystemHealth] = useState<SystemHealth>();
   const [readiness, setReadiness] = useState<ReminderReadiness>();
   const [reminderItems, setReminderItems] = useState<AdminReminderItem[]>([]);
+  const [deliveryRuns, setDeliveryRuns] = useState<ReminderDeliveryRunItem[]>([]);
   const [reminderStatus, setReminderStatus] = useState('');
   const [reminderType, setReminderType] = useState('');
   const [reminderSearch, setReminderSearch] = useState('');
@@ -25,18 +42,25 @@ export function GrowthPage() {
       if (reminderStatus) reminderParams.set('status', reminderStatus);
       if (reminderType) reminderParams.set('reminderType', reminderType);
       if (reminderSearch.trim()) reminderParams.set('search', reminderSearch.trim());
-      const [growth, reminderStats, health, readinessResult, reminderList] = await Promise.all([
-        apiGet<GrowthStats>(`/api/admin/growth-stats?days=${days}`),
-        apiGet<Record<string, number>>('/api/admin/reminder-stats'),
-        apiGet<SystemHealth>('/api/admin/system-health'),
-        apiGet<ReminderReadiness>('/api/admin/reminder-readiness'),
-        apiGet<{ items: AdminReminderItem[] }>(`/api/admin/reminders?${reminderParams.toString()}`),
-      ]);
+      const [growth, reminderStats, health, readinessResult, reminderList, runList] =
+        await Promise.all([
+          apiGet<GrowthStats>(`/api/admin/growth-stats?days=${days}`),
+          apiGet<Record<string, number>>('/api/admin/reminder-stats'),
+          apiGet<SystemHealth>('/api/admin/system-health'),
+          apiGet<ReminderReadiness>('/api/admin/reminder-readiness'),
+          apiGet<{ items: AdminReminderItem[] }>(
+            `/api/admin/reminders?${reminderParams.toString()}`,
+          ),
+          apiGet<{ items: ReminderDeliveryRunItem[] }>(
+            '/api/admin/reminder-runs?page=1&pageSize=20',
+          ),
+        ]);
       setData(growth);
       setReminders(reminderStats);
       setSystemHealth(health);
       setReadiness(readinessResult);
       setReminderItems(reminderList.items);
+      setDeliveryRuns(runList.items);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '增长数据加载失败');
     } finally {
@@ -76,6 +100,17 @@ export function GrowthPage() {
           />
         )}
       {error && <Alert type="error" showIcon message={error} />}
+      {readiness && readiness.blockers.length > 0 && (
+        <Alert
+          style={{ marginTop: 16 }}
+          type={readiness.healthStatus === 'blocked' ? 'error' : 'warning'}
+          showIcon
+          message="提醒正式上线条件尚未满足"
+          description={readiness.blockers
+            .map((value) => reminderBlockerLabels[value] || value)
+            .join('；')}
+        />
+      )}
       <div className="stat-grid growth-summary">
         <Card>
           <Statistic title="活跃用户" value={data?.activeUsers ?? 0} />
@@ -176,6 +211,28 @@ export function GrowthPage() {
         </Card>
         <Card>
           <Statistic title="缺少开赛时间" value={readiness?.missingEventStartAt ?? 0} />
+        </Card>
+        <Card>
+          <Statistic title="逾期待发送" value={readiness?.overduePending ?? 0} />
+        </Card>
+        <Card>
+          <Statistic
+            title="最近任务"
+            value={
+              readiness?.latestRunAgeMinutes === null ||
+              readiness?.latestRunAgeMinutes === undefined
+                ? '-'
+                : readiness.latestRunAgeMinutes
+            }
+            suffix={readiness?.latestRunAgeMinutes == null ? undefined : '分钟前'}
+          />
+        </Card>
+        <Card>
+          <Statistic
+            title="云空间有效期"
+            value={readiness?.cloudDaysRemaining ?? '-'}
+            suffix={readiness?.cloudDaysRemaining == null ? undefined : '天'}
+          />
         </Card>
         <Card>
           <Statistic title="看到提醒" value={data?.reminderFunnel.viewed ?? 0} />
@@ -286,6 +343,39 @@ export function GrowthPage() {
             width: 220,
             render: (value) => value || '-',
           },
+        ]}
+      />
+      <h2 className="section-title">任务运行记录</h2>
+      <Table<ReminderDeliveryRunItem>
+        rowKey="id"
+        size="small"
+        dataSource={deliveryRuns}
+        pagination={false}
+        scroll={{ x: 980 }}
+        columns={[
+          { title: '开始时间', dataIndex: 'startedAt', width: 190 },
+          { title: '模式', dataIndex: 'mode', width: 100 },
+          {
+            title: '结果',
+            dataIndex: 'status',
+            width: 110,
+            render: (value) => (
+              <Tag color={value === 'succeeded' ? 'green' : value === 'failed' ? 'red' : 'orange'}>
+                {value}
+              </Tag>
+            ),
+          },
+          { title: '到期', dataIndex: 'dueCount', width: 80 },
+          { title: '发送', dataIndex: 'sentCount', width: 80 },
+          { title: '失败', dataIndex: 'failedCount', width: 80 },
+          { title: '跳过', dataIndex: 'skippedCount', width: 80 },
+          {
+            title: '错误类别',
+            dataIndex: 'errorCategory',
+            width: 220,
+            render: (value) => value || '-',
+          },
+          { title: '版本', dataIndex: 'release', width: 130, render: (value) => value || '-' },
         ]}
       />
     </main>

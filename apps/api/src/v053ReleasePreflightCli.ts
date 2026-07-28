@@ -6,6 +6,7 @@ import {
   evaluateV053Environment,
   evaluateV053Repository,
   evaluateV053WechatTemplates,
+  evaluateReminderRuntimeConfig,
   fetchV053WechatTemplates,
   type PreflightCheck,
   type PreflightMode,
@@ -32,6 +33,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const checks: PreflightCheck[] = [
   ...evaluateV053Environment(process.env, phase, mode),
   ...evaluateV053Repository({ repoRoot, env: process.env, phase }),
+  ...(phase === 'reminders' ? evaluateReminderRuntimeConfig(process.env) : []),
 ];
 
 try {
@@ -39,7 +41,7 @@ try {
     const templates = await fetchV053WechatTemplates(process.env);
     checks.push(...evaluateV053WechatTemplates(process.env, templates));
   }
-  if (!skipDatabase) checks.push(...(await evaluateV053Database(phase)));
+  if (!skipDatabase) checks.push(...(await evaluateV053Database(phase, mode)));
 } catch (error) {
   checks.push({
     id: phase === 'reminders' ? 'external_readiness' : 'database_connection',

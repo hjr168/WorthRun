@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { prisma } from '@worth-running/database';
+import {
+  cloudDaysRemaining,
+  readRuntimeEnvFile,
+  reminderRuntimeConfigMatched,
+} from './reminderRuntimeConfig.js';
 
 export type PreflightPhase = 'foundation' | 'users' | 'reminders';
 export type PreflightMode = 'ready' | 'live';
@@ -173,6 +178,24 @@ export function evaluateV053Environment(
   return checks;
 }
 
+export function evaluateReminderRuntimeConfig(
+  env: NodeJS.ProcessEnv,
+  fileEnv: Record<string, string | undefined> | null = readRuntimeEnvFile(),
+): PreflightCheck[] {
+  return [
+    check(
+      'runtime_config_match',
+      reminderRuntimeConfigMatched(env, fileEnv),
+      '当前进程的提醒配置必须与服务器 .env 一致',
+    ),
+    check(
+      'unicloud_remaining_days',
+      (cloudDaysRemaining(env.UNICLOUD_SPACE_EXPIRES_AT) ?? -1) >= 30,
+      'UniCloud 空间有效期必须至少剩余 30 天',
+    ),
+  ];
+}
+
 function fileText(repoRoot: string, path: string) {
   return readFileSync(resolve(repoRoot, path), 'utf8');
 }
@@ -256,7 +279,9 @@ export function evaluateV053WechatTemplates(
   const hasFields = (template: WechatTemplate | undefined, fields: Array<string | undefined>) =>
     Boolean(
       template &&
-        fields.every((field) => field?.trim() && template.content?.includes(`{{${field.trim()}.DATA}}`)),
+      fields.every(
+        (field) => field?.trim() && template.content?.includes(`{{${field.trim()}.DATA}}`),
+      ),
     );
 
   return [
@@ -283,9 +308,7 @@ export function evaluateV053WechatTemplates(
   ];
 }
 
-export async function fetchV053WechatTemplates(
-  env: NodeJS.ProcessEnv,
-): Promise<WechatTemplate[]> {
+export async function fetchV053WechatTemplates(env: NodeJS.ProcessEnv): Promise<WechatTemplate[]> {
   const appid = env.WX_APPID?.trim();
   const secret = env.WX_APPSECRET?.trim();
   if (!appid || !secret) throw new Error('微信 AppID 或 AppSecret 未配置');
@@ -296,7 +319,8 @@ export async function fetchV053WechatTemplates(
     access_token?: string;
     errcode?: number;
   };
-  if (!tokenResult.access_token) throw new Error(`微信 access token 获取失败 ${tokenResult.errcode ?? ''}`);
+  if (!tokenResult.access_token)
+    throw new Error(`微信 access token 获取失败 ${tokenResult.errcode ?? ''}`);
   const templateResponse = await fetch(
     `https://api.weixin.qq.com/wxaapi/newtmpl/gettemplate?access_token=${encodeURIComponent(tokenResult.access_token)}`,
   );
@@ -312,6 +336,7 @@ export async function fetchV053WechatTemplates(
 
 export async function evaluateV053Database(
   phase: PreflightPhase = 'foundation',
+  mode: PreflightMode = 'live',
 ): Promise<PreflightCheck[]> {
   const migrationName = '20260722160000_user_growth_reminders';
   const v054MigrationName = '20260727110000_event_verification_reminders';
@@ -363,18 +388,38 @@ export async function evaluateV053Database(
     ),
   ];
   if (phase === 'reminders') {
-    const eligibleRows = await prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT count(DISTINCT e.id)::bigint AS count
+    const eligibleRows = await prisma.$queryRaw<
+      Array<{ eligible: bigint; signup_eligible: bigint; race_eligible: bigint }>
+    >`
+      SELECT
+        count(DISTINCT e.id) FILTER (
+          WHERE e.event_start_at > now() + interval '24 hours'
+            OR (
+              e.signup_status = 'not_started'
+              AND e.signup_start_at > now()
+            )
+            OR (
+              e.signup_status IN ('signup_open', 'closing_soon')
+              AND e.signup_deadline > now()
+            )
+        )::bigint AS eligible,
+        count(DISTINCT e.id) FILTER (
+          WHERE (
+            e.signup_status = 'not_started'
+            AND e.signup_start_at > now()
+          ) OR (
+            e.signup_status IN ('signup_open', 'closing_soon')
+            AND e.signup_deadline > now()
+          )
+        )::bigint AS signup_eligible,
+        count(DISTINCT e.id) FILTER (
+          WHERE e.event_start_at > now() + interval '24 hours'
+        )::bigint AS race_eligible
       FROM events e
       WHERE e.publish_status = 'published'
         AND e.info_status = 'verified'
         AND e.source_level IN ('official', 'trusted')
         AND e.event_date >= CURRENT_DATE
-        AND (
-          e.event_start_at IS NOT NULL
-          OR e.signup_start_at IS NOT NULL
-          OR e.signup_deadline IS NOT NULL
-        )
         AND EXISTS (
           SELECT 1
           FROM event_source_summaries s
@@ -397,10 +442,25 @@ export async function evaluateV053Database(
       ),
       check(
         'eligible_reminder_event',
-        Number(eligibleRows[0]?.count || 0) > 0,
+        Number(eligibleRows[0]?.eligible || 0) > 0,
         '至少需要一场已核实且具备真实提醒时间的未来赛事',
       ),
+      check(
+        'race_reminder_events',
+        Number(eligibleRows[0]?.race_eligible || 0) >= 2,
+        '至少需要两场具备真实开赛时间的赛前提醒赛事',
+      ),
+      check(
+        'signup_reminder_events',
+        Number(eligibleRows[0]?.signup_eligible || 0) >= 1,
+        '至少需要一场具备有效报名时间的报名提醒赛事',
+      ),
     );
+    if (mode === 'ready') {
+      for (const item of checks.slice(-3)) {
+        if (item.status === 'blocker') item.message = `体验版准备：${item.message}`;
+      }
+    }
   }
   return checks;
 }

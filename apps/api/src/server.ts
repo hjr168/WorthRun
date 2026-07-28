@@ -74,7 +74,16 @@ import {
   candidateAcceptIssues,
 } from './candidateWorkflow.js';
 import { previewBulkAccept, runBulkAccept } from './candidateAcceptWorkflow.js';
-import { eventPublishIssues, previewBulkPublish, runBulkPublish } from './eventPublishWorkflow.js';
+import {
+  eventPublishIssues,
+  findPublishedEventDuplicates,
+  previewBulkPublish,
+  runBulkPublish,
+} from './eventPublishWorkflow.js';
+import {
+  archiveDuplicatePublishedEvent,
+  DuplicateEventGovernanceError,
+} from './duplicateEventGovernance.js';
 import {
   criticalEventFieldsChanged,
   getEventVerificationPage,
@@ -136,6 +145,7 @@ import {
   getReminderReadiness,
   getReminderStats,
   listAdminReminders,
+  listReminderDeliveryRuns,
   reminderOptionsForEvent,
   subscribeReminders,
 } from './reminderWorkflow.js';
@@ -439,11 +449,37 @@ const bulkPublishSchema = z.object({
   expected: z.array(workflowSnapshotSchema).max(20).optional(),
 });
 
-const dataCleanupSchema = z.object({
+const standardDataCleanupSchema = z.object({
   actions: z.array(z.enum(dataCleanupActions)).min(1, '请至少选择一项治理动作'),
   dryRun: z.boolean().default(true),
   expected: z.record(z.enum(dataCleanupActions), z.number().int().min(0)).optional(),
 });
+
+const duplicateRelatedCountsSchema = z.object({
+  favorites: z.number().int().min(0),
+  choices: z.number().int().min(0),
+  reminders: z.number().int().min(0),
+  feedback: z.number().int().min(0),
+  shares: z.number().int().min(0),
+  interactions: z.number().int().min(0),
+  sourceSummaries: z.number().int().min(0),
+});
+
+const duplicateEventCleanupSchema = z.object({
+  action: z.literal('archive_duplicate_published_event'),
+  primaryId: z.string().trim().min(1),
+  duplicateId: z.string().trim().min(1),
+  dryRun: z.boolean().default(true),
+  expected: z
+    .object({
+      primaryUpdatedAt: z.string().datetime(),
+      duplicateUpdatedAt: z.string().datetime(),
+      related: duplicateRelatedCountsSchema,
+    })
+    .optional(),
+});
+
+const dataCleanupSchema = z.union([standardDataCleanupSchema, duplicateEventCleanupSchema]);
 
 const adminUserCreateSchema = z.object({
   username: z.string().trim().min(1, '用户名不能为空').max(50),
@@ -1024,8 +1060,11 @@ function verifyPassword(password: string, storedHash: string) {
   return timingSafeEqual(Buffer.from(candidate), Buffer.from(hash));
 }
 
-function validatePublish(event: Parameters<typeof eventPublishIssues>[0]) {
+async function validatePublish(event: Parameters<typeof eventPublishIssues>[0]) {
   const issues = eventPublishIssues(event);
+  if ((await findPublishedEventDuplicates(event)).length) {
+    issues.push('duplicate_published_event');
+  }
   if (issues.length) throw new HttpError(400, `发布前检查未通过：${issues.join('、')}`);
 }
 
@@ -1755,6 +1794,18 @@ app.get(
 );
 
 app.get(
+  '/api/admin/reminder-runs',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const query = validateQuery(paginationQuerySchema, req.query) as {
+      page: number;
+      pageSize: number;
+    };
+    res.json(await listReminderDeliveryRuns(query));
+  }),
+);
+
+app.get(
   '/api/admin/workflow-stats',
   asyncHandler(async (req, res) => {
     requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
@@ -1801,11 +1852,26 @@ app.post(
       throw new HttpError(403, '只有超级管理员可以应用数据治理');
     }
     try {
+      if ('action' in input) {
+        res.json(
+          await archiveDuplicatePublishedEvent({
+            ...input,
+            dryRun: input.dryRun ?? true,
+            adminUserId: admin.id,
+          }),
+        );
+        return;
+      }
       res.json(
         await runDataCleanup({ ...input, dryRun: input.dryRun ?? true, adminUserId: admin.id }),
       );
     } catch (error) {
-      if (error instanceof DataCleanupConflictError) throw new HttpError(409, error.message);
+      if (
+        error instanceof DataCleanupConflictError ||
+        error instanceof DuplicateEventGovernanceError
+      ) {
+        throw new HttpError(409, error.message);
+      }
       throw error;
     }
   }),
@@ -1979,7 +2045,7 @@ app.post(
       throw new HttpError(400, '请先保存赛事，再通过赛事核验流程标记为已核实');
     }
     if (input.publishStatus === 'published') {
-      validatePublish({
+      await validatePublish({
         ...input,
         sourceUrl: input.sourceUrl as string | null,
         updatedAt: new Date(),
@@ -2039,7 +2105,8 @@ app.put(
     const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
     const input = validateBody(eventSchema, req.body);
     if (input.publishStatus === 'published') {
-      validatePublish({
+      await validatePublish({
+        id: req.params.id,
         ...input,
         sourceUrl: input.sourceUrl as string | null,
         updatedAt: new Date(),
@@ -2130,7 +2197,7 @@ async function changePublishStatus(
     include: { checklistItems: true },
   });
   if (!before) throw new HttpError(404, '赛事不存在');
-  if (status === 'published') validatePublish(before);
+  if (status === 'published') await validatePublish(before);
 
   const updated = await prisma.$transaction(async (tx) => {
     const event = await tx.event.update({

@@ -606,6 +606,10 @@ export interface GrowthStats {
 export interface EventVerificationItem extends AdminEvent {
   ready: boolean;
   reminderEligible: boolean;
+  availableReminderTypes: Array<'signup' | 'race_week'>;
+  reminderIssues: string[];
+  duplicatePublishedWith: Array<{ id: string; eventName: string }>;
+  suggestedPrimaryId?: string | null;
   issues: string[];
 }
 
@@ -616,18 +620,31 @@ export interface EventVerificationSummary {
   staleSummary: number;
   openAlerts: number;
   reminderEligible: number;
+  duplicatePublishedGroups: number;
 }
 
 export interface ReminderReadiness {
   configured: boolean;
   enabled: boolean;
   miniprogramState: string;
+  environment: string;
+  runtimeConfigMatched: boolean;
+  cloudDaysRemaining: number | null;
   eligibleEvents: number;
   signupEligibleEvents: number;
   raceEligibleEvents: number;
+  eligibleByType: {
+    signup: number;
+    race_week: number;
+  };
   missingEventStartAt: number;
   missingSignupTime: number;
   statuses: Record<string, number>;
+  overduePending: number;
+  recentFailures: number;
+  latestRunAgeMinutes: number | null;
+  healthStatus: 'healthy' | 'warning' | 'blocked';
+  blockers: string[];
   latestRun?: {
     id: string;
     status: string;
@@ -659,4 +676,18 @@ export interface AdminReminderItem {
     AdminEvent,
     'eventName' | 'city' | 'eventDate' | 'eventStartAt' | 'infoStatus' | 'publishStatus'
   >;
+}
+
+export interface ReminderDeliveryRunItem {
+  id: string;
+  mode: string;
+  status: string;
+  startedAt: string;
+  finishedAt?: string | null;
+  dueCount: number;
+  sentCount: number;
+  failedCount: number;
+  skippedCount: number;
+  errorCategory?: string | null;
+  release?: string | null;
 }

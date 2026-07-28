@@ -1,4 +1,16 @@
-import { Alert, Button, Card, Input, message, Select, Space, Statistic, Table, Tag } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Input,
+  message,
+  Modal,
+  Select,
+  Space,
+  Statistic,
+  Table,
+  Tag,
+} from 'antd';
 import { CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -17,6 +29,16 @@ const issueLabels: Record<string, string> = {
   source_summary_stale: '来源摘要待复核',
   open_change_alert: '存在变更告警',
   preview_snapshot_changed: '预览后数据已变化',
+  duplicate_published_event: '疑似重复已发布赛事',
+};
+
+const reminderIssueLabels: Record<string, string> = {
+  event_not_reminder_ready: '赛事基础条件未满足',
+  missing_signup_start_at: '缺少报名开始时间',
+  missing_signup_deadline: '缺少报名截止时间',
+  signup_not_active: '报名当前不可提醒',
+  missing_event_start_at: '缺少真实开赛时间',
+  race_less_than_24h: '距离比赛不足 24 小时',
 };
 
 type PreviewItem = {
@@ -28,7 +50,7 @@ type PreviewItem = {
 };
 
 export function EventVerificationPage() {
-  const { can } = useAdmin();
+  const { admin, can } = useAdmin();
   const [summary, setSummary] = useState<EventVerificationSummary>();
   const [items, setItems] = useState<EventVerificationItem[]>([]);
   const [selected, setSelected] = useState<React.Key[]>([]);
@@ -103,6 +125,74 @@ export function EventVerificationPage() {
     }
   };
 
+  const archiveDuplicate = async (item: EventVerificationItem) => {
+    const primaryId = item.suggestedPrimaryId;
+    if (!primaryId || primaryId === item.id) return;
+    try {
+      const preview = await apiSend<{
+        primary: { id: string; eventName: string; updatedAt: string };
+        duplicate: { id: string; eventName: string; updatedAt: string };
+        related: {
+          favorites: number;
+          choices: number;
+          reminders: number;
+          feedback: number;
+          shares: number;
+          interactions: number;
+          sourceSummaries: number;
+        };
+      }>('POST', '/api/admin/data-quality/cleanup', {
+        action: 'archive_duplicate_published_event',
+        primaryId,
+        duplicateId: item.id,
+        dryRun: true,
+      });
+      Modal.confirm({
+        title: '确认归档重复赛事',
+        content: (
+          <Space direction="vertical" size={8}>
+            <div>保留：{preview.primary.eventName}</div>
+            <div>归档：{preview.duplicate.eventName}</div>
+            <div>
+              用户关联：收藏 {preview.related.favorites}、选择 {preview.related.choices}、提醒{' '}
+              {preview.related.reminders}、反馈 {preview.related.feedback}、分享{' '}
+              {preview.related.shares}
+            </div>
+            <div>存在用户关联数据时系统会拒绝归档。</div>
+          </Space>
+        ),
+        okText: '确认归档',
+        okButtonProps: {
+          danger: true,
+          disabled:
+            preview.related.favorites +
+              preview.related.choices +
+              preview.related.reminders +
+              preview.related.feedback +
+              preview.related.shares >
+            0,
+        },
+        onOk: async () => {
+          await apiSend('POST', '/api/admin/data-quality/cleanup', {
+            action: 'archive_duplicate_published_event',
+            primaryId,
+            duplicateId: item.id,
+            dryRun: false,
+            expected: {
+              primaryUpdatedAt: preview.primary.updatedAt,
+              duplicateUpdatedAt: preview.duplicate.updatedAt,
+              related: preview.related,
+            },
+          });
+          message.success('重复赛事已归档并写入操作日志');
+          await load();
+        },
+      });
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '重复赛事预览失败');
+    }
+  };
+
   return (
     <main className="page">
       <div className="page-header">
@@ -133,6 +223,9 @@ export function EventVerificationPage() {
         </Card>
         <Card>
           <Statistic title="可订阅赛事" value={summary?.reminderEligible ?? 0} />
+        </Card>
+        <Card>
+          <Statistic title="疑似重复组" value={summary?.duplicatePublishedGroups ?? 0} />
         </Card>
       </div>
 
@@ -198,11 +291,21 @@ export function EventVerificationPage() {
             },
             {
               title: '提醒资格',
-              width: 110,
+              width: 300,
               render: (_, item) => (
-                <Tag color={item.reminderEligible ? 'green' : undefined}>
-                  {item.reminderEligible ? '可订阅' : '不可订阅'}
-                </Tag>
+                <Space size={[4, 4]} wrap>
+                  {item.availableReminderTypes.map((type) => (
+                    <Tag key={type} color="green">
+                      {type === 'signup' ? '报名提醒' : '赛前提醒'}
+                    </Tag>
+                  ))}
+                  {!item.availableReminderTypes.length &&
+                    item.reminderIssues.map((value) => (
+                      <Tag key={value} color="orange">
+                        {reminderIssueLabels[value] || value}
+                      </Tag>
+                    ))}
+                </Space>
               ),
             },
             {
@@ -219,6 +322,21 @@ export function EventVerificationPage() {
                       </Tag>
                     ))}
                   </Space>
+                ),
+            },
+            {
+              title: '操作',
+              width: 130,
+              fixed: 'right',
+              render: (_, item) =>
+                admin?.role === 'super_admin' &&
+                item.suggestedPrimaryId &&
+                item.suggestedPrimaryId !== item.id ? (
+                  <Button danger size="small" onClick={() => void archiveDuplicate(item)}>
+                    归档重复项
+                  </Button>
+                ) : (
+                  <Link to={`/events/edit/${item.id}`}>查看赛事</Link>
                 ),
             },
           ]}

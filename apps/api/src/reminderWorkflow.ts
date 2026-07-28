@@ -1,6 +1,7 @@
 import { prisma } from '@worth-running/database';
 import type { EventReminderStatus, EventReminderType } from '@worth-running/database';
 import { chinaDateOnly } from '@worth-running/shared';
+import { cloudDaysRemaining, reminderRuntimeConfigMatched } from './reminderRuntimeConfig.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -96,6 +97,27 @@ export function buildReminderOptions(event: ReminderEvent, now = new Date()): Re
   return [signup, race];
 }
 
+export function reminderIssueCodes(event: ReminderEvent, now = new Date()) {
+  const issue = baseIssue(event, now);
+  if (issue) return ['event_not_reminder_ready'];
+  const issues: string[] = [];
+  if (event.signupStatus === 'not_started' && !event.signupStartAt) {
+    issues.push('missing_signup_start_at');
+  } else if (
+    ['signup_open', 'closing_soon'].includes(event.signupStatus) &&
+    !event.signupDeadline
+  ) {
+    issues.push('missing_signup_deadline');
+  } else if (!['not_started', 'signup_open', 'closing_soon'].includes(event.signupStatus)) {
+    issues.push('signup_not_active');
+  }
+  if (!event.eventStartAt) issues.push('missing_event_start_at');
+  else if (event.eventStartAt.getTime() - now.getTime() <= DAY_MS) {
+    issues.push('race_less_than_24h');
+  }
+  return issues;
+}
+
 export async function reminderOptionsForEvent(eventId: string, now = new Date()) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
@@ -176,7 +198,8 @@ export async function getReminderStats() {
 }
 
 export async function getReminderReadiness(now = new Date()) {
-  const [events, grouped, latestRun] = await Promise.all([
+  const recentFailureSince = new Date(now.getTime() - DAY_MS);
+  const [events, grouped, latestRun, overduePending, recentFailures] = await Promise.all([
     prisma.event.findMany({
       where: { publishStatus: 'published', eventDate: { gte: now } },
       select: {
@@ -195,21 +218,51 @@ export async function getReminderReadiness(now = new Date()) {
     }),
     prisma.eventReminder.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.reminderDeliveryRun.findFirst({ orderBy: { startedAt: 'desc' } }),
+    prisma.eventReminder.count({
+      where: { status: 'pending', scheduledAt: { lt: now } },
+    }),
+    prisma.reminderDeliveryRun.count({
+      where: {
+        startedAt: { gte: recentFailureSince },
+        status: { in: ['failed', 'partial'] },
+      },
+    }),
   ]);
   const options = events.map((event) => buildReminderOptions(event, now));
+  const configured = Boolean(
+    process.env.WX_SIGNUP_REMINDER_TEMPLATE_ID &&
+    process.env.WX_RACE_REMINDER_TEMPLATE_ID &&
+    process.env.WX_SIGNUP_REMINDER_EVENT_FIELD &&
+    process.env.WX_SIGNUP_REMINDER_NOTICE_FIELD &&
+    process.env.WX_SIGNUP_REMINDER_DATE_FIELD &&
+    process.env.WX_RACE_REMINDER_EVENT_FIELD &&
+    process.env.WX_RACE_REMINDER_NOTICE_FIELD &&
+    process.env.WX_RACE_REMINDER_DATE_FIELD,
+  );
+  const enabled = process.env.REMINDER_FEATURE_ENABLED === 'true';
+  const miniprogramState = process.env.WX_MINIPROGRAM_STATE || 'formal';
+  const runtimeConfigMatched = reminderRuntimeConfigMatched();
+  const remainingDays = cloudDaysRemaining();
+  const latestRunAgeMinutes = latestRun
+    ? Math.max(0, Math.floor((now.getTime() - latestRun.startedAt.getTime()) / 60_000))
+    : null;
+  const blockers: string[] = [];
+  if (!configured) blockers.push('reminder_config_incomplete');
+  if (!runtimeConfigMatched) blockers.push('runtime_config_mismatch');
+  if (remainingDays === null || remainingDays < 30) blockers.push('unicloud_expiring');
+  if (enabled && miniprogramState !== 'formal') blockers.push('formal_state_required');
+  if (enabled && (latestRunAgeMinutes === null || latestRunAgeMinutes > 30)) {
+    blockers.push('reminder_cron_stale');
+  }
+  if (overduePending > 0) blockers.push('overdue_pending');
+  if (recentFailures > 0) blockers.push('recent_delivery_failure');
   return {
-    configured: Boolean(
-      process.env.WX_SIGNUP_REMINDER_TEMPLATE_ID &&
-      process.env.WX_RACE_REMINDER_TEMPLATE_ID &&
-      process.env.WX_SIGNUP_REMINDER_EVENT_FIELD &&
-      process.env.WX_SIGNUP_REMINDER_NOTICE_FIELD &&
-      process.env.WX_SIGNUP_REMINDER_DATE_FIELD &&
-      process.env.WX_RACE_REMINDER_EVENT_FIELD &&
-      process.env.WX_RACE_REMINDER_NOTICE_FIELD &&
-      process.env.WX_RACE_REMINDER_DATE_FIELD,
-    ),
-    enabled: process.env.REMINDER_FEATURE_ENABLED === 'true',
-    miniprogramState: process.env.WX_MINIPROGRAM_STATE || 'formal',
+    configured,
+    enabled,
+    miniprogramState,
+    environment: miniprogramState,
+    runtimeConfigMatched,
+    cloudDaysRemaining: remainingDays,
     eligibleEvents: options.filter((items) => items.some((item) => item.available)).length,
     signupEligibleEvents: options.filter(
       (items) => items.find((item) => item.type === 'signup')?.available,
@@ -217,6 +270,13 @@ export async function getReminderReadiness(now = new Date()) {
     raceEligibleEvents: options.filter(
       (items) => items.find((item) => item.type === 'race_week')?.available,
     ).length,
+    eligibleByType: {
+      signup: options.filter((items) => items.find((item) => item.type === 'signup')?.available)
+        .length,
+      race_week: options.filter(
+        (items) => items.find((item) => item.type === 'race_week')?.available,
+      ).length,
+    },
     missingEventStartAt: events.filter((event) => !event.eventStartAt).length,
     missingSignupTime: events.filter(
       (event) =>
@@ -224,6 +284,11 @@ export async function getReminderReadiness(now = new Date()) {
         (['signup_open', 'closing_soon'].includes(event.signupStatus) && !event.signupDeadline),
     ).length,
     statuses: Object.fromEntries(grouped.map((row) => [row.status, row._count._all])),
+    overduePending,
+    recentFailures,
+    latestRunAgeMinutes,
+    healthStatus: blockers.length ? (enabled ? 'blocked' : 'warning') : 'healthy',
+    blockers,
     latestRun,
   };
 }
@@ -273,6 +338,18 @@ export async function listAdminReminders(input: {
       take: input.pageSize,
     }),
     prisma.eventReminder.count({ where }),
+  ]);
+  return { items, total, page: input.page, pageSize: input.pageSize };
+}
+
+export async function listReminderDeliveryRuns(input: { page: number; pageSize: number }) {
+  const [items, total] = await Promise.all([
+    prisma.reminderDeliveryRun.findMany({
+      orderBy: { startedAt: 'desc' },
+      skip: (input.page - 1) * input.pageSize,
+      take: input.pageSize,
+    }),
+    prisma.reminderDeliveryRun.count(),
   ]);
   return { items, total, page: input.page, pageSize: input.pageSize };
 }
