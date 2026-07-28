@@ -155,7 +155,8 @@
 - [ ] 禁用用户只可浏览，不可修改资料、收藏、选择、反馈或订阅提醒。
 - [ ] UniCloud 支付宝云函数已部署，JPEG/PNG/WebP、2MB 限制、过期/重放凭证、伪造回调和旧头像删除均通过真机验证。
 - [ ] `worthrun-avatar` 函数详情的“云函数URL化” PATH 为 `/worthrun-avatar`，使用控制台显示的 `dev-hz.cloudbasefunction.cn` 测试域名；公网请求能到达函数。
-- [ ] 支付宝云空间 `env-00jy6bpz3vhc` 已续期，剩余有效期不少于 30 天；当前控制台显示到期时间为 2026-08-26 23:59:59。
+- [ ] 支付宝云空间 `env-00jy6bpz3vhc` 已开启自动续费；记录的到期时间只用于后台提示，
+      不作为发布阻塞项。
 - [ ] UniCloud 云存储权限已设为仅云函数可读写，头像展示只使用短期 URL。
 - [ ] 微信平台已配置 API 与 UniCloud 的 `request` / `uploadFile` / `downloadFile` 合法域名。
 - [ ] 微信 `request` 合法域名包含 `https://run-api.huangjiarong.top`；`uploadFile` 包含 `https://env-00jy6bpz3vhc.dev-hz.cloudbasefunction.cn`；头像下载域名包含 `https://env-00jy6bpz3vhc.normal.cloudstatic.cn`。
@@ -186,7 +187,8 @@
 
 ### 体验版灰度（ready）
 
-- [ ] `REMINDER_FEATURE_ENABLED=false` 保持，`WX_MINIPROGRAM_STATE=trial`，`UNICLOUD_SPACE_EXPIRES_AT` 已更新为续费后准确时间（剩余 >30 天）。
+- [ ] `REMINDER_FEATURE_ENABLED=false` 保持，`WX_MINIPROGRAM_STATE=trial`；
+      UniCloud 自动续费状态已由运营人员确认。
 - [ ] 两个订阅消息模板（报名 `thing9/time2/thing3`、赛前 `thing1/time11/thing5`）已按公众平台实际值配置，`time` 字段统一北京时间 `YYYY-MM-DD HH:mm`。
 - [ ] `pnpm release:preflight-v0.5.3 -- --phase=reminders --mode=ready` 通过，无 `BLOCK`。
 - [ ] 使用 2-3 个体验版账号完成报名与赛前两类真实发送：
@@ -214,7 +216,7 @@
 
 - [ ] 首次迁移已删除旧 PM2 定义后重新创建进程；`pm2 describe` 的脚本路径为
       `ops/start-api-clean-env.sh`，后台显示运行配置与服务器 `.env` 一致。
-- [ ] UniCloud 已续费并更新准确到期时间，剩余有效期不少于 30 天。
+- [ ] UniCloud 自动续费已开启；后台到期时间告警仅作运营提示，不阻断 `live` 预检。
 - [ ] 后台“赛事核验”不存在未处理的已发布重复赛事；澳门马拉松重复记录已完成审计归档。
 - [ ] 至少 2 场赛事可订阅赛前提醒，至少 1 场赛事可订阅报名提醒。
 - [ ] 2–3 个内部微信账号完成报名与赛前两类模板真实发送、拒绝授权和取消提醒验证。

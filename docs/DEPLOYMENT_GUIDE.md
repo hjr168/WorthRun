@@ -30,7 +30,7 @@
   - `WX_SIGNUP_REMINDER_TEMPLATE_ID` / `WX_RACE_REMINDER_TEMPLATE_ID`：报名与赛前 7 天订阅消息模板。当前模板分别为“报名时间提醒”和“比赛开始提醒”。
   - `WX_SIGNUP_REMINDER_*_FIELD` / `WX_RACE_REMINDER_*_FIELD`：两个模板中赛事名称、提醒说明和日期对应的字段键，必须按微信公众平台显示的 `thing1`、`time3` 等实际键填写，不能沿用示例猜测。
   - `UNICLOUD_AVATAR_BASE_URL` / `UNICLOUD_AVATAR_SHARED_SECRET`：UniCloud 支付宝云 URL 化头像函数地址与共享密钥。
-  - `UNICLOUD_PROVIDER=alipay` / `UNICLOUD_SPACE_ID=env-00jy6bpz3vhc` / `UNICLOUD_SPACE_EXPIRES_AT`：记录头像空间供应商、空间和有效期，供上线预检阻断错误空间或临近到期。
+  - `UNICLOUD_PROVIDER=alipay` / `UNICLOUD_SPACE_ID=env-00jy6bpz3vhc` / `UNICLOUD_SPACE_EXPIRES_AT`：记录头像空间供应商、空间和有效期；错误空间会阻断预检，自动续费场景下的临近到期只作提示。
 - `chinaath_api` 来源使用固定的中国田协公开赛事目录，不需要 AI Key；每次最多读取 20 条，并只生成后台候选。该接口是当前观察到的公开接口，不是承诺稳定的开放平台契约，响应结构变化时适配器会明确失败并记录状态。
 - 中国田协目录不提供可直接采信的赛事官方报名入口；运营人员必须人工补充并核验 `officialUrl` 和报名状态后才能采纳为赛事草稿。
 - 测试、体验版和正式环境禁止设置 `ALLOW_DEV_ADMIN=true`。

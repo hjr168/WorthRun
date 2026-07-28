@@ -92,6 +92,15 @@ describe('V0.5.3 release preflight', () => {
     expect(checks.find((item) => item.id === 'runtime_config_match')?.status).toBe('blocker');
   });
 
+  it('only warns when the auto-renewed UniCloud date is near', () => {
+    const checks = evaluateV053Environment(
+      { ...readyEnv, UNICLOUD_SPACE_EXPIRES_AT: '2026-08-01T00:00:00+08:00' },
+      'reminders',
+    );
+    expect(checks.find((item) => item.id === 'unicloud_expiry')?.status).toBe('warning');
+    expect(checks.find((item) => item.id === 'unicloud_expiry')?.status).not.toBe('blocker');
+  });
+
   it('blocks reminder template ids that do not exist in the current mini program', () => {
     const checks = evaluateV053WechatTemplates(readyEnv, [
       {

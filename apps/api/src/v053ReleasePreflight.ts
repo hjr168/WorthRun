@@ -26,6 +26,10 @@ function check(id: string, passed: boolean, message: string): PreflightCheck {
   return { id, status: passed ? 'pass' : 'blocker', message };
 }
 
+function advisory(id: string, passed: boolean, message: string): PreflightCheck {
+  return { id, status: passed ? 'pass' : 'warning', message };
+}
+
 function secretLength(value: string | undefined) {
   return value?.trim().length ?? 0;
 }
@@ -113,11 +117,11 @@ export function evaluateV053Environment(
         /^env-[a-z0-9]+$/.test(env.UNICLOUD_SPACE_ID?.trim() || ''),
         '必须配置支付宝云服务空间 ID',
       ),
-      check(
+      advisory(
         'unicloud_expiry',
         Number.isFinite(Date.parse(env.UNICLOUD_SPACE_EXPIRES_AT || '')) &&
           Date.parse(env.UNICLOUD_SPACE_EXPIRES_AT || '') > Date.now() + 30 * 24 * 60 * 60 * 1000,
-        '支付宝云空间有效期必须晚于当前时间至少 30 天',
+        'UniCloud 已配置自动续费；记录的到期时间不足 30 天，请在续费后更新',
       ),
     );
   }
@@ -188,10 +192,10 @@ export function evaluateReminderRuntimeConfig(
       reminderRuntimeConfigMatched(env, fileEnv),
       '当前进程的提醒配置必须与服务器 .env 一致',
     ),
-    check(
+    advisory(
       'unicloud_remaining_days',
       (cloudDaysRemaining(env.UNICLOUD_SPACE_EXPIRES_AT) ?? -1) >= 30,
-      'UniCloud 空间有效期必须至少剩余 30 天',
+      'UniCloud 已配置自动续费；记录的到期时间不足 30 天，仅作运营提示',
     ),
   ];
 }

@@ -247,9 +247,10 @@ export async function getReminderReadiness(now = new Date()) {
     ? Math.max(0, Math.floor((now.getTime() - latestRun.startedAt.getTime()) / 60_000))
     : null;
   const blockers: string[] = [];
+  const warnings: string[] = [];
   if (!configured) blockers.push('reminder_config_incomplete');
   if (!runtimeConfigMatched) blockers.push('runtime_config_mismatch');
-  if (remainingDays === null || remainingDays < 30) blockers.push('unicloud_expiring');
+  if (remainingDays === null || remainingDays < 30) warnings.push('unicloud_expiring');
   if (enabled && miniprogramState !== 'formal') blockers.push('formal_state_required');
   if (enabled && (latestRunAgeMinutes === null || latestRunAgeMinutes > 30)) {
     blockers.push('reminder_cron_stale');
@@ -287,8 +288,15 @@ export async function getReminderReadiness(now = new Date()) {
     overduePending,
     recentFailures,
     latestRunAgeMinutes,
-    healthStatus: blockers.length ? (enabled ? 'blocked' : 'warning') : 'healthy',
+    healthStatus: blockers.length
+      ? enabled
+        ? 'blocked'
+        : 'warning'
+      : warnings.length
+        ? 'warning'
+        : 'healthy',
     blockers,
+    warnings,
     latestRun,
   };
 }

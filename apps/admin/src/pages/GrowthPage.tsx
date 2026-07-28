@@ -100,13 +100,13 @@ export function GrowthPage() {
           />
         )}
       {error && <Alert type="error" showIcon message={error} />}
-      {readiness && readiness.blockers.length > 0 && (
+      {readiness && (readiness.blockers.length > 0 || readiness.warnings.length > 0) && (
         <Alert
           style={{ marginTop: 16 }}
           type={readiness.healthStatus === 'blocked' ? 'error' : 'warning'}
           showIcon
-          message="提醒正式上线条件尚未满足"
-          description={readiness.blockers
+          message={readiness.blockers.length > 0 ? '提醒正式上线条件尚未满足' : '提醒运营提示'}
+          description={[...readiness.blockers, ...readiness.warnings]
             .map((value) => reminderBlockerLabels[value] || value)
             .join('；')}
         />

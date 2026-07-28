@@ -645,6 +645,7 @@ export interface ReminderReadiness {
   latestRunAgeMinutes: number | null;
   healthStatus: 'healthy' | 'warning' | 'blocked';
   blockers: string[];
+  warnings: string[];
   latestRun?: {
     id: string;
     status: string;
