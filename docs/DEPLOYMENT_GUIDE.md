@@ -64,9 +64,18 @@ pnpm --filter @worth-running/api start
 不足 1GB 运行内存的服务器使用仓库根目录 `ecosystem.config.cjs` 启动 API。赛事源自动运行不增加第二个 PM2 进程，而由系统 cron 启动一次性任务：
 
 ```bash
+# 仅在首次从旧的 server.js PM2 定义迁移到清洁启动脚本时执行：
+pm2 delete worth-running-api
+APP_RELEASE=<commit> pm2 start ecosystem.config.cjs --only worth-running-api --env production
+
+# 已完成清洁启动迁移后的常规发布：
 pm2 startOrReload ecosystem.config.cjs --only worth-running-api --env production --update-env
 pm2 save
 ```
+
+首次迁移后用 `pm2 describe worth-running-api` 确认 `script path` 为
+`/opt/worth-running/ops/start-api-clean-env.sh`；如果仍显示
+`apps/api/dist/apps/api/src/server.js`，说明 PM2 保留了旧定义，不得继续上线检查。
 
 具体 crontab、日志轮转、资源验收和失败恢复见 `docs/EVENT_SOURCE_OPERATIONS.md`。完成目标服务器资源验收前，不要开启来源的自动运行。
 
