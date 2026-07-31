@@ -1,76 +1,73 @@
-<theme-shell title="哪场值得跑" show-search="{{true}}" bind:search="openSearch">
-<view class="page home-page">
-  <view class="home-hero">
-    <view class="hero-accent"></view>
-    <view class="hero-content">
-      <view class="hero-kicker">大湾区跑者指南</view>
-      <view class="hero-title">未来赛事，<text class="hero-emphasis">先判断</text></view>
-      <view class="hero-title">再去官方确认。</view>
-      <view class="hero-copy">选好城市和距离，帮你筛出值得优先关注的赛事</view>
-      <view class="actions">
-        <button class="primary-button" bindtap="openPreference">设置跑赛偏好</button>
-        <button class="secondary-button" bindtap="openEvents">先随便看看</button>
-      </view>
+<theme-shell variant="home" show-search="{{true}}" show-region="{{true}}" bind:search="openEvents" bind:region="openRegion">
+  <view class="page home-page">
+    <view class="home-intro">
+      <view class="season-title">秋季跑赛目的地</view>
+      <text class="slogan">去一座城，跑一场</text>
     </view>
+
+    <view class="month-nav" aria-label="选择月份">
+      <view wx:for="{{monthTabs}}" wx:key="value" class="month-tab {{item.value === month ? 'active' : ''}}" data-month="{{item.value}}" bindtap="selectMonth" aria-label="{{item.label}}赛事">{{item.label}}</view>
+    </view>
+
+    <loading-state wx:if="{{loading}}" text="正在加载本月赛事" />
+    <block wx:elif="{{error}}">
+      <view class="status-card status-error">
+        <text class="status-card-title">本月赛事暂时未能加载</text>
+        <text class="status-card-copy">{{error}}</text>
+        <button class="primary-button status-action" bindtap="reload">重新加载</button>
+        <button class="plain-button status-feedback" bindtap="reportProblem">反馈问题</button>
+      </view>
+    </block>
+    <block wx:else>
+      <swiper wx:if="{{focusEvents.length}}" class="focus-swiper" autoplay="{{true}}" interval="4000" duration="500" circular="{{true}}" indicator-dots="{{true}}" indicator-color="rgba(255,255,255,.45)" indicator-active-color="#f2541b" aria-label="本期焦点赛事轮播">
+        <swiper-item wx:for="{{focusEvents}}" wx:key="id">
+          <view class="focus-slide {{item.coverImageMode === 'aspectFit' ? 'is-contained' : ''}}" bindtap="openEvent" data-id="{{item.id}}" role="button" aria-label="查看焦点赛事 {{item.eventName}}">
+            <image class="focus-slide-image" src="{{item.coverImageUrl}}" mode="{{item.coverImageMode || 'aspectFill'}}" binderror="onFocusImageError" data-index="{{index}}" aria-label="{{item.eventName}}赛事图片" />
+            <view class="focus-slide-mask"></view>
+            <view class="focus-slide-content">
+              <text class="focus-slide-label">本期焦点</text>
+              <text class="focus-slide-title">{{item.eventName}}</text>
+              <text class="focus-slide-date">{{item.dateText}}</text>
+              <text class="focus-slide-distance">{{item.distanceItems.join(' / ')}}</text>
+              <text class="focus-slide-city">{{item.city}}</text>
+              <button class="focus-slide-button" catchtap="openEvent" data-id="{{item.id}}" aria-label="查看焦点赛事">查看赛事</button>
+            </view>
+            <text wx:if="{{item.coverAttribution}}" class="focus-slide-attribution">图：{{item.coverAttribution}}</text>
+          </view>
+        </swiper-item>
+      </swiper>
+      <view wx:else class="focus-empty">
+        <text class="focus-empty-kicker">本期焦点</text>
+        <text class="focus-empty-title">等待一场值得出发的比赛</text>
+        <text class="focus-empty-copy">赛事信息正在持续核验，先去全国赛事列表看看。</text>
+        <button class="primary-button focus-empty-button" bindtap="openEvents">浏览全国赛事</button>
+      </view>
+
+      <block wx:if="{{editorsPicks.length}}">
+        <view class="section-title-row"><text class="section-title">本月值得去</text><text class="section-more" bindtap="openEvents" role="button" aria-label="查看全部赛事">查看全部　›</text></view>
+        <view class="event-list">
+          <view wx:for="{{editorsPicks}}" wx:key="id" class="image-event-row" bindtap="openEvent" data-id="{{item.id}}" role="button" aria-label="查看赛事 {{item.eventName}}">
+            <image class="row-image {{item.coverImageMode === 'aspectFit' ? 'is-contained' : ''}}" src="{{item.coverThumbnailUrl}}" mode="{{item.coverImageMode || 'aspectFill'}}" lazy-load="{{true}}" binderror="onEditorImageError" data-index="{{index}}" aria-label="{{item.eventName}}赛事图片" />
+            <view class="row-copy"><text class="row-title">{{item.eventName}}</text><text class="row-meta">{{item.dateText}}　·　{{item.city}}</text><text class="row-meta">{{item.distanceItems.join(' / ')}}</text><text class="official-link">前往官方确认　›</text></view>
+          </view>
+        </view>
+      </block>
+
+      <block wx:if="{{signupSoon.length}}">
+        <view class="section-title-row"><text class="section-title">即将开报</text><text class="section-more" bindtap="openEvents" role="button" aria-label="查看更多赛事">更多赛事　›</text></view>
+        <view class="opening-list" aria-label="即将开报赛事"><view wx:for="{{signupSoon}}" wx:key="id" class="opening-row" bindtap="openEvent" data-id="{{item.id}}" role="button" aria-label="查看赛事 {{item.eventName}}"><text class="opening-date">{{item.signupStartAtText || '近期'}}</text><view class="opening-copy"><text class="opening-name">{{item.eventName}}</text><text class="opening-city">{{item.city}}</text></view></view></view>
+      </block>
+
+      <block wx:if="{{recommended.length}}">
+        <view class="section-title-row"><text class="section-title">为你推荐</text></view>
+        <scroll-view scroll-x="true" class="recommend-scroll" aria-label="推荐赛事"><view wx:for="{{recommended}}" wx:key="id" class="recommend-card" bindtap="openEvent" data-id="{{item.id}}" role="button"><image class="{{item.coverImageMode === 'aspectFit' ? 'is-contained' : ''}}" src="{{item.coverThumbnailUrl}}" mode="{{item.coverImageMode || 'aspectFill'}}" lazy-load="{{true}}" binderror="onRecommendedImageError" data-index="{{index}}" aria-label="{{item.eventName}}赛事图片" /><text>{{item.eventName}}</text><text class="recommend-city">{{item.city}} · {{item.dateText}}</text></view></scroll-view>
+      </block>
+
+      <view wx:if="{{!focusEvents.length && !editorsPicks.length && !signupSoon.length && !recommended.length}}" class="home-empty-state">
+        <text class="home-empty-title">本月暂无已核验赛事</text>
+        <text class="home-empty-copy">换一个月份，或前往赛事列表浏览全国赛事。</text>
+        <button class="secondary-button home-empty-button" bindtap="openEvents">打开赛事列表</button>
+      </view>
+    </block>
   </view>
-
-  <loading-state wx:if="{{loading}}" text="正在加载赛事" />
-  <block wx:elif="{{error}}">
-    <empty-state title="请求失败" description="{{error}}" />
-    <button class="secondary-button" bindtap="reload">重新加载</button>
-    <button class="plain-button feedback-problem-link" bindtap="reportProblem">反馈问题</button>
-  </block>
-
-  <block wx:else>
-    <view wx:if="{{preference}}" class="preference-strip" bindtap="openPreference">
-      <view>
-        <view class="preference-label">当前偏好</view>
-        <view class="preference-value">{{preferenceText}}</view>
-      </view>
-      <view class="preference-action">调整</view>
-    </view>
-    <view wx:if="{{fallbackNotice}}" class="fallback-notice">{{fallbackNotice}}</view>
-
-    <view wx:if="{{priorityEvents.length}}" class="section">
-      <view class="section-heading">
-        <view class="section-title">优先关注</view>
-        <view class="section-link" role="button" bindtap="openEvents" aria-label="查看全部赛事"><text>全部赛事</text><image class="section-link-icon" src="/assets/icons/chevron-right-orange.png" mode="aspectFit" /></view>
-      </view>
-      <event-card
-        wx:for="{{priorityEvents}}"
-        wx:key="id"
-        class="card-gap"
-        event="{{item}}"
-        bind:open="openEvent"
-        bind:favorite="toggleFavorite"
-      />
-    </view>
-
-    <view wx:if="{{closingEvents.length}}" class="section">
-      <view class="section-title">即将截止</view>
-      <event-card
-        wx:for="{{closingEvents}}"
-        wx:key="id"
-        class="card-gap"
-        event="{{item}}"
-        bind:open="openEvent"
-        bind:favorite="toggleFavorite"
-      />
-    </view>
-
-    <view wx:if="{{recentEvents.length}}" class="section">
-      <view class="section-title">近期赛事</view>
-      <event-card
-        wx:for="{{recentEvents}}"
-        wx:key="id"
-        class="card-gap"
-        event="{{item}}"
-        bind:open="openEvent"
-        bind:favorite="toggleFavorite"
-      />
-    </view>
-
-    <empty-state wx:if="{{!priorityEvents.length && !closingEvents.length && !recentEvents.length}}" title="暂无赛事" description="后台发布赛事后会出现在这里" />
-  </block>
-</view>
 </theme-shell>

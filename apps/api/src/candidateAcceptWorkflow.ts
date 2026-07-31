@@ -130,6 +130,8 @@ async function acceptOneCandidate(
       data: {
         eventName: data.eventName,
         city: data.city,
+        provinceCode: data.provinceCode,
+        cityCode: data.cityCode,
         eventDate: new Date(`${eventDate}T00:00:00.000Z`),
         eventStartAt: data.eventStartAt ? new Date(data.eventStartAt) : null,
         distanceItems: data.distanceItems,
@@ -154,6 +156,10 @@ async function acceptOneCandidate(
           create: data.tags.map((tagName) => ({ tagName, tagType: 'experience' })),
         },
       },
+    });
+    await tx.eventMediaAsset.updateMany({
+      where: { candidateId: candidate.id },
+      data: { candidateId: null, eventId: event.id },
     });
     const acceptedCandidate = await tx.eventCandidate.update({
       where: { id: candidate.id },

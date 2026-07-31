@@ -30,10 +30,18 @@ const issueLabels: Record<string, string> = {
   open_change_alert: '存在变更告警',
   preview_snapshot_changed: '预览后数据已变化',
   duplicate_published_event: '疑似重复已发布赛事',
+  missing_region_code: '缺少六位省市行政区代码',
+  region_code_mismatch: '省市行政区代码与城市不一致',
+  unsupported_region: '地区不在当前全国目录',
 };
 
 const reminderIssueLabels: Record<string, string> = {
   event_not_reminder_ready: '赛事基础条件未满足',
+  event_not_published: '赛事未发布',
+  event_expired: '赛事已过期',
+  info_not_verified: '赛事信息尚未核实',
+  source_not_reminder_trusted: '来源等级不足',
+  change_alert_open: '存在变更告警待复核',
   missing_signup_start_at: '缺少报名开始时间',
   missing_signup_deadline: '缺少报名截止时间',
   signup_not_active: '报名当前不可提醒',
@@ -326,18 +334,29 @@ export function EventVerificationPage() {
             },
             {
               title: '操作',
-              width: 130,
+              width: 180,
               fixed: 'right',
-              render: (_, item) =>
-                admin?.role === 'super_admin' &&
-                item.suggestedPrimaryId &&
-                item.suggestedPrimaryId !== item.id ? (
-                  <Button danger size="small" onClick={() => void archiveDuplicate(item)}>
-                    归档重复项
-                  </Button>
-                ) : (
-                  <Link to={`/events/edit/${item.id}`}>查看赛事</Link>
-                ),
+              render: (_, item) => {
+                const hasOpenAlert = item.issues.includes('open_change_alert');
+                const canArchiveDuplicate =
+                  admin?.role === 'super_admin' &&
+                  item.suggestedPrimaryId &&
+                  item.suggestedPrimaryId !== item.id;
+                return (
+                  <Space size={4} direction="vertical">
+                    {canArchiveDuplicate ? (
+                      <Button danger size="small" onClick={() => void archiveDuplicate(item)}>
+                        归档重复项
+                      </Button>
+                    ) : (
+                      <Link to={`/events/edit/${item.id}`}>查看赛事</Link>
+                    )}
+                    {hasOpenAlert && (
+                      <Link to={`/event-changes?eventId=${item.id}`}>去变更复核</Link>
+                    )}
+                  </Space>
+                );
+              },
             },
           ]}
         />

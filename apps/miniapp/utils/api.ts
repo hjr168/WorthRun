@@ -12,8 +12,11 @@ export interface EventSummary {
   id: string;
   eventName: string;
   city: string;
+  provinceCode?: string | null;
+  cityCode?: string | null;
   eventDate: string;
   eventStartAt?: string | null;
+  signupStartAt?: string | null;
   distanceItems: string[];
   signupStatus: SignupStatus;
   signupDeadline?: string | null;
@@ -27,6 +30,12 @@ export interface EventSummary {
   isFavorite?: boolean;
   hasSourceSummary?: boolean;
   sourceSummaryStale?: boolean;
+  coverImageUrl?: string;
+  coverThumbnailUrl?: string;
+  coverAttribution?: string | null;
+  coverImageMode?: 'aspectFit' | 'aspectFill';
+  coverImageWidth?: number | null;
+  coverImageHeight?: number | null;
 }
 
 export type EventChoice = 'interested' | 'considering' | 'registered';
@@ -83,7 +92,7 @@ export interface EventReminderItem {
 }
 
 export type ShareScene =
-  'home' | 'events' | 'event_detail' | 'tools' | 'source_summary' | 'release_notes';
+  'home' | 'events' | 'event_detail' | 'tools' | 'source_summary' | 'release_notes' | 'radar';
 export interface ShareSettings {
   revision: string;
   scenes: Record<ShareScene, { titleTemplate: string; imageUrl: string }>;
@@ -129,8 +138,30 @@ export interface PublicSourceSummary {
 export interface Preference {
   userKey: string;
   cities: string[];
+  provinceCodes?: string[];
+  cityCodes?: string[];
   distances: string[];
   focusTags: string[];
+}
+
+export interface DiscoveryHomeResponse {
+  month: string;
+  focusEvents: EventSummary[];
+  editorsPicks: EventSummary[];
+  signupSoon: EventSummary[];
+  recommended: EventSummary[];
+  complianceNotice: string;
+  officialActionText: string;
+}
+export interface RegionCity {
+  cityCode: string;
+  cityName: string;
+  provinceCode: string;
+}
+export interface RegionProvince {
+  provinceCode: string;
+  provinceName: string;
+  cities: RegionCity[];
 }
 
 export interface RequestOptions {
@@ -227,6 +258,19 @@ export function getEvents(params: Record<string, unknown> = {}) {
     complianceNotice: string;
     officialActionText: string;
   }>('/api/events', { data: params, silent: true });
+}
+
+export function getDiscoveryHome(month: string, userKey?: string) {
+  return request<DiscoveryHomeResponse>('/api/discovery/home', {
+    data: { month, userKey },
+    silent: true,
+  });
+}
+
+export function getRegions() {
+  return request<{ nationwideEnabled: boolean; provinces: RegionProvince[] }>('/api/regions', {
+    silent: true,
+  });
 }
 
 export function getEventDetail(id: string) {
@@ -355,7 +399,8 @@ export function recordShare(data: {
     | 'tools'
     | 'source_summary'
     | 'release_notes'
-    | 'personal_home';
+    | 'personal_home'
+    | 'radar';
   requestShareToken?: boolean;
 }) {
   return request<{ id: string; shareToken: string | null }>('/api/share-records', {
@@ -461,6 +506,77 @@ export function subscribeEventReminders(
 export function cancelEventReminder(eventId: string, type: 'signup' | 'race_week') {
   return request(`/api/users/me/reminders/${eventId}/${type}`, {
     method: 'DELETE',
+    silent: true,
+  });
+}
+
+// ===== V0.6 雷达与匿名访客增长 =====
+
+/** 雷达分组标识。 */
+export type RadarPrimaryGroup = 'closingSoon' | 'signupOpening' | 'recentlyChanged' | 'matched';
+
+/** 雷达卡片摘要（在 EventSummary 基础上扩展来源/核验/匹配字段）。 */
+export interface RadarEventSummary {
+  id: string;
+  eventName: string;
+  city: string;
+  eventDate: string;
+  distanceItems: string[];
+  signupStatus: SignupStatus;
+  signupStartAt?: string | null;
+  signupDeadline?: string | null;
+  officialUrl: string;
+  sourceName: string;
+  sourceLevel: string;
+  sourceCheckedAt?: string | null;
+  infoStatus: InfoStatus;
+  runJudgement: RunJudgement;
+  primaryGroup: RadarPrimaryGroup;
+  badges: string[];
+  matchScore: number | null;
+  matchReasons: string[];
+}
+
+export interface RadarResponse {
+  generatedAt: string;
+  window: { start: string; end: string; days: number };
+  filters: { cities: string[]; distances: string[]; focusTags: string[] };
+  campaign: { code: string; accepted: boolean } | null;
+  total: number;
+  groups: {
+    signupOpening: RadarEventSummary[];
+    closingSoon: RadarEventSummary[];
+    recentlyChanged: RadarEventSummary[];
+    matched: RadarEventSummary[];
+  };
+  complianceNotice: string;
+  officialActionText: string;
+}
+
+export function getRadar(params: Record<string, unknown> = {}) {
+  return request<RadarResponse>('/api/radar', { data: params, silent: true });
+}
+
+/** 匿名访客埋点（无需登录，失败静默，不阻塞主业务）。 */
+export function recordVisitorActivity(data: {
+  userKey: string;
+  action?:
+    | 'viewed_radar'
+    | 'viewed_event_detail'
+    | 'set_preference'
+    | 'added_favorite'
+    | 'set_choice'
+    | 'subscribed_reminder'
+    | 'copied_official'
+    | 'started_share';
+  eventId?: string;
+  entryPage?: string;
+  campaign?: string;
+  referralShareToken?: string;
+}) {
+  return request<{ recorded: true }>('/api/growth/visitor-activity', {
+    method: 'POST',
+    data,
     silent: true,
   });
 }

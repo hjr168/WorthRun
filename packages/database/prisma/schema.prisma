@@ -170,6 +170,25 @@ enum EventInteractionAction {
   source_original_link_copy
 }
 
+enum GrowthCampaignType {
+  wechat_group
+  wechat_moments
+  xiaohongshu
+  running_club
+  running_store
+  coach
+  photographer
+  organizer
+  public_account
+  other
+}
+
+enum GrowthCampaignStatus {
+  active
+  paused
+  archived
+}
+
 enum EventChoiceType {
   interested
   considering
@@ -193,10 +212,25 @@ enum ReleaseNoteStatus {
   offline
 }
 
+enum MediaAssetReviewStatus {
+  pending_review
+  approved_for_display
+  rejected
+}
+
+enum HomeEditorialSection {
+  focus
+  editors_pick
+  signup_soon
+  recommended
+}
+
 model Event {
   id               String        @id @default(cuid())
   eventName        String        @map("event_name")
   city             String
+  provinceCode     String?       @map("province_code")
+  cityCode         String?       @map("city_code")
   eventDate        DateTime      @map("event_date") @db.Date
   eventStartAt     DateTime?     @map("event_start_at")
   distanceItems    String[]      @map("distance_items")
@@ -235,8 +269,12 @@ model Event {
   sourceSummaries EventSourceSummary[]
   shareOverride   EventShareOverride?
   reminders       EventReminder[]
+  visitorEventViews GrowthVisitorEventViewDaily[]
+  mediaAssets      EventMediaAsset[]
+  editorialItems   HomeEditorialItem[]
 
   @@index([city])
+  @@index([provinceCode, cityCode])
   @@index([eventDate])
   @@index([publishStatus])
   @@index([signupStatus])
@@ -278,6 +316,8 @@ model UserPreference {
   userKey   String   @unique @map("user_key")
   userId    String?  @map("user_id")
   cities    String[] @default([])
+  provinceCodes String[] @default([]) @map("province_codes")
+  cityCodes String[] @default([]) @map("city_codes")
   distances String[] @default([])
   focusTags String[] @default([]) @map("focus_tags")
   createdAt DateTime @default(now()) @map("created_at")
@@ -654,6 +694,8 @@ model EventSource {
   searchQuery           String?           @map("search_query")
   allowedDomains        String[]          @default([]) @map("allowed_domains")
   cityHints             String[]          @default([]) @map("city_hints")
+  provinceCodes         String[]          @default([]) @map("province_codes")
+  cityCodes             String[]          @default([]) @map("city_codes")
   sourceLevel           SourceLevel       @default(unknown) @map("source_level")
   status                EventSourceStatus @default(active)
   scheduleEnabled       Boolean           @default(false) @map("schedule_enabled")
@@ -687,6 +729,8 @@ model EventCandidate {
   status                EventCandidateStatus @default(new)
   eventName             String               @map("event_name")
   city                  String
+  provinceCode          String?              @map("province_code")
+  cityCode              String?              @map("city_code")
   eventDate             DateTime?            @map("event_date") @db.Date
   sourceUrl             String?              @map("source_url")
   officialUrl           String?              @map("official_url")
@@ -713,12 +757,14 @@ model EventCandidate {
   mergedInto       EventCandidate?    @relation("EventCandidateMerges", fields: [mergedIntoCandidateId], references: [id], onDelete: SetNull)
   mergedCandidates EventCandidate[]   @relation("EventCandidateMerges")
   changeAlerts     EventChangeAlert[]
+  mediaAssets      EventMediaAsset[]
 
   @@unique([sourceId, sourceExternalId])
   @@index([status])
   @@index([sourceId])
   @@index([mergedIntoCandidateId])
   @@index([eventName, city, eventDate])
+  @@index([provinceCode, cityCode])
   @@map("event_candidates")
 }
 
@@ -821,4 +867,145 @@ model EventInteraction {
   @@index([eventId, action, occurredDate])
   @@index([action, occurredDate])
   @@map("event_interactions")
+}
+
+// ===== V0.6 大湾区赛事雷达与冷启动增长 =====
+
+/// 持久运营渠道。code 为非敏感公开标识，创建后不可修改；
+/// 可暂停/归档但不物理删除已使用 Campaign。不存私人微信号/手机号。
+model GrowthCampaign {
+  id          String               @id @default(cuid())
+  code        String               @unique
+  name        String
+  channelType GrowthCampaignType   @map("channel_type")
+  partnerName String?              @map("partner_name")
+  status      GrowthCampaignStatus @default(active)
+  startsAt    DateTime?            @map("starts_at")
+  endsAt      DateTime?            @map("ends_at")
+  createdBy   String?              @map("created_by")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  visitorActivities GrowthVisitorDaily[]
+
+  @@index([status, channelType])
+  @@index([createdAt])
+  @@map("growth_campaigns")
+}
+
+/// 匿名访客日活动（幂等聚合表）。visitorKeyHash 为服务端 HMAC，不存明文 userKey。
+/// 同一访客同一天一行；首日有效 Campaign/分享 token 归因不覆盖。
+model GrowthVisitorDaily {
+  id                 String   @id @default(cuid())
+  visitorKeyHash     String   @map("visitor_key_hash")
+  activityDate       DateTime @map("activity_date") @db.Date
+  userId             String?  @map("user_id")
+  campaignId         String?  @map("campaign_id")
+  referralShareToken String?  @map("referral_share_token")
+  firstEntryPage     String?  @map("first_entry_page")
+  firstChannel       String?  @map("first_channel")
+  viewedRadar        Boolean  @default(false) @map("viewed_radar")
+  setPreference      Boolean  @default(false) @map("set_preference")
+  addedFavorite      Boolean  @default(false) @map("added_favorite")
+  setChoice          Boolean  @default(false) @map("set_choice")
+  subscribedReminder Boolean  @default(false) @map("subscribed_reminder")
+  copiedOfficial     Boolean  @default(false) @map("copied_official")
+  startedShare       Boolean  @default(false) @map("started_share")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  campaign GrowthCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  eventViews GrowthVisitorEventViewDaily[]
+
+  @@unique([visitorKeyHash, activityDate])
+  @@index([activityDate, campaignId])
+  @@index([userId, activityDate])
+  @@index([referralShareToken, activityDate])
+  @@map("growth_visitor_daily")
+}
+
+/// 不同赛事浏览幂等事实表。同一访客同日同一赛事只记一次 firstViewedAt，
+/// 用于可靠计算"查看至少 2 场不同赛事"。
+model GrowthVisitorEventViewDaily {
+  id             String   @id @default(cuid())
+  visitorDailyId String   @map("visitor_daily_id")
+  eventId        String   @map("event_id")
+  firstViewedAt  DateTime @default(now()) @map("first_viewed_at")
+
+  visitorDaily GrowthVisitorDaily @relation(fields: [visitorDailyId], references: [id], onDelete: Cascade)
+  event        Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([visitorDailyId, eventId])
+  @@index([eventId, firstViewedAt])
+  @@map("growth_visitor_event_view_daily")
+}
+
+/// 图片必须经过人工审核才允许出现在小程序；未通过时公共 API 使用品牌默认封面。
+model EventMediaAsset {
+  id                String                @id @default(cuid())
+  eventId           String?               @map("event_id")
+  candidateId       String?               @map("candidate_id")
+  originalUrl       String?               @map("original_url")
+  thumbnailUrl      String?               @map("thumbnail_url")
+  sourcePageUrl     String                @map("source_page_url")
+  attribution       String?
+  originalFileId    String?               @map("original_file_id")
+  cloudbaseFileId   String?               @map("cloudbase_file_id")
+  thumbnailFileId   String?               @map("thumbnail_file_id")
+  sha256            String
+  width             Int?
+  height            Int?
+  mimeType          String?               @map("mime_type")
+  processedBySharp  Boolean?               @map("processed_by_sharp")
+  originalBytes     Int?                  @map("original_bytes")
+  heroBytes         Int?                  @map("hero_bytes")
+  thumbnailBytes    Int?                  @map("thumbnail_bytes")
+  reviewStatus      MediaAssetReviewStatus @default(pending_review) @map("review_status")
+  isPrimary         Boolean               @default(false) @map("is_primary")
+  discoveredBy      String?               @map("discovered_by")
+  reviewedBy        String?               @map("reviewed_by")
+  reviewedAt        DateTime?             @map("reviewed_at")
+  reviewNote        String?               @map("review_note")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  event             Event?                @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  candidate         EventCandidate?       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, reviewStatus, isPrimary])
+  @@index([candidateId, reviewStatus])
+  @@index([sha256])
+  @@map("event_media_assets")
+}
+
+model HomeEditorialPlan {
+  id          String   @id @default(cuid())
+  month       String   @unique
+  createdBy   String?  @map("created_by")
+  updatedBy   String?  @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  items       HomeEditorialItem[]
+
+  @@map("home_editorial_plans")
+}
+
+model HomeEditorialItem {
+  id          String              @id @default(cuid())
+  planId      String              @map("plan_id")
+  eventId     String              @map("event_id")
+  section     HomeEditorialSection
+  rank        Int                 @default(0)
+  note        String?
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  plan        HomeEditorialPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  event       Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, section, rank])
+  @@unique([planId, section, eventId])
+  @@index([eventId])
+  @@map("home_editorial_items")
 }

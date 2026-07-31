@@ -20,6 +20,7 @@ export type AdminAction =
   | 'review_ai_candidates'
   | 'review_event_changes'
   | 'apply_event_changes'
+  | 'manage_growth_campaigns'
   | 'view';
 
 const ROLE_MATRIX: Record<AdminAction, string[]> = {
@@ -35,6 +36,7 @@ const ROLE_MATRIX: Record<AdminAction, string[]> = {
   review_ai_candidates: ['event_operator', 'content_reviewer'],
   review_event_changes: ['event_operator', 'content_reviewer'],
   apply_event_changes: ['event_operator'],
+  manage_growth_campaigns: ['event_operator'],
   view: ['event_operator', 'content_reviewer', 'readonly'],
 };
 

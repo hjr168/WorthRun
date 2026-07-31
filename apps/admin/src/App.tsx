@@ -45,7 +45,9 @@ import { ShareCenterPage } from './pages/ShareCenterPage';
 import { ReleaseNotesPage } from './pages/ReleaseNotesPage';
 import { UsersPage } from './pages/UsersPage';
 import { GrowthPage } from './pages/GrowthPage';
+import { GrowthCampaignsPage } from './pages/GrowthCampaignsPage';
 import { EventVerificationPage } from './pages/EventVerificationPage';
+import { DiscoveryContentPage } from './pages/DiscoveryContentPage';
 
 const { Content, Sider } = Layout;
 
@@ -113,11 +115,15 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
                         ? '/choice-stats'
                         : location.pathname.startsWith('/users')
                           ? '/users'
-                          : location.pathname.startsWith('/growth')
-                            ? '/growth'
-                            : location.pathname.startsWith('/logs')
-                              ? '/logs'
-                              : '/workbench';
+                          : location.pathname.startsWith('/growth-campaigns')
+                            ? '/growth-campaigns'
+                            : location.pathname.startsWith('/growth')
+                              ? '/growth'
+                              : location.pathname.startsWith('/discovery-content')
+                                ? '/discovery-content'
+                              : location.pathname.startsWith('/logs')
+                                ? '/logs'
+                                : '/workbench';
 
   return (
     <Layout className="app-shell">
@@ -185,12 +191,22 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
                     icon: <LineChartOutlined />,
                     label: <Link to="/growth">增长与提醒</Link>,
                   },
+                  {
+                    key: '/growth-campaigns',
+                    icon: <RocketOutlined />,
+                    label: <Link to="/growth-campaigns">增长渠道</Link>,
+                  },
                 ]
               : []),
             {
               key: '/content',
               icon: <ToolOutlined />,
               label: <Link to="/content">内容配置</Link>,
+            },
+            {
+              key: '/discovery-content',
+              icon: <ToolOutlined />,
+              label: <Link to="/discovery-content">全国发现内容</Link>,
             },
             {
               key: '/settings',
@@ -243,7 +259,14 @@ function Shell({ admin, onLogout }: { admin: AdminUser | null; onLogout: () => v
                 )
               }
             />
+            <Route
+              path="/growth-campaigns"
+              element={
+                admin?.role === 'super_admin' ? <GrowthCampaignsPage /> : <Navigate to="/workbench" replace />
+              }
+            />
             <Route path="/content" element={<ContentPage />} />
+            <Route path="/discovery-content" element={<DiscoveryContentPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/logs" element={<LogsPage />} />
           </Routes>

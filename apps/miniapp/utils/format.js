@@ -29,7 +29,8 @@ exports.infoStatusLabels = {
 function formatDate(value) {
     if (!value)
         return '待确认';
-    return value.slice(0, 10);
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+    return (match === null || match === void 0 ? void 0 : match[1]) || '待确认';
 }
 function formatDateTime(value) {
     if (!value)

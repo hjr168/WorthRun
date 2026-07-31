@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "未来 90 天赛事雷达",
+  "usingComponents": {
+    "event-card": "../../components/event-card/index",
+    "empty-state": "../../components/empty-state/index",
+    "loading-state": "../../components/loading-state/index"
+  }
+}

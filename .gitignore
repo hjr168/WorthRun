@@ -16,3 +16,8 @@ docs/real-events.local.csv
 apps/miniapp/project.private.config.json
 design/
 promo/
+
+# V0.6 增长运营：本地真实联系人数据不提交
+ops/growth/*.local.csv
+ops/growth/*.local.md
+ops/growth/private/

@@ -94,6 +94,23 @@ describe('eventSourceSchema', () => {
     ).toThrow('大湾区内地城市');
   });
 
+  it('accepts one province code and removes city hints in nationwide mode', () => {
+    const previous = process.env.NATIONWIDE_DISCOVERY_ENABLED;
+    process.env.NATIONWIDE_DISCOVERY_ENABLED = 'true';
+    try {
+      const parsed = eventSourceSchema.parse({
+        name: '全国江苏来源',
+        sourceType: 'chinaath_api',
+        cityHints: ['南京'],
+        provinceCodes: ['320000'],
+      });
+      expect(parsed).toMatchObject({ cityHints: [], provinceCodes: ['320000'] });
+    } finally {
+      if (previous === undefined) delete process.env.NATIONWIDE_DISCOVERY_ENABLED;
+      else process.env.NATIONWIDE_DISCOVERY_ENABLED = previous;
+    }
+  });
+
   it('locks fixed structured sources to server-owned URLs and limits', () => {
     const world = eventSourceSchema.parse({
       name: '世界田联',

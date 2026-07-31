@@ -23,6 +23,7 @@ import {
   EditOutlined,
   HistoryOutlined,
   PlusOutlined,
+  PictureOutlined,
   ReloadOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
@@ -52,6 +53,8 @@ import {
 } from '../utils/aiSources';
 import { beijingDateTimeToIso } from '../utils/form';
 import { showError } from '../utils/helpers';
+import { RegionFields } from '../components/RegionFields';
+import { getSupportedProvinces, resolveSupportedRegion } from '@worth-running/shared';
 
 const sourceTypeOptions = [
   { value: 'page_url', label: '网页 AI 抽取' },
@@ -82,7 +85,7 @@ const candidateStatusLabels: Record<EventCandidateItem['status'], string> = {
   merged: '已合并',
 };
 
-function fixedSourceHelp(sourceType: EventSourceItem['sourceType']) {
+function fixedSourceHelp(sourceType: EventSourceItem['sourceType'], nationwideEnabled = false) {
   if (sourceType === 'world_athletics') {
     return {
       message: '固定读取世界田联香港路跑日历',
@@ -97,7 +100,9 @@ function fixedSourceHelp(sourceType: EventSourceItem['sourceType']) {
   }
   return {
     message: '固定读取中国田协公开赛事目录',
-    description: '每个来源只查询一个大湾区内地城市；官方报名入口仍需人工补充。',
+    description: nationwideEnabled
+      ? '每个来源按一个省级行政区分页抓取全国目录；官方报名入口仍需人工补充。'
+      : '每个来源只查询一个大湾区内地城市；官方报名入口仍需人工补充。',
   };
 }
 
@@ -108,6 +113,7 @@ interface SourceFormValues {
   searchQuery?: string;
   allowedDomains?: string;
   cityHints?: string;
+  provinceCode?: string;
   sourceLevel: EventSourceItem['sourceLevel'];
   status: EventSourceItem['status'];
   scheduleEnabled: boolean;
@@ -120,6 +126,8 @@ interface SourceFormValues {
 interface CandidateFormValues {
   eventName: string;
   city: string;
+  provinceCode?: string;
+  cityCode?: string;
   eventDate: string;
   eventStartAt?: string;
   distanceItems?: string;
@@ -178,6 +186,7 @@ export function AiSourcesPage() {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicatePrimaries, setDuplicatePrimaries] = useState<Record<string, string>>({});
   const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [nationwideEnabled, setNationwideEnabled] = useState(false);
 
   const loadSources = () => {
     setSourcesLoading(true);
@@ -231,6 +240,9 @@ export function AiSourcesPage() {
 
   useEffect(() => {
     void loadSources();
+    void apiGet<{ nationwideEnabled: boolean }>('/api/regions')
+      .then((result) => setNationwideEnabled(result.nationwideEnabled))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -341,6 +353,11 @@ export function AiSourcesPage() {
         searchQuery: normalizeOptionalString(values.searchQuery),
         allowedDomains: splitList(values.allowedDomains),
         cityHints: splitList(values.cityHints),
+        provinceCodes:
+          nationwideEnabled && values.sourceType === 'chinaath_api' && values.provinceCode
+            ? [values.provinceCode]
+            : [],
+        cityCodes: [],
         sourceLevel: values.sourceLevel,
         status: values.status,
         scheduleEnabled: values.scheduleEnabled,
@@ -377,6 +394,7 @@ export function AiSourcesPage() {
             searchQuery: source.searchQuery || '',
             allowedDomains: joinList(source.allowedDomains),
             cityHints: joinList(source.cityHints),
+            provinceCode: source.provinceCodes?.[0] || '',
             sourceLevel: source.sourceLevel,
             status: source.status,
             scheduleEnabled: source.scheduleEnabled,
@@ -430,6 +448,16 @@ export function AiSourcesPage() {
     candidateForm.setFieldsValue({
       eventName: readString(extractedData, 'eventName') || candidate.eventName,
       city: readString(extractedData, 'city') || candidate.city,
+      provinceCode:
+        readString(extractedData, 'provinceCode') ||
+        candidate.provinceCode ||
+        resolveSupportedRegion(readString(extractedData, 'city') || candidate.city)?.provinceCode ||
+        undefined,
+      cityCode:
+        readString(extractedData, 'cityCode') ||
+        candidate.cityCode ||
+        resolveSupportedRegion(readString(extractedData, 'city') || candidate.city)?.cityCode ||
+        undefined,
       eventDate: formatDateInput(readString(extractedData, 'eventDate') || candidate.eventDate),
       eventStartAt: readString(extractedData, 'eventStartAt') || '',
       distanceItems: joinList(readStringArray(extractedData, 'distanceItems')),
@@ -580,6 +608,14 @@ export function AiSourcesPage() {
                 dataIndex: 'sourceType',
                 width: 140,
                 render: (value: EventSourceItem['sourceType']) => sourceTypeLabels[value],
+              },
+              {
+                title: '抓取范围',
+                width: 170,
+                render: (_, record) =>
+                  record.provinceCodes?.length
+                    ? record.provinceCodes.join('、')
+                    : record.cityHints?.join('、') || '固定来源',
               },
               {
                 title: '等级',
@@ -774,6 +810,7 @@ export function AiSourcesPage() {
                     'missing_source_url',
                     'duplicate_event',
                     'source_date_conflict',
+                    'missing_region_code',
                   ] as CandidateReviewIssue[]
                 ).map((value) => ({ value, label: candidateIssueLabel(value) })),
               ]}
@@ -920,6 +957,18 @@ export function AiSourcesPage() {
                       </Button>
                       <Button
                         size="small"
+                        icon={<PictureOutlined />}
+                        onClick={() =>
+                          window.open(
+                            `/discovery-content?candidateId=${encodeURIComponent(record.id)}`,
+                            '_blank',
+                          )
+                        }
+                      >
+                        来源图片
+                      </Button>
+                      <Button
+                        size="small"
                         type="primary"
                         onClick={() => reviewCandidate(record, 'accept')}
                       >
@@ -1055,8 +1104,8 @@ export function AiSourcesPage() {
               showIcon
               type="info"
               style={{ marginBottom: 16 }}
-              message={fixedSourceHelp(selectedSourceType).message}
-              description={fixedSourceHelp(selectedSourceType).description}
+              message={fixedSourceHelp(selectedSourceType, nationwideEnabled).message}
+              description={fixedSourceHelp(selectedSourceType, nationwideEnabled).description}
             />
           ) : (
             <>
@@ -1076,23 +1125,44 @@ export function AiSourcesPage() {
               </Form.Item>
             </>
           )}
-          <Form.Item
-            label="目标城市"
-            name="cityHints"
-            extra={
-              selectedSourceType === 'chinaath_api'
-                ? '必须且只能填写一个大湾区内地城市'
-                : '仅可填写大湾区城市；固定来源会由服务端设置目标城市'
-            }
-          >
-            <Input
-              placeholder={selectedSourceType === 'chinaath_api' ? '广州' : '广州, 深圳, 佛山'}
-              disabled={
-                selectedSourceType === 'world_athletics' ||
-                selectedSourceType === 'chinamarathon_sitemap'
+          {nationwideEnabled && selectedSourceType === 'chinaath_api' ? (
+            <Form.Item
+              label="目标省级行政区"
+              name="provinceCode"
+              rules={[{ required: true, message: '请选择目标省级行政区' }]}
+              extra="一个省级行政区一个来源；系统会按省级代码分页抓取。"
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder="选择目标省级行政区"
+                options={getSupportedProvinces().map((item) => ({
+                  value: item.provinceCode,
+                  label: `${item.provinceName}（${item.provinceCode}）`,
+                }))}
+              />
+            </Form.Item>
+          ) : (
+            <Form.Item
+              label="目标城市"
+              name="cityHints"
+              extra={
+                selectedSourceType === 'chinaath_api'
+                  ? '必须且只能填写一个大湾区内地城市'
+                  : nationwideEnabled
+                    ? '页面 AI 抽取可填写城市提示；固定来源会由服务端设置目标城市'
+                    : '仅可填写大湾区城市；固定来源会由服务端设置目标城市'
               }
-            />
-          </Form.Item>
+            >
+              <Input
+                placeholder={selectedSourceType === 'chinaath_api' ? '广州' : '广州, 深圳, 佛山'}
+                disabled={
+                  selectedSourceType === 'world_athletics' ||
+                  selectedSourceType === 'chinamarathon_sitemap'
+                }
+              />
+            </Form.Item>
+          )}
           <Form.Item label="来源等级" name="sourceLevel" rules={[{ required: true }]}>
             <Select options={sourceLevelOptions} disabled={selectedSourceType !== 'page_url'} />
           </Form.Item>
@@ -1252,7 +1322,7 @@ export function AiSourcesPage() {
           showIcon
           type="info"
           style={{ marginBottom: 16 }}
-          message="补齐官方入口、来源链接和比赛日期后，再采纳为赛事草稿。"
+          message="补齐官方入口、来源链接、比赛日期和行政区代码后，再采纳为赛事草稿。"
         />
         <Form form={candidateForm} layout="vertical">
           <div className="form-grid">
@@ -1340,6 +1410,8 @@ export function AiSourcesPage() {
               <Input />
             </Form.Item>
           </div>
+          <Typography.Title level={5}>行政区划代码</Typography.Title>
+          <RegionFields form={candidateForm} />
           <Form.Item label="一句话判断" name="judgementSummary">
             <Input.TextArea rows={2} maxLength={500} showCount />
           </Form.Item>
@@ -1376,6 +1448,8 @@ function buildExtractedData(candidate: EventCandidateItem, values: CandidateForm
     ...base,
     eventName: values.eventName.trim(),
     city: values.city.trim(),
+    provinceCode: values.provinceCode?.trim() || null,
+    cityCode: values.cityCode?.trim() || null,
     eventDate: values.eventDate.trim(),
     eventStartAt: beijingDateTimeToIso(values.eventStartAt),
     distanceItems: splitList(values.distanceItems),
@@ -1437,6 +1511,7 @@ function workflowIssueLabel(issue: string) {
     missing_source_url: '缺少来源链接',
     community_without_official_evidence: '社区来源缺少官方依据',
     source_date_conflict: '来源日期冲突',
+    missing_region_code: '缺少六位省市行政区代码',
     unmerged_duplicate_group: '需先归并疑似重复组',
     duplicate_event: '已存在对应赛事',
     preview_snapshot_changed: '记录在预览后已更新',

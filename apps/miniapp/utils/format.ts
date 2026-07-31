@@ -23,12 +23,13 @@ export const infoStatusLabels: Record<string, string> = {
   source_error: '来源异常',
 };
 
-export function formatDate(value?: string) {
+export function formatDate(value?: string | null) {
   if (!value) return '待确认';
-  return value.slice(0, 10);
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+  return match?.[1] || '待确认';
 }
 
-export function formatDateTime(value?: string) {
+export function formatDateTime(value?: string | null) {
   if (!value) return '待确认';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '待确认';

@@ -317,3 +317,73 @@
   min-height: 88rpx;
   line-height: 1.2;
 }
+
+/* Keep the account surface in the same editorial system as home, events, and radar. */
+.mine-page {
+  padding: 24rpx 24rpx calc(108rpx + env(safe-area-inset-bottom));
+}
+
+.profile-card,
+.summary-panel,
+.choice-stat,
+.menu-button,
+.dev-tools,
+.compliance-card {
+  border-color: var(--wr-border, rgba(23, 21, 18, .12));
+  border-radius: 24rpx;
+  background: var(--wr-surface, #fff);
+  box-shadow: 0 8rpx 24rpx rgba(44, 33, 21, .06);
+}
+
+.profile-card {
+  margin-top: 0;
+}
+
+.profile-avatar-placeholder,
+.menu-icon-box {
+  background: var(--wr-primary-soft, #fff0e9);
+  color: var(--wr-primary, #f2541b);
+}
+
+.profile-kicker,
+.profile-action,
+.summary-action,
+.menu-action,
+.receipt-status {
+  color: var(--wr-primary, #f2541b);
+}
+
+.profile-title,
+.summary-value,
+.summary-label,
+.next-name,
+.menu-title,
+.receipt-event {
+  color: var(--wr-text, #171512);
+}
+
+.profile-desc,
+.registered-at,
+.summary-label,
+.menu-summary,
+.receipt-note,
+.receipt-meta,
+.choice-stat-label {
+  color: var(--wr-muted, #6c6861);
+}
+
+.summary-row + .summary-row,
+.receipt-row {
+  border-color: var(--wr-border, rgba(23, 21, 18, .12));
+}
+
+.choice-stat-value.interested,
+.choice-stat-value.considering,
+.choice-stat-value.registered {
+  color: var(--wr-text, #171512);
+}
+
+.menu-button-hover {
+  border-color: var(--wr-primary, #f2541b);
+  background: var(--wr-primary-soft, #fff0e9);
+}

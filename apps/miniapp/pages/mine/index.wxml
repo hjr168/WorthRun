@@ -1,4 +1,4 @@
-<theme-shell title="我的">
+<theme-shell title="我的" show-theme="{{true}}">
 <view class="page mine-page">
   <loading-state wx:if="{{loading}}" text="正在加载我的信息" />
   <block wx:elif="{{error}}">

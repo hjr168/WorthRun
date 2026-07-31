@@ -12,6 +12,10 @@ const account_1 = require("../../utils/account");
 const reminder_permission_1 = require("../../utils/reminder-permission");
 const user_session_1 = require("../../utils/user-session");
 const index_1 = require("../../config/index");
+const DEFAULT_EVENT_COVER = '/assets/images/event-cover-default.png';
+function coverUrl(value) {
+    return value && !value.endsWith('event-cover-default.jpg') ? value : DEFAULT_EVENT_COVER;
+}
 Page({
     data: {
         id: '',
@@ -84,7 +88,7 @@ Page({
             const verification = (0, event_detail_1.buildVerificationGroups)(detail.event.infoStatus, detail.event.checklistItems);
             detail.event.reminderOptions = (detail.event.reminderOptions || []).map((item) => (Object.assign(Object.assign({}, item), { scheduleText: item.scheduledAt ? (0, format_1.formatDateTime)(item.scheduledAt) : '' })));
             this.setData({
-                event: detail.event,
+                event: Object.assign(Object.assign({}, detail.event), { coverImageUrl: coverUrl(detail.event.coverImageUrl), coverThumbnailUrl: coverUrl(detail.event.coverThumbnailUrl || detail.event.coverImageUrl) }),
                 isFavorite: favorites.items.some((item) => item.eventId === this.data.id),
                 viewerChoice: viewerChoice.choice,
                 dateText: (0, format_1.formatDate)(detail.event.eventDate),
@@ -129,6 +133,9 @@ Page({
     },
     reload() {
         this.load();
+    },
+    onCoverImageError() {
+        this.setData({ 'event.coverImageUrl': DEFAULT_EVENT_COVER });
     },
     reportProblem() {
         (0, product_feedback_1.openProductFeedback)('event_detail', this.data.errorRequestId || undefined);

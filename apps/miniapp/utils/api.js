@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ApiError = void 0;
 exports.request = request;
 exports.getEvents = getEvents;
+exports.getDiscoveryHome = getDiscoveryHome;
+exports.getRegions = getRegions;
 exports.getEventDetail = getEventDetail;
 exports.savePreference = savePreference;
 exports.getPreference = getPreference;
@@ -30,6 +32,8 @@ exports.recordActivity = recordActivity;
 exports.getMyReminders = getMyReminders;
 exports.subscribeEventReminders = subscribeEventReminders;
 exports.cancelEventReminder = cancelEventReminder;
+exports.getRadar = getRadar;
+exports.recordVisitorActivity = recordVisitorActivity;
 const index_1 = require("../config/index");
 const user_session_1 = require("./user-session");
 class ApiError extends Error {
@@ -103,6 +107,17 @@ function request(path, options = {}) {
 }
 function getEvents(params = {}) {
     return request('/api/events', { data: params, silent: true });
+}
+function getDiscoveryHome(month, userKey) {
+    return request('/api/discovery/home', {
+        data: { month, userKey },
+        silent: true,
+    });
+}
+function getRegions() {
+    return request('/api/regions', {
+        silent: true,
+    });
 }
 function getEventDetail(id) {
     return request(`/api/events/${id}`, { silent: true });
@@ -241,6 +256,17 @@ function subscribeEventReminders(eventId, acceptedTypes) {
 function cancelEventReminder(eventId, type) {
     return request(`/api/users/me/reminders/${eventId}/${type}`, {
         method: 'DELETE',
+        silent: true,
+    });
+}
+function getRadar(params = {}) {
+    return request('/api/radar', { data: params, silent: true });
+}
+/** 匿名访客埋点（无需登录，失败静默，不阻塞主业务）。 */
+function recordVisitorActivity(data) {
+    return request('/api/growth/visitor-activity', {
+        method: 'POST',
+        data,
         silent: true,
     });
 }

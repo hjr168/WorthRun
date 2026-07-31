@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CHINAATH_PUBLIC_LIST_URL } from '../eventSourceConfig.js';
+import { resolveSupportedRegion } from '@worth-running/shared';
 import type { SourceCandidateBatch } from './sourceCandidate.js';
 
 const CHINAATH_LIST_ENDPOINT =
@@ -44,6 +45,7 @@ interface FetchChinaAthOptions {
   pageNo?: number;
   pageSize?: number;
   cityHints?: string[];
+  provinceCode?: string;
 }
 
 export async function fetchChinaAthOfficialCandidates(
@@ -53,10 +55,11 @@ export async function fetchChinaAthOfficialCandidates(
   const pageNo = options.pageNo ?? 1;
   const pageSize = Math.min(Math.max(options.pageSize ?? DEFAULT_BATCH_SIZE, 1), 20);
   const hints = (options.cityHints ?? []).map(normalizeCityHint).filter(Boolean);
-  if (hints.length !== 1 || !CHINAATH_CITY_IDS[hints[0]]) {
+  const nationwideProvince = options.provinceCode;
+  if (!nationwideProvince && (hints.length !== 1 || !CHINAATH_CITY_IDS[hints[0]])) {
     throw new Error('中国田协来源必须配置一个大湾区内地城市');
   }
-  const cityId = CHINAATH_CITY_IDS[hints[0]];
+  const cityId = nationwideProvince ? '' : CHINAATH_CITY_IDS[hints[0]];
   const response = await fetchImpl(CHINAATH_LIST_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -65,7 +68,7 @@ export async function fetchChinaAthOfficialCandidates(
       'user-agent': process.env.AI_INGEST_USER_AGENT || 'WorthRunBot/0.1',
     },
     body: JSON.stringify({
-      provinceId: '440000',
+      provinceId: nationwideProvince || '440000',
       cityId,
       districtId: '',
       raceName: '',
@@ -88,6 +91,7 @@ export async function fetchChinaAthOfficialCandidates(
 
   const data = parsed.data.data;
   const records = data.results.filter((race) => {
+    if (nationwideProvince) return true;
     const haystack = `${race.raceName} ${race.raceAddress || ''}`;
     return haystack.includes(hints[0]);
   });
@@ -100,6 +104,7 @@ export async function fetchChinaAthOfficialCandidates(
     pageCount: data.pageCount ?? Math.ceil(data.totalCount / remotePageSize),
     candidates: records.map((race) => {
       const city = parseCity(race.raceAddress);
+      const region = resolveSupportedRegion(city);
       const distances = parseRaceItems(race.raceItem);
       const quote = [race.raceName, race.raceTime, race.raceAddress, race.raceItem]
         .filter(Boolean)
@@ -115,6 +120,8 @@ export async function fetchChinaAthOfficialCandidates(
         candidate: {
           eventName: race.raceName,
           city,
+          provinceCode: region?.provinceCode || null,
+          cityCode: region?.cityCode || null,
           eventDate: race.raceTime,
           eventStartAt: null,
           distanceItems: distances,

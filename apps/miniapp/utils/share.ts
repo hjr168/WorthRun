@@ -31,6 +31,10 @@ export const defaultShareSettings: ShareSettings = {
       titleTemplate: '哪场值得跑更新了｜{latestVersion}',
       imageUrl: '/assets/share/share-release.jpg',
     },
+    radar: {
+      titleTemplate: '未来 90 天大湾区赛事雷达｜哪场值得跑',
+      imageUrl: '/assets/share/share-brand.jpg',
+    },
   },
 };
 
@@ -111,7 +115,8 @@ export function trackShare(
     | 'tools'
     | 'source_summary'
     | 'release_notes'
-    | 'personal_home',
+    | 'personal_home'
+    | 'radar',
   eventId?: string,
   requestShareToken = false,
 ) {

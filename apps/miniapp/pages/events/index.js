@@ -6,6 +6,9 @@ const product_feedback_1 = require("../../utils/product-feedback");
 const share_1 = require("../../utils/share");
 const cities = [
     '全部',
+    '北京', '上海',
+    '南京', '无锡', '徐州', '常州', '苏州', '南通', '连云港', '淮安', '盐城', '扬州', '镇江', '泰州', '宿迁',
+    '杭州', '宁波', '温州', '嘉兴', '湖州', '绍兴', '金华', '衢州', '舟山', '台州', '丽水',
     '广州',
     '深圳',
     '珠海',
@@ -15,9 +18,18 @@ const cities = [
     '中山',
     '江门',
     '肇庆',
+    '汕头', '湛江', '茂名', '梅州', '汕尾', '河源', '阳江', '清远', '潮州', '揭阳', '云浮',
+    '成都', '自贡', '攀枝花', '泸州', '德阳', '绵阳', '广元', '遂宁', '内江', '乐山', '南充', '眉山', '宜宾', '广安', '达州', '雅安', '巴中', '资阳', '阿坝', '甘孜', '凉山',
+    '重庆', '武汉', '黄石', '十堰', '宜昌', '襄阳', '鄂州', '荆门', '孝感', '荆州', '黄冈', '咸宁', '随州', '恩施', '神农架',
+    '福州', '厦门', '莆田', '三明', '泉州', '漳州', '南平', '龙岩', '宁德',
     '香港',
     '澳门',
 ];
+const months = ['全部月份', ...Array.from({ length: 12 }, (_, index) => {
+        const date = new Date();
+        date.setMonth(date.getMonth() + index);
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    })];
 const distances = ['全部', '5K', '10K', '半马', '全马', '欢乐跑'];
 const signupOptions = [
     { label: '全部', value: '' },
@@ -44,10 +56,13 @@ Page({
         distanceIndex: 0,
         signupIndex: 0,
         judgementIndex: 0,
+        monthIndex: 0,
+        filtersExpanded: false,
         cities,
         distances,
         signupLabels: signupOptions.map((item) => item.label),
         judgementLabels: judgementOptions.map((item) => item.label),
+        months,
         events: [],
         page: 1,
         pageSize: 10,
@@ -90,6 +105,7 @@ Page({
                 distance: this.data.distanceIndex ? distances[this.data.distanceIndex] : '',
                 signupStatus: signupOptions[this.data.signupIndex].value,
                 runJudgement: judgementOptions[this.data.judgementIndex].value,
+                month: this.data.monthIndex ? months[this.data.monthIndex] : '',
             };
             const activeFilters = [
                 this.data.search.trim() ? `搜索：${this.data.search.trim()}` : '',
@@ -97,6 +113,7 @@ Page({
                 this.data.distanceIndex ? distances[this.data.distanceIndex] : '',
                 this.data.signupIndex ? signupOptions[this.data.signupIndex].label : '',
                 this.data.judgementIndex ? judgementOptions[this.data.judgementIndex].label : '',
+                this.data.monthIndex ? months[this.data.monthIndex] : '',
             ].filter(Boolean);
             const [eventRes, favoriteRes] = await Promise.all([
                 (0, api_1.getEvents)(params),
@@ -154,6 +171,7 @@ Page({
             distanceIndex: 0,
             signupIndex: 0,
             judgementIndex: 0,
+            monthIndex: 0,
             hasActiveFilter: false,
         });
         this.load(true);
@@ -173,6 +191,13 @@ Page({
     onJudgementChange(event) {
         this.setData({ judgementIndex: Number(event.detail.value) });
         this.load(true);
+    },
+    onMonthChange(event) {
+        this.setData({ monthIndex: Number(event.detail.value) });
+        this.load(true);
+    },
+    toggleFilters() {
+        this.setData({ filtersExpanded: !this.data.filtersExpanded });
     },
     openEvent(event) {
         wx.navigateTo({ url: `/pages/event-detail/index?id=${event.detail.id}` });

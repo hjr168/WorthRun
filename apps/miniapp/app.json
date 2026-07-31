@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/home/index",
+    "pages/radar/index",
     "pages/events/index",
     "pages/event-detail/index",
     "pages/source-summary/index",
@@ -21,17 +22,17 @@
   "window": {
     "navigationStyle": "custom",
     "navigationBarTitleText": "",
-    "navigationBarBackgroundColor": "#F4F5F7",
+    "navigationBarBackgroundColor": "#FBFAF7",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#F8FAFC"
+    "backgroundColor": "#FBFAF7"
   },
   "usingComponents": {
     "theme-shell": "/components/theme-shell/index"
   },
   "tabBar": {
     "color": "#64748B",
-    "selectedColor": "#FF5C1A",
-    "backgroundColor": "#FFFFFF",
+    "selectedColor": "#F2541B",
+    "backgroundColor": "#FFFEFC",
     "borderStyle": "black",
     "list": [
       {
@@ -45,6 +46,12 @@
         "text": "赛事",
         "iconPath": "assets/icons/tab-events.png",
         "selectedIconPath": "assets/icons/tab-events-active.png"
+      },
+      {
+        "pagePath": "pages/radar/index",
+        "text": "雷达",
+        "iconPath": "assets/icons/tab-radar.png",
+        "selectedIconPath": "assets/icons/tab-radar-active.png"
       },
       {
         "pagePath": "pages/mine/index",

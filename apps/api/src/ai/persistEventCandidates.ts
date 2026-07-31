@@ -1,5 +1,6 @@
 import { EventCandidateStatus, Prisma, prisma } from '@worth-running/database';
-import { isFutureChinaDate, isGreaterBayAreaCity } from '@worth-running/shared';
+import { isFutureChinaDate, isGreaterBayAreaCity, resolveSupportedRegion } from '@worth-running/shared';
+import { isNationwideDiscoveryEnabled } from '../dataPolicy.js';
 import { canMonitorPublishedEventChanges, classifyCandidate } from './eventSourceOperations.js';
 import type { SourceCandidate } from './sources/sourceCandidate.js';
 import { detectEventChanges } from '../eventChangeDetection.js';
@@ -24,7 +25,7 @@ export function candidateExclusionReason(
   now: Date = new Date(),
 ) {
   if (!shouldPersistCandidateByDate(candidate.eventDate, now)) return 'expired' as const;
-  if (!isGreaterBayAreaCity(candidate.city)) return 'outside_region' as const;
+  if (!isNationwideDiscoveryEnabled() && !isGreaterBayAreaCity(candidate.city)) return 'outside_region' as const;
   return null;
 }
 
@@ -93,8 +94,12 @@ export async function persistEventCandidates(
   };
 
   for (const item of items) {
+    const rawCandidate = item.candidate;
+    const region = resolveSupportedRegion(rawCandidate.city, rawCandidate.cityCode);
     const candidate = {
-      ...item.candidate,
+      ...rawCandidate,
+      provinceCode: rawCandidate.provinceCode || region?.provinceCode || null,
+      cityCode: rawCandidate.cityCode || region?.cityCode || null,
       sourceLevel: source.sourceLevel,
       officialUrl: resolveCandidateOfficialUrl(
         source.sourceLevel,
@@ -279,6 +284,8 @@ export async function persistEventCandidates(
           : EventCandidateStatus.new,
       eventName: candidate.eventName,
       city: candidate.city,
+      provinceCode: candidate.provinceCode || resolveSupportedRegion(candidate.city)?.provinceCode || null,
+      cityCode: candidate.cityCode || resolveSupportedRegion(candidate.city)?.cityCode || null,
       eventDate,
       sourceUrl: candidate.sourceUrl,
       officialUrl: candidate.officialUrl,

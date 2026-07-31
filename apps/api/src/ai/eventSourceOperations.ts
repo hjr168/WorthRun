@@ -1,3 +1,6 @@
+import { resolveSupportedRegion } from '@worth-running/shared';
+import { isNationwideDiscoveryEnabled } from '../dataPolicy.js';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
 
@@ -7,6 +10,7 @@ export const candidateReviewIssues = [
   'missing_source_url',
   'duplicate_event',
   'source_date_conflict',
+  'missing_region_code',
 ] as const;
 
 export type CandidateReviewIssue = (typeof candidateReviewIssues)[number];
@@ -19,6 +23,9 @@ interface CandidateForClassification {
   eventDate?: string | null;
   officialUrl?: string | null;
   sourceUrl?: string | null;
+  city?: string | null;
+  provinceCode?: string | null;
+  cityCode?: string | null;
 }
 
 export function classifyCandidate(
@@ -31,6 +38,18 @@ export function classifyCandidate(
   if (!candidate.officialUrl) reviewIssues.push('missing_official_url');
   if (!candidate.sourceUrl) reviewIssues.push('missing_source_url');
   if (duplicateEventId) reviewIssues.push('duplicate_event');
+  if (isNationwideDiscoveryEnabled()) {
+    const region = resolveSupportedRegion(candidate.city);
+    if (
+      !region ||
+      !candidate.provinceCode ||
+      !candidate.cityCode ||
+      candidate.provinceCode !== region.provinceCode ||
+      candidate.cityCode !== region.cityCode
+    ) {
+      reviewIssues.push('missing_region_code');
+    }
+  }
 
   return {
     priorityScore: candidatePriorityScore(candidate.eventDate, now),

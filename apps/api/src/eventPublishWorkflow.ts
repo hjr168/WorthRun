@@ -1,5 +1,5 @@
 import { Prisma, prisma } from '@worth-running/database';
-import { normalizeGreaterBayAreaCity } from '@worth-running/shared';
+import { normalizeGreaterBayAreaCity, resolveSupportedRegion } from '@worth-running/shared';
 import { publishBoundaryError } from './dataPolicy.js';
 import { hasOfficialEvidence } from './sourceAuthority.js';
 
@@ -9,6 +9,8 @@ export interface PublishWorkflowEvent {
   id?: string;
   eventName: string;
   city: string;
+  provinceCode?: string | null;
+  cityCode?: string | null;
   eventDate: Date | string;
   distanceItems: string[];
   signupStatus: string;
@@ -77,13 +79,17 @@ function normalizedEvidenceUrl(value: string | null | undefined) {
   }
 }
 
+function comparableCity(value: string) {
+  return resolveSupportedRegion(value)?.cityCode || normalizeGreaterBayAreaCity(value) || value.replace(/\s|市$/g, '');
+}
+
 export function arePotentialDuplicateEvents(
   left: DuplicateComparableEvent,
   right: DuplicateComparableEvent,
 ) {
   if (left.id && right.id && left.id === right.id) return false;
   if (
-    normalizeGreaterBayAreaCity(left.city) !== normalizeGreaterBayAreaCity(right.city) ||
+    comparableCity(left.city) !== comparableCity(right.city) ||
     eventDateOnly(left.eventDate) !== eventDateOnly(right.eventDate)
   ) {
     return false;
@@ -149,7 +155,10 @@ export function eventPublishIssues(event: PublishWorkflowEvent, now = new Date()
   if (event.infoStatus === 'user_flagged') issues.push('user_flagged');
   const date =
     event.eventDate instanceof Date ? event.eventDate.toISOString().slice(0, 10) : event.eventDate;
-  const boundary = publishBoundaryError(event.city, date, now);
+  const boundary = publishBoundaryError(event.city, date, now, {
+    provinceCode: event.provinceCode,
+    cityCode: event.cityCode,
+  });
   if (boundary) issues.push(boundary);
   const text = [
     event.eventName,

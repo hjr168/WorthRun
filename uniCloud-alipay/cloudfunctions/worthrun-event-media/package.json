@@ -1,0 +1,16 @@
+{
+  "name": "worthrun-event-media",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "busboy": "^1.6.0"
+  },
+  "cloudfunction-config": {
+    "concurrency": 1,
+    "memorySize": 512,
+    "path": "/worthrun-event-media",
+    "timeout": 30,
+    "triggers": []
+  }
+}

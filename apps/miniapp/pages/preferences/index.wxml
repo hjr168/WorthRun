@@ -7,16 +7,20 @@
     <view wx:if="{{error}}" class="error-tip">{{error}}</view>
     <view class="form-card">
       <view class="chip-section">
-        <view class="field-label">常跑城市</view>
+        <view class="field-label">想去哪些省份</view>
+        <input class="province-search" placeholder="搜索省份，例如浙江、广东" value="{{provinceSearch}}" bindinput="searchProvince" />
+        <view class="province-row">
+          <button wx:for="{{filteredProvinces}}" wx:key="provinceCode" class="province-chip {{item.provinceCode === activeProvinceCode ? 'selected' : ''}}" data-code="{{item.provinceCode}}" bindtap="selectProvince">{{item.provinceName}}</button>
+        </view>
+        <view class="field-label city-label">选择城市（可多选）</view>
         <view class="chip-row">
           <button
             wx:for="{{cityChips}}"
-            wx:key="label"
+            wx:key="value"
             class="chip {{item.selected ? 'selected' : ''}}"
             aria-label="{{item.label}}{{item.selected ? '，已选择' : '，未选择'}}"
-            data-group="cities"
-            data-value="{{item.label}}"
-            bindtap="toggleChip"
+            data-code="{{item.value}}"
+            bindtap="toggleCity"
           >
             {{item.label}}
           </button>

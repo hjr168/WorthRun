@@ -15,6 +15,7 @@ import {
   EditOutlined,
   EyeInvisibleOutlined,
   FileDoneOutlined,
+  PictureOutlined,
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons';
@@ -327,6 +328,15 @@ export function EventsPage() {
                       编辑
                     </Button>
                   )}
+                  <Button
+                    size="small"
+                    icon={<PictureOutlined />}
+                    onClick={() =>
+                      navigate(`/discovery-content?tab=media&eventId=${record.id}`)
+                    }
+                  >
+                    图片
+                  </Button>
                   {can('publish_event') &&
                     (archived ? (
                       <Button

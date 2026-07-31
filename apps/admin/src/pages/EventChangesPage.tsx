@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   Checkbox,
   Descriptions,
@@ -17,6 +18,7 @@ import {
 import { ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiGet, apiSend } from '../api';
 import { useAdmin } from '../context/AdminContext';
 import type {
@@ -54,6 +56,8 @@ const emptySummary: EventChangeAlertSummary = {
 
 export function EventChangesPage() {
   const { can } = useAdmin();
+  const [searchParams] = useSearchParams();
+  const initialEventId = searchParams.get('eventId') || undefined;
   const [items, setItems] = useState<EventChangeAlertItem[]>([]);
   const [summary, setSummary] = useState(emptySummary);
   const [total, setTotal] = useState(0);
@@ -62,6 +66,8 @@ export function EventChangesPage() {
     page: 1,
     pageSize: 20,
     status: 'open',
+    // 从核验页等场景跳转过来时，按赛事过滤并定位其开放告警。
+    ...(initialEventId ? { eventId: initialEventId } : {}),
   });
   const [selected, setSelected] = useState<EventChangeAlertItem | null>(null);
   const [selectedFields, setSelectedFields] = useState<EventChangeField[]>([]);
@@ -180,6 +186,24 @@ export function EventChangesPage() {
         <Statistic title="7 天内已检查" value={summary.checkedWithin7Days} />
         <Statistic title="30 天内已应用" value={summary.appliedWithin30Days} />
       </div>
+
+      {query.eventId && (
+        <Alert
+          style={{ margin: '12px 0' }}
+          type="info"
+          showIcon
+          message="正在按赛事过滤变更告警"
+          description="仅显示从赛事核验跳转过来的该赛事开放告警。处理后即可回到核验页继续。"
+          action={
+            <Button
+              size="small"
+              onClick={() => setQuery((value) => ({ ...value, eventId: undefined, page: 1 }))}
+            >
+              查看全部告警
+            </Button>
+          }
+        />
+      )}
 
       <div className="event-change-filters">
         <Input.Search

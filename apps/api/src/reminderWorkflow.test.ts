@@ -78,4 +78,23 @@ describe('reminder options', () => {
     expect(canReactivateReminder('cancelled')).toBe(true);
     expect(canReactivateReminder('failed')).toBe(true);
   });
+
+  it('returns specific base-condition codes so the admin can tell where to fix', () => {
+    const now = new Date('2026-07-22T00:00:00.000Z');
+    expect(reminderIssueCodes({ ...event, publishStatus: 'draft' }, now)).toEqual([
+      'event_not_published',
+    ]);
+    expect(
+      reminderIssueCodes({ ...event, eventDate: new Date('2026-07-01T00:00:00.000Z') }, now),
+    ).toEqual(['event_expired']);
+    expect(reminderIssueCodes({ ...event, infoStatus: 'pending_verify' }, now)).toEqual([
+      'info_not_verified',
+    ]);
+    expect(reminderIssueCodes({ ...event, sourceLevel: 'community' }, now)).toEqual([
+      'source_not_reminder_trusted',
+    ]);
+    expect(reminderIssueCodes({ ...event, changeAlerts: [{ id: 'alert-1' }] }, now)).toEqual([
+      'change_alert_open',
+    ]);
+  });
 });

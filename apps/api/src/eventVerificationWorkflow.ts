@@ -1,5 +1,6 @@
 import { Prisma, prisma } from '@worth-running/database';
-import { publishBoundaryError } from './dataPolicy.js';
+import { isNationwideDiscoveryEnabled, publishBoundaryError, resolveRegionForBoundary } from './dataPolicy.js';
+import { resolveSupportedRegion } from '@worth-running/shared';
 import { arePotentialDuplicateEvents } from './eventPublishWorkflow.js';
 import { buildReminderOptions, reminderIssueCodes } from './reminderWorkflow.js';
 
@@ -10,6 +11,8 @@ export type VerificationEvent = {
   id: string;
   eventName: string;
   city: string;
+  provinceCode?: string | null;
+  cityCode?: string | null;
   eventDate: Date;
   eventStartAt: Date | null;
   distanceItems: string[];
@@ -45,6 +48,8 @@ const verificationInclude = {
 const criticalFields = [
   'eventName',
   'city',
+  'provinceCode',
+  'cityCode',
   'eventDate',
   'eventStartAt',
   'distanceItems',
@@ -77,8 +82,18 @@ export function eventVerificationIssues(event: VerificationEvent, now = new Date
     event.city,
     event.eventDate.toISOString().slice(0, 10),
     now,
+    { provinceCode: event.provinceCode, cityCode: event.cityCode },
   );
-  if (boundary) issues.push(boundary);
+  if (boundary) {
+    if (isNationwideDiscoveryEnabled()) {
+      const region = resolveSupportedRegion(event.city);
+      if (!region) issues.push('unsupported_region');
+      else if (!event.provinceCode || !event.cityCode) issues.push('missing_region_code');
+      else issues.push('region_code_mismatch');
+    } else {
+      issues.push(boundary);
+    }
+  }
   if (!['official', 'trusted'].includes(event.sourceLevel)) issues.push('source_not_trusted');
   if (!event.officialUrl) issues.push('missing_official_url');
   if (!event.sourceName) issues.push('missing_source_name');
@@ -191,12 +206,24 @@ export async function runBulkVerify(input: {
         }
         const issues = eventVerificationIssues(before, now);
         if (issues.length) throw new Error(issues.join(','));
+        // 核验通过时顺带补齐缺失的省市行政区代码（城市可识别时），避免赛事因代码为空无法公开展示，
+        // 也避免用户在无代码编辑入口的核验页陷入"补齐代码"死锁。
+        const filledRegion = resolveRegionForBoundary(before.city, {
+          provinceCode: before.provinceCode,
+          cityCode: before.cityCode,
+        });
         const event = await tx.event.update({
           where: { id: before.id },
           data: {
             infoStatus: 'verified',
             sourceCheckedAt: now,
             fieldConfidence: verifiedFieldConfidence(before) as Prisma.InputJsonValue,
+            ...(!before.provinceCode && filledRegion.provinceCode
+              ? { provinceCode: filledRegion.provinceCode }
+              : {}),
+            ...(!before.cityCode && filledRegion.cityCode
+              ? { cityCode: filledRegion.cityCode }
+              : {}),
           },
         });
         const reviewedReminders = await tx.eventReminder.findMany({

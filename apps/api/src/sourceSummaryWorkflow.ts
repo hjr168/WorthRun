@@ -1,15 +1,21 @@
 import { Prisma, prisma } from '@worth-running/database';
 import { buildPublicEventWhere } from './dataPolicy.js';
-import { generateEventSourceSummary } from './sourceSummaryGeneration.js';
+import { generateEventSourceSummary, SourceSummaryGenerationError } from './sourceSummaryGeneration.js';
 
 export class SourceSummaryNotFoundError extends Error {}
 export class SourceSummaryConflictError extends Error {}
 export class SourceSummaryValidationError extends Error {}
 
-export async function createSourceSummaryDraft(eventId: string, adminUserId?: string) {
+export async function createSourceSummaryDraft(
+  eventId: string,
+  adminUserId?: string,
+  store: typeof prisma = prisma,
+) {
+  const now = new Date();
   const result = await generateEventSourceSummary(eventId, {
+    now,
     findExisting: ({ eventId: identityEventId, contentHash, promptVersion }) =>
-      prisma.eventSourceSummary.findUnique({
+      store.eventSourceSummary.findUnique({
         where: {
           eventId_contentHash_promptVersion: {
             eventId: identityEventId,
@@ -19,10 +25,35 @@ export async function createSourceSummaryDraft(eventId: string, adminUserId?: st
         },
       }),
   });
-  if ('existing' in result && result.existing) return result.existing;
+  if ('reused' in result) {
+    const reused = result.reused;
+    if (!reused) throw new SourceSummaryGenerationError('来源摘要生成异常');
+    // 来源内容未变化：每次抓取都真实发生了，更新 fetchedAt 反映最近的抓取时间，
+    // 并返回 reused 信号让接口/前端给出准确反馈（而非假装生成新草稿）。
+    const refreshed = await store.eventSourceSummary.update({
+      where: { id: reused.id },
+      data: { fetchedAt: now },
+    });
+    await store.adminOperationLog.create({
+      data: {
+        adminUserId,
+        action: 'source_summary.refetch_unchanged',
+        targetType: 'event_source_summaries',
+        targetId: refreshed.id,
+        afterValue: {
+          eventId,
+          summaryId: refreshed.id,
+          status: refreshed.status,
+          contentHash: refreshed.contentHash,
+        },
+        note: '来源内容未变化，仅刷新抓取时间',
+      },
+    });
+    return { ...refreshed, reused: true } as const;
+  }
   const generated = result.generated;
-  const created = await prisma.eventSourceSummary.create({ data: generated });
-  await prisma.adminOperationLog.create({
+  const created = await store.eventSourceSummary.create({ data: generated });
+  await store.adminOperationLog.create({
     data: {
       adminUserId,
       action: 'source_summary.generate_draft',
@@ -40,7 +71,7 @@ export async function createSourceSummaryDraft(eventId: string, adminUserId?: st
       note: '抓取来源并生成摘要草稿',
     },
   });
-  return created;
+  return { ...created, reused: false } as const;
 }
 
 export async function listSourceSummaries(eventId: string) {

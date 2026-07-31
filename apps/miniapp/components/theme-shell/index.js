@@ -7,8 +7,8 @@ function applyChrome(theme) {
     const dark = theme === 'dark';
     wx.setTabBarStyle({
         color: dark ? '#8899AA' : '#6B7A8D',
-        selectedColor: '#FF5C1A',
-        backgroundColor: dark ? '#162030' : '#FFFFFF',
+        selectedColor: '#F2541B',
+        backgroundColor: dark ? '#162030' : '#FFFEFC',
         borderStyle: dark ? 'white' : 'black',
     });
 }
@@ -51,6 +51,18 @@ Component({
             type: Boolean,
             value: false,
         },
+        variant: {
+            type: String,
+            value: 'default',
+        },
+        showRegion: {
+            type: Boolean,
+            value: false,
+        },
+        showTheme: {
+            type: Boolean,
+            value: false,
+        },
     },
     data: Object.assign({ theme: 'light' }, getNavigationMetrics()),
     lifetimes: {
@@ -70,6 +82,9 @@ Component({
     methods: {
         openSearch() {
             this.triggerEvent('search');
+        },
+        openRegion() {
+            this.triggerEvent('region');
         },
         goBack() {
             const pages = getCurrentPages();

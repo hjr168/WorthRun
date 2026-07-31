@@ -34,13 +34,28 @@ function chinaNineOnDate(date: Date) {
   return new Date(`${chinaDateOnly(date)}T01:00:00.000Z`);
 }
 
-function baseIssue(event: ReminderEvent, now: Date) {
-  if (event.publishStatus !== 'published') return '赛事未公开发布';
-  if (event.eventDate.getTime() <= now.getTime()) return '赛事已过期';
-  if (event.infoStatus !== 'verified') return '赛事信息尚未人工核实';
-  if (!['official', 'trusted'].includes(event.sourceLevel)) return '赛事缺少官方或可信来源';
-  if (event.changeAlerts?.length) return '赛事信息正在复核';
+/** 提醒资格基础条件不满足时的具体原因 code，供后台逐条展示，便于运营定位修复入口。 */
+const baseIssueReasons: Record<string, string> = {
+  event_not_published: '赛事未公开发布',
+  event_expired: '赛事已过期',
+  info_not_verified: '赛事信息尚未人工核实',
+  source_not_reminder_trusted: '赛事缺少官方或可信来源',
+  change_alert_open: '赛事信息正在复核',
+};
+
+function baseIssueCode(event: ReminderEvent, now: Date) {
+  if (event.publishStatus !== 'published') return 'event_not_published';
+  if (event.eventDate.getTime() <= now.getTime()) return 'event_expired';
+  if (event.infoStatus !== 'verified') return 'info_not_verified';
+  if (!['official', 'trusted'].includes(event.sourceLevel))
+    return 'source_not_reminder_trusted';
+  if (event.changeAlerts?.length) return 'change_alert_open';
   return null;
+}
+
+function baseIssue(event: ReminderEvent, now: Date) {
+  const code = baseIssueCode(event, now);
+  return code ? (baseIssueReasons[code] ?? code) : null;
 }
 
 export function buildReminderOptions(event: ReminderEvent, now = new Date()): ReminderOption[] {
@@ -98,8 +113,8 @@ export function buildReminderOptions(event: ReminderEvent, now = new Date()): Re
 }
 
 export function reminderIssueCodes(event: ReminderEvent, now = new Date()) {
-  const issue = baseIssue(event, now);
-  if (issue) return ['event_not_reminder_ready'];
+  const baseCode = baseIssueCode(event, now);
+  if (baseCode) return [baseCode];
   const issues: string[] = [];
   if (event.signupStatus === 'not_started' && !event.signupStartAt) {
     issues.push('missing_signup_start_at');

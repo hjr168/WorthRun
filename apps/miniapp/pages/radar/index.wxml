@@ -1,0 +1,99 @@
+<theme-shell title="雷达">
+<view class="page radar-page">
+  <view class="radar-hero">
+    <view class="hero-accent"></view>
+    <view class="hero-content">
+      <view class="hero-kicker">全国赛事雷达</view>
+      <view class="hero-title">未来 90 天赛事，<text class="hero-emphasis">一屏看清</text></view>
+      <view class="hero-copy">全国赛事持续核验中，报名信息请前往官方确认</view>
+    </view>
+  </view>
+
+  <view class="filter-bar">
+    <view class="filter-group">
+      <view class="filter-label">城市</view>
+      <view class="chip-row">
+        <view
+          wx:for="{{cityChips}}"
+          wx:key="label"
+          class="chip {{item.selected ? 'chip-on' : ''}}"
+          data-group="cities"
+          data-value="{{item.label}}"
+          bindtap="toggleChip"
+        >{{item.label}}</view>
+      </view>
+    </view>
+    <view class="filter-group">
+      <view class="filter-label">距离</view>
+      <view class="chip-row">
+        <view
+          wx:for="{{distanceChips}}"
+          wx:key="label"
+          class="chip {{item.selected ? 'chip-on' : ''}}"
+          data-group="distances"
+          data-value="{{item.label}}"
+          bindtap="toggleChip"
+        >{{item.label}}</view>
+      </view>
+    </view>
+    <view class="filter-group">
+      <view class="filter-label">关注点</view>
+      <view class="chip-row">
+        <view
+          wx:for="{{focusChips}}"
+          wx:key="label"
+          class="chip {{item.selected ? 'chip-on' : ''}}"
+          data-group="focusTags"
+          data-value="{{item.label}}"
+          bindtap="toggleChip"
+        >{{item.label}}</view>
+      </view>
+    </view>
+    <view class="filter-actions">
+      <button class="secondary-button" bindtap="clearFilters">清空</button>
+      <button class="primary-button" bindtap="applyFilters">应用筛选</button>
+    </view>
+  </view>
+
+  <loading-state wx:if="{{loading}}" text="正在生成雷达" />
+
+  <block wx:elif="{{error}}">
+    <empty-state title="雷达加载失败" description="{{error}}" />
+    <button class="secondary-button" bindtap="reload">重新加载</button>
+  </block>
+
+  <block wx:else>
+    <view class="radar-meta">
+      <text class="meta-count">命中 {{totalCount}} 场赛事</text>
+      <text class="meta-window">未来 {{windowDays}} 天</text>
+    </view>
+
+    <view wx:if="{{showNoPrefHint}}" class="pref-hint" bindtap="openPreference">
+      未设置偏好，显示近期值得关注赛事。点此设置城市、距离和关注点，获得更贴合的雷达。
+    </view>
+
+    <view wx:for="{{displayGroups}}" wx:key="key" wx:for-item="group" class="section">
+      <view class="section-title">{{group.title}}</view>
+      <event-card
+        wx:for="{{group.items}}"
+        wx:key="id"
+        wx:for-item="item"
+        class="card-gap"
+        event="{{item}}"
+        showFavorite="{{false}}"
+        bind:open="openEvent"
+      />
+    </view>
+
+    <empty-state
+      wx:if="{{!displayGroups.length}}"
+      title="暂无命中赛事"
+      description="试试调整城市或距离筛选，或等待后台核验更多赛事"
+    />
+  </block>
+
+  <view class="compliance-footer">
+    <text>{{complianceNotice}}</text>
+  </view>
+</view>
+</theme-shell>

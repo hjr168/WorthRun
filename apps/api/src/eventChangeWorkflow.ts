@@ -1,6 +1,6 @@
 import { Prisma, prisma } from '@worth-running/database';
 import type { SignupStatus } from '@worth-running/database';
-import { buildPublicEventWhere, publishBoundaryError } from './dataPolicy.js';
+import { buildPublicEventWhere, publishBoundaryError, resolveRegionForBoundary } from './dataPolicy.js';
 
 export const eventChangeFields = [
   'eventDate',
@@ -24,6 +24,8 @@ export interface EventChangeAlertQuery {
   severity?: 'normal' | 'important' | 'critical';
   changedField?: EventChangeField | (typeof eventChangeSignalFields)[number];
   search?: string;
+  /** 按赛事定位，用于从核验页等跳转后过滤出该赛事的变更告警。 */
+  eventId?: string;
 }
 
 export interface EventChangeResolutionInput {
@@ -39,6 +41,7 @@ export function buildEventChangeAlertWhere(
   if (query.status) where.status = query.status;
   if (query.severity) where.severity = query.severity;
   if (query.changedField) where.changedFields = { has: query.changedField };
+  if (query.eventId) where.eventId = query.eventId;
   if (query.search) {
     where.OR = [
       { event: { eventName: { contains: query.search, mode: 'insensitive' } } },
@@ -164,6 +167,7 @@ function previewFromAlert(alert: AlertWithEvent, input: EventChangeResolutionInp
       proposed.city,
       proposed.eventDate.toISOString().slice(0, 10),
       now,
+      { provinceCode: proposed.provinceCode, cityCode: proposed.cityCode },
     );
     if (boundary) issues.push(boundary);
     if (!proposed.distanceItems.length) issues.push('missing_distance_items');
@@ -222,7 +226,7 @@ export async function resolveEventChangeAlert(
 
     let updatedEvent = alert.event;
     if (input.action === 'apply_fields') {
-      const data = eventUpdateData(preview.changes);
+      const data = eventUpdateData(preview.changes, alert.event);
       updatedEvent = await tx.event.update({ where: { id: alert.event.id }, data });
     } else if (input.action === 'archive_event') {
       updatedEvent = await tx.event.update({
@@ -343,7 +347,10 @@ function applyValues<T extends AlertWithEvent['event']>(
   };
 }
 
-function eventUpdateData(changes: Record<string, { before: unknown; after: unknown }>) {
+function eventUpdateData(
+  changes: Record<string, { before: unknown; after: unknown }>,
+  event: AlertWithEvent['event'],
+) {
   const data: Prisma.EventUpdateInput = {
     infoStatus: 'pending_verify',
     sourceCheckedAt: null,
@@ -354,5 +361,12 @@ function eventUpdateData(changes: Record<string, { before: unknown; after: unkno
   if (changes.signupStatus) data.signupStatus = changes.signupStatus.after as SignupStatus;
   if (changes.signupDeadline) data.signupDeadline = new Date(String(changes.signupDeadline.after));
   if (changes.officialUrl) data.officialUrl = String(changes.officialUrl.after);
+  // 应用来源变更时，顺带补齐缺失的省市行政区代码（城市可识别时），避免赛事因代码为空无法公开展示。
+  const region = resolveRegionForBoundary(event.city, {
+    provinceCode: event.provinceCode,
+    cityCode: event.cityCode,
+  });
+  if (!event.provinceCode && region.provinceCode) data.provinceCode = region.provinceCode;
+  if (!event.cityCode && region.cityCode) data.cityCode = region.cityCode;
   return data;
 }

@@ -43,9 +43,9 @@ describe('source summary generation', () => {
     expect(result.keyPoints).toHaveLength(2);
   });
 
-  it('returns an existing content version before calling the AI provider', async () => {
+  it('signals a reused content version before calling the AI provider', async () => {
     const completeJson = vi.fn();
-    const existing = { id: 'summary-existing' };
+    const existing = { id: 'summary-existing', status: 'draft' };
     const store = {
       event: {
         findUnique: vi.fn().mockResolvedValue({
@@ -69,7 +69,9 @@ describe('source summary generation', () => {
       findExisting: vi.fn().mockResolvedValue(existing as never),
       completeJson,
     });
-    expect(result).toEqual({ existing });
+    // 命中缓存时返回 reused 信号（携带原记录），由调用方更新 fetchedAt 并如实反馈；
+    // 不再调用 AI 重新生成，避免内容未变时浪费成本。
+    expect(result).toEqual({ reused: existing });
     expect(completeJson).not.toHaveBeenCalled();
   });
 });

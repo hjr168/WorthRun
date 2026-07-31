@@ -3,15 +3,23 @@
   style="--wr-nav-height: {{navHeight}}px; --wr-capsule-top: {{capsuleTop}}px; --wr-nav-action-right: {{navActionRight}}px; --wr-search-action-right: {{searchActionRight}}px;"
 >
   <view class="custom-nav" style="height: {{navHeight}}px;">
-    <view class="custom-nav-title {{showBack ? 'custom-nav-title-with-back' : ''}} {{showSearch ? 'custom-nav-title-with-search' : ''}}">{{title}}</view>
+    <view wx:if="{{variant === 'home'}}" class="home-nav-brand" aria-label="WorthRun 哪场值得跑">
+      <text class="home-nav-brand-en">WorthRun</text>
+      <text class="home-nav-brand-cn">哪场值得跑</text>
+    </view>
+    <view wx:else class="custom-nav-title {{showBack ? 'custom-nav-title-with-back' : ''}} {{showSearch ? 'custom-nav-title-with-search' : ''}}">{{title}}</view>
     <button wx:if="{{showBack}}" class="nav-back" bindtap="goBack" aria-label="返回上一页">
       <image class="nav-icon nav-back-light" src="/assets/icons/arrow-left.png" mode="aspectFit" />
       <image class="nav-icon nav-back-dark" src="/assets/icons/arrow-left-light.png" mode="aspectFit" />
     </button>
     <button wx:if="{{showSearch}}" class="nav-search" bindtap="openSearch" aria-label="搜索赛事">
-      <image class="nav-icon" src="/assets/icons/search.png" mode="aspectFit" />
+      <image class="nav-icon" src="/assets/icons/search.png" mode="aspectFit" aria-label="搜索图标" />
     </button>
-    <button class="theme-toggle" bindtap="toggleTheme" aria-label="{{theme === 'dark' ? '切换到白天模式' : '切换到黑夜模式'}}">
+    <button wx:if="{{showRegion}}" class="nav-region" bindtap="openRegion" aria-label="选择赛事地区，当前为全国">
+      <text class="nav-region-label">全国</text>
+      <image class="nav-region-chevron" src="/assets/icons/chevron-down.png" mode="aspectFit" aria-label="展开地区" />
+    </button>
+    <button wx:if="{{showTheme}}" class="theme-toggle" bindtap="toggleTheme" aria-label="{{theme === 'dark' ? '切换到白天模式' : '切换到黑夜模式'}}">
       <image class="nav-icon" src="{{theme === 'dark' ? '/assets/icons/sun.png' : '/assets/icons/moon.png'}}" mode="aspectFit" />
     </button>
   </view>

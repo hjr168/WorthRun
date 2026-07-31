@@ -39,6 +39,12 @@ import { getSubscribeMessageError } from '../../utils/reminder-permission';
 import { hasValidUserToken } from '../../utils/user-session';
 import { config } from '../../config/index';
 
+const DEFAULT_EVENT_COVER = '/assets/images/event-cover-default.png';
+
+function coverUrl(value?: string | null) {
+  return value && !value.endsWith('event-cover-default.jpg') ? value : DEFAULT_EVENT_COVER;
+}
+
 Page({
   data: {
     id: '',
@@ -118,7 +124,11 @@ Page({
         scheduleText: item.scheduledAt ? formatDateTime(item.scheduledAt) : '',
       }));
       this.setData({
-        event: detail.event,
+        event: {
+          ...detail.event,
+          coverImageUrl: coverUrl(detail.event.coverImageUrl),
+          coverThumbnailUrl: coverUrl(detail.event.coverThumbnailUrl || detail.event.coverImageUrl),
+        },
         isFavorite: favorites.items.some((item) => item.eventId === this.data.id),
         viewerChoice: viewerChoice.choice,
         dateText: formatDate(detail.event.eventDate),
@@ -166,6 +176,9 @@ Page({
   },
   reload() {
     this.load();
+  },
+  onCoverImageError() {
+    this.setData({ 'event.coverImageUrl': DEFAULT_EVENT_COVER });
   },
   reportProblem() {
     openProductFeedback('event_detail', this.data.errorRequestId || undefined);

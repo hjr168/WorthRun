@@ -67,6 +67,8 @@ export interface EventTagInput {
 export interface EventInput {
   eventName: string;
   city: string;
+  provinceCode?: string | null;
+  cityCode?: string | null;
   eventDate: string;
   eventStartAt?: string | null;
   distanceItems: string[];
@@ -95,6 +97,10 @@ export interface EventInput {
 export interface EventListQuery {
   search?: string;
   city?: string;
+  provinceCode?: string;
+  cityCode?: string;
+  month?: string;
+  sort?: 'date_asc' | 'signup_deadline' | 'latest';
   signupStatus?: SignupStatus;
   publishStatus?: PublishStatus;
   infoStatus?: InfoStatus;
@@ -141,60 +147,20 @@ export const adminRoleValues = [
   'readonly',
 ] as const;
 
-export const greaterBayAreaCities = [
-  '广州',
-  '深圳',
-  '珠海',
-  '佛山',
-  '惠州',
-  '东莞',
-  '中山',
-  '江门',
-  '肇庆',
-  '香港',
-  '澳门',
-] as const;
-
-export type GreaterBayAreaCity = (typeof greaterBayAreaCities)[number];
-
-export const greaterBayAreaCityAliases: Record<GreaterBayAreaCity, string[]> = {
-  广州: ['广州', '广州市', '广东省广州', '广东省广州市'],
-  深圳: ['深圳', '深圳市', '广东省深圳', '广东省深圳市'],
-  珠海: ['珠海', '珠海市', '广东省珠海', '广东省珠海市'],
-  佛山: ['佛山', '佛山市', '广东省佛山', '广东省佛山市'],
-  惠州: ['惠州', '惠州市', '广东省惠州', '广东省惠州市'],
-  东莞: ['东莞', '东莞市', '广东省东莞', '广东省东莞市'],
-  中山: ['中山', '中山市', '广东省中山', '广东省中山市'],
-  江门: ['江门', '江门市', '广东省江门', '广东省江门市'],
-  肇庆: ['肇庆', '肇庆市', '广东省肇庆', '广东省肇庆市'],
-  香港: ['香港', '香港特别行政区'],
-  澳门: ['澳门', '澳门特别行政区'],
-};
-
-export const greaterBayAreaCityValues = Object.values(greaterBayAreaCityAliases).flat();
-
-export function normalizeGreaterBayAreaCity(value: string | null | undefined) {
-  if (!value) return null;
-  const normalized = value.replace(/\s+/g, '');
-  for (const city of greaterBayAreaCities) {
-    if (greaterBayAreaCityAliases[city].some((alias) => normalized === alias)) return city;
-  }
-  return null;
-}
-
-export function isGreaterBayAreaCity(value: string | null | undefined) {
-  return normalizeGreaterBayAreaCity(value) !== null;
-}
-
-export function detectGreaterBayAreaCity(value: string | null | undefined) {
-  if (!value) return null;
-  const normalized = value.replace(/\s+/g, '');
-  for (const city of greaterBayAreaCities) {
-    const aliases = [...greaterBayAreaCityAliases[city]].sort((a, b) => b.length - a.length);
-    if (aliases.some((alias) => normalized.includes(alias))) return city;
-  }
-  return null;
-}
+// 大湾区城市常量与工具从独立的无循环依赖模块导入（见 region.ts）。
+export {
+  greaterBayAreaCities,
+  greaterBayAreaCityAliases,
+  greaterBayAreaCityValues,
+  normalizeGreaterBayAreaCity,
+  isGreaterBayAreaCity,
+  detectGreaterBayAreaCity,
+  supportedRegions,
+  supportedProvinceCodes,
+  resolveSupportedRegion,
+  getSupportedProvinces,
+} from './region.js';
+export type { GreaterBayAreaCity, SupportedRegion } from './region.js';
 
 const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
 
@@ -214,3 +180,5 @@ export function isFutureChinaDate(eventDate: string | null | undefined, now: Dat
 }
 
 export * from './share.js';
+export * from './radar.js';
+export * from './radarGroups.js';

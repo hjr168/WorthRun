@@ -38,6 +38,34 @@ describe('event verification workflow', () => {
     expect(eventVerificationIssues(event(), now)).toEqual([]);
   });
 
+  it('auto-fills nationwide region codes from the city name instead of blocking verification', () => {
+    const previous = process.env.NATIONWIDE_DISCOVERY_ENABLED;
+    process.env.NATIONWIDE_DISCOVERY_ENABLED = 'true';
+    try {
+      // 城市可识别但省市行政区代码缺失：校验自动用城市名兜底，不再报 missing_region_code，
+      // 这样无代码编辑入口的核验页也能放行（实际代码补齐在落库时完成）。
+      expect(eventVerificationIssues(event(), now)).not.toContain('missing_region_code');
+      expect(
+        eventVerificationIssues(event({ provinceCode: '440000', cityCode: '440100' }), now),
+      ).not.toContain('missing_region_code');
+      // 不在首期全国目录的城市仍需人工处理
+      expect(
+        eventVerificationIssues(event({ city: '西宁' }), now),
+      ).toContain('unsupported_region');
+      // 补齐 region 视为关键字段变化（核验失效）
+      expect(
+        criticalEventFieldsChanged(event(), {
+          ...event(),
+          provinceCode: '440000',
+          cityCode: '440100',
+        }),
+      ).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.NATIONWIDE_DISCOVERY_ENABLED;
+      else process.env.NATIONWIDE_DISCOVERY_ENABLED = previous;
+    }
+  });
+
   it('rejects missing or stale evidence and open change alerts', () => {
     expect(
       eventVerificationIssues(

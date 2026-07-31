@@ -26,6 +26,12 @@
 .chip-section {
   margin-bottom: 26rpx;
 }
+.province-search { width: 100%; box-sizing: border-box; margin: 16rpx 0; border: 1rpx solid #ddd9d0; border-radius: 12rpx; background: #fbfaf7; padding: 18rpx; color: #222; font-size: 25rpx; }
+.province-row { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.province-chip { min-height: 64rpx; margin: 0; border: 1rpx solid #ddd9d0; border-radius: 999rpx; background: #fff; color: #555; padding: 10rpx 18rpx; font-size: 24rpx; line-height: 1.2; }
+.province-chip::after { border: 0; }
+.province-chip.selected { border-color: #f2541b; background: #fff0e9; color: #f2541b; font-weight: 700; }
+.city-label { margin-top: 20rpx; }
 
 .chip-section:last-child {
   margin-bottom: 0;

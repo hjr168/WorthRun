@@ -1,4 +1,8 @@
 <view class="event-card" bindtap="onOpen">
+  <view class="event-cover-shell {{coverMode === 'aspectFit' ? 'is-contained' : ''}}">
+    <image class="event-cover" src="{{coverUrl}}" mode="{{coverMode}}" lazy-load="{{true}}" binderror="onImageError" aria-label="{{event.eventName}}赛事图片" />
+    <text wx:if="{{event.coverAttribution}}" class="event-cover-attribution">图：{{event.coverAttribution}}</text>
+  </view>
   <view class="event-head">
     <view class="event-main">
       <view class="event-name">{{event.eventName}}</view>
@@ -12,10 +16,6 @@
   <view class="status-row">
     <event-status-tag signup-status="{{event.signupStatus || 'unknown'}}" event-date="{{event.eventDate || ''}}" />
     <text class="judgement">{{judgementText}}</text>
-  </view>
-  <view wx:if="{{event.judgementSummary}}" class="summary">{{event.judgementSummary}}</view>
-  <view wx:if="{{reasons.length}}" class="reasons">
-    <view wx:for="{{reasons}}" wx:key="*this" class="reason">· {{item}}</view>
   </view>
   <view class="card-footer">
     <view class="tag-row">

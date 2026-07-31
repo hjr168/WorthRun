@@ -1,0 +1,8 @@
+{
+  "home": "Webview: pages/home/index",
+  "events": "",
+  "radar": "",
+  "mine": "",
+  "detail": "",
+  "screenshotCacheNote": "开发者工具模拟器截图可能复用首页画面；AX 页面路径和文本以每次 get_app_state 为准。"
+}

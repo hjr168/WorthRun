@@ -36,6 +36,8 @@ import { MiniappPublishChecks } from '../components/MiniappPublishChecks';
 import { useConfig } from '../hooks/useConfig';
 import { DEFAULT_CITIES, DEFAULT_DISTANCES } from './ContentPage';
 import { useAdmin } from '../context/AdminContext';
+import { RegionFields } from '../components/RegionFields';
+import { resolveSupportedRegion } from '@worth-running/shared';
 
 const { TextArea } = Input;
 
@@ -52,9 +54,12 @@ export function EventEditPage() {
     if (!id) return;
     apiGet<AdminEvent>(`/api/admin/events/${id}`)
       .then((event) => {
+        const region = resolveSupportedRegion(event.city, event.cityCode);
         form.setFieldsValue({
           ...event,
           city: event.city ? [event.city] : [],
+          provinceCode: event.provinceCode || region?.provinceCode || undefined,
+          cityCode: event.cityCode || region?.cityCode || undefined,
           eventDate: event.eventDate ? dayjs(event.eventDate).format('YYYY-MM-DD') : undefined,
           eventStartAt: event.eventStartAt
             ? dayjs(event.eventStartAt).format('YYYY-MM-DDTHH:mm')
@@ -200,6 +205,9 @@ export function EventEditPage() {
                           <Input />
                         </Form.Item>
                       </div>
+                    </Section>
+                    <Section title="行政区划代码">
+                      <RegionFields form={form} />
                     </Section>
                     <Section title="报名信息">
                       <div className="form-grid">
@@ -371,8 +379,20 @@ function SourceSummaryPanel({ eventId }: { eventId: string }) {
   const generate = async () => {
     try {
       setGenerating(true);
-      await apiSend('POST', `/api/admin/events/${eventId}/source-summaries/generate`);
-      message.success('来源摘要草稿已生成，请人工核对后发布');
+      const result = await apiSend<{ reused?: boolean; status?: string }>(
+        'POST',
+        `/api/admin/events/${eventId}/source-summaries/generate`,
+      );
+      // 后端：reused=true 表示来源内容未变化（仅刷新抓取时间），reused=false 表示新建了草稿
+      if (result.reused) {
+        message.info(
+          result.status === 'published'
+            ? '来源内容未变化，沿用已发布版本（已刷新抓取时间）'
+            : '来源内容未变化，已刷新草稿抓取时间',
+        );
+      } else {
+        message.success('来源摘要草稿已生成，请人工核对后发布');
+      }
       await load();
     } catch (error) {
       showError(error);
@@ -474,9 +494,7 @@ function SourceSummaryPanel({ eventId }: { eventId: string }) {
                 ))}
               </Space>
             </Descriptions.Item>
-            <Descriptions.Item label="限制说明">
-              {item.limitations || '无'}
-            </Descriptions.Item>
+            <Descriptions.Item label="限制说明">{item.limitations || '无'}</Descriptions.Item>
           </Descriptions>
           <Input.TextArea
             rows={3}

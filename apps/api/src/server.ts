@@ -17,9 +17,14 @@ import {
   shareSceneValues,
   signupStatusValues,
   sourceLevelValues,
+  getSupportedProvinces,
+  resolveSupportedRegion,
+  supportedProvinceCodes,
 } from '@worth-running/shared';
 import type {
   FeedbackStatus,
+  GrowthCampaignStatus,
+  GrowthCampaignType,
   InfoStatus,
   PublishStatus,
   RunJudgement,
@@ -55,7 +60,17 @@ import {
 import { publicFeedbackSchema, type PublicFeedbackInput } from './feedbackSubmission.js';
 import { recordBlockedFeedback } from './feedbackMaintenance.js';
 import { getMiniProgramCode } from './wxacode.js';
-import { buildPublicEventWhere } from './dataPolicy.js';
+import { buildPublicEventWhere, isNationwideDiscoveryEnabled } from './dataPolicy.js';
+import {
+  assertSafeImageUrlResolved,
+  extractImageCandidates,
+  fetchPinnedHttps,
+  imageDimensions,
+  mediaSha256,
+  validateImagePayload,
+} from './mediaDiscovery.js';
+import { EventMediaClient, EventMediaUnavailableError } from './eventMediaClient.js';
+import { mediaDisplayMode, mediaReviewIssues, mediaUploadStatus } from './mediaGovernance.js';
 import {
   DataCleanupConflictError,
   dataCleanupActions,
@@ -138,8 +153,26 @@ import {
   publicUser,
   registerWechatUser,
   secretKey,
+  userKeyHash,
 } from './userIdentity.js';
 import { createShareToken, getGrowthStats, recordUserActivity } from './growthAnalytics.js';
+import {
+  recordVisitorActivity,
+  resolveCampaignId,
+  visitorActivityDate,
+  visitorActionFields,
+  type VisitorAction,
+} from './visitorGrowth.js';
+import {
+  campaignChannelTypeValues,
+  createCampaign,
+  getCampaignStats,
+  updateCampaign,
+  validateCampaignCode,
+  validateDateRange,
+} from './campaignService.js';
+import { queryRadar } from './radarService.js';
+import { radarDisabledResponse } from '@worth-running/shared';
 import {
   buildReminderOptions,
   getReminderReadiness,
@@ -189,12 +222,20 @@ const tokenSecret = process.env.ADMIN_TOKEN_SECRET || 'worth-running-dev-secret'
 const feedbackAbuseSecret = process.env.FEEDBACK_ABUSE_SECRET || tokenSecret;
 const userSystemEnabled = process.env.USER_SYSTEM_ENABLED === 'true';
 const reminderFeatureEnabled = process.env.REMINDER_FEATURE_ENABLED === 'true';
+// V0.6 大湾区赛事雷达开关。默认关闭，上线时先以 false 部署，体验版验证后再开启。
+// 关闭时 /api/radar 返回稳定空结构（radarDisabledResponse），首页回退现有赛事分组。
+const radarFeatureEnabled = process.env.RADAR_FEATURE_ENABLED === 'true';
 const reminderRequestEnabled = (req: Request) =>
   reminderFeatureEnabled ||
   (process.env.WX_MINIPROGRAM_STATE === 'trial' && req.header('X-WX-MiniProgram-Env') === 'trial');
 const userTokenSecret = process.env.USER_TOKEN_SECRET || tokenSecret;
 const userHashSecret = process.env.USER_OPENID_HASH_SECRET || feedbackAbuseSecret;
 const avatarSharedSecret = process.env.UNICLOUD_AVATAR_SHARED_SECRET || '';
+const eventMediaSharedSecret = process.env.UNICLOUD_EVENT_MEDIA_SHARED_SECRET || '';
+const eventMediaClient = new EventMediaClient({
+  baseUrl: process.env.UNICLOUD_EVENT_MEDIA_BASE_URL,
+  sharedSecret: eventMediaSharedSecret,
+});
 const userSystemConfigured = Boolean(
   process.env.WX_APPID &&
   process.env.WX_APPSECRET &&
@@ -298,6 +339,9 @@ app.use((req, res, next) => {
   next();
 });
 app.use(cors(corsOptions));
+// 直接上传接口的 body 较大（base64 图片），在全局 1mb 解析器之前为该路径单独提高限制，
+// 否则大 body 会在到达路由级中间件前被全局解析器拦截并抛 413，且该错误响应不带 CORS 头。
+app.use('/api/admin/media-assets/upload', express.json({ limit: '12mb' }));
 app.use(express.json({ limit: '1mb' }));
 
 const complianceNotice = 'AI 整理，仅供参考，报名以官方为准。';
@@ -371,6 +415,16 @@ const eventTagSchema = z.object({
 const eventSchema = z.object({
   eventName: z.string().trim().min(1, '赛事名称不能为空'),
   city: z.string().trim().min(1, '城市不能为空'),
+  provinceCode: z
+    .string()
+    .regex(/^\d{6}$/, '省代码必须是六位数字')
+    .nullable()
+    .optional(),
+  cityCode: z
+    .string()
+    .regex(/^\d{6}$/, '市代码必须是六位数字')
+    .nullable()
+    .optional(),
   eventDate: dateOnlySchema,
   eventStartAt: optionalDateTimeSchema,
   distanceItems: z.array(z.string().trim().min(1)).min(1, '距离项目不能为空'),
@@ -425,6 +479,42 @@ const candidateReviewSchema = z.object({
 
 const candidatePatchSchema = z.object({
   extractedData: aiEventCandidateSchema,
+});
+
+const mediaDiscoverSchema = z.object({
+  pageUrl: z.string().url(),
+  officialUrl: z.string().url(),
+  sourceUrl: z.string().url().optional().nullable(),
+});
+const mediaAssetCreateSchema = z.object({
+  eventId: z.string().optional().nullable(),
+  candidateId: z.string().optional().nullable(),
+  imageUrl: z.string().url(),
+  sourcePageUrl: z.string().url(),
+  attribution: z.string().trim().max(200).optional().nullable(),
+  rightsNote: z.string().trim().max(500).optional().nullable(),
+});
+const mediaAssetUploadSchema = z.object({
+  eventId: z.string().optional().nullable(),
+  candidateId: z.string().optional().nullable(),
+  imageBase64: z.string().min(1),
+  fileName: z.string().trim().max(200).optional().default('upload'),
+  attribution: z.string().trim().min(1).max(200),
+  rightsNote: z.string().trim().max(500).optional().nullable(),
+});
+const mediaReviewSchema = z.object({
+  action: z.enum(['approve', 'reject', 'primary']),
+  note: z.string().trim().max(500).optional().nullable(),
+});
+const editorialItemSchema = z.object({
+  eventId: z.string().min(1),
+  section: z.enum(['focus', 'editors_pick', 'signup_soon', 'recommended']),
+  rank: z.number().int().min(0).max(50),
+  note: z.string().trim().max(300).optional().nullable(),
+});
+const editorialPlanSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  items: z.array(editorialItemSchema).max(100),
 });
 
 const workflowSnapshotSchema = z.object({
@@ -498,6 +588,8 @@ const adminUserUpdateSchema = z.object({
 const preferenceSchema = z.object({
   userKey: z.string().trim().min(1, 'userKey 不能为空'),
   cities: stringArraySchema,
+  provinceCodes: z.array(z.string().regex(/^\d{6}$/)).default([]),
+  cityCodes: z.array(z.string().regex(/^\d{6}$/)).default([]),
   distances: stringArraySchema,
   focusTags: stringArraySchema,
 });
@@ -556,6 +648,62 @@ const activitySchema = z.object({
       'subscribedReminder',
     ])
     .optional(),
+});
+
+// V0.6 匿名访客增长埋点（无需登录）。
+const visitorActivitySchema = z.object({
+  userKey: z.string().trim().min(1, 'userKey 不能为空').max(100, 'userKey 无效'),
+  action: z
+    .enum([
+      'viewed_radar',
+      'viewed_event_detail',
+      'set_preference',
+      'added_favorite',
+      'set_choice',
+      'subscribed_reminder',
+      'copied_official',
+      'started_share',
+    ])
+    .optional(),
+  eventId: z.string().trim().min(1).max(64).optional(),
+  entryPage: z.string().trim().max(64).optional(),
+  campaign: z.string().trim().max(64).optional(),
+  referralShareToken: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{20,64}$/)
+    .optional(),
+});
+
+// 把埋点动作名映射到 visitor daily 布尔字段（viewed_event_detail 走赛事浏览事实表）。
+const visitorActionMap: Record<string, VisitorAction | 'viewed_event_detail'> = {
+  viewed_radar: 'viewedRadar',
+  viewed_event_detail: 'viewed_event_detail',
+  set_preference: 'setPreference',
+  added_favorite: 'addedFavorite',
+  set_choice: 'setChoice',
+  subscribed_reminder: 'subscribedReminder',
+  copied_official: 'copiedOfficial',
+  started_share: 'startedShare',
+};
+
+// V0.6 Campaign 管理。
+const campaignChannelEnum = z.enum(campaignChannelTypeValues as [string, ...string[]]);
+const createCampaignSchema = z.object({
+  code: z.string().trim().min(1),
+  name: z.string().trim().min(1).max(64),
+  channelType: campaignChannelEnum,
+  partnerName: z.string().trim().max(64).optional(),
+  startsAt: z.string().datetime().optional().nullable(),
+  endsAt: z.string().datetime().optional().nullable(),
+});
+const updateCampaignSchema = z.object({
+  name: z.string().trim().min(1).max(64).optional(),
+  channelType: campaignChannelEnum.optional(),
+  partnerName: z.string().trim().max(64).optional(),
+  startsAt: z.string().datetime().optional().nullable(),
+  endsAt: z.string().datetime().optional().nullable(),
+  status: z.enum(['active', 'paused', 'archived']).optional(),
 });
 
 const reminderSubscriptionSchema = z.object({
@@ -722,6 +870,19 @@ const adminRemindersQuerySchema = paginationQuerySchema.extend({
 const publicEventsQuerySchema = paginationQuerySchema.extend({
   search: queryStringSchema,
   city: queryStringSchema,
+  provinceCode: z
+    .string()
+    .regex(/^\d{6}$/)
+    .optional(),
+  cityCode: z
+    .string()
+    .regex(/^\d{6}$/)
+    .optional(),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
+  sort: z.enum(['date_asc', 'signup_deadline', 'latest']).default('date_asc'),
   distance: queryStringSchema,
   signupStatus: z.enum(signupStatusValues).optional(),
   runJudgement: z.enum(runJudgementValues).optional(),
@@ -823,6 +984,7 @@ const eventChangeAlertQuerySchema = paginationQuerySchema.extend({
   severity: z.enum(['normal', 'important', 'critical']).optional(),
   changedField: z.enum([...eventChangeFields, ...eventChangeSignalFields]).optional(),
   search: queryStringSchema,
+  eventId: z.string().trim().min(1).optional(),
 });
 
 const eventChangeResolveSchema = z
@@ -853,6 +1015,10 @@ type PublicEventsQuery = {
   pageSize: number;
   search?: string;
   city?: string;
+  provinceCode?: string;
+  cityCode?: string;
+  month?: string;
+  sort: 'date_asc' | 'signup_deadline' | 'latest';
   distance?: string;
   signupStatus?: SignupStatus;
   runJudgement?: RunJudgement;
@@ -930,9 +1096,12 @@ function parseEventDate(value: string) {
 }
 
 function eventDataFromInput(input: Record<string, any>): Prisma.EventUncheckedCreateInput {
+  const resolvedRegion = resolveSupportedRegion(input.city, input.cityCode);
   return {
     eventName: input.eventName,
     city: input.city,
+    provinceCode: input.provinceCode || resolvedRegion?.provinceCode || null,
+    cityCode: input.cityCode || resolvedRegion?.cityCode || null,
     eventDate: parseEventDate(input.eventDate),
     eventStartAt: parseDate(input.eventStartAt as string | null),
     distanceItems: input.distanceItems,
@@ -1038,6 +1207,13 @@ function requireInternalAvatarSecret(req: Request) {
   }
 }
 
+function requireInternalEventMediaSecret(req: Request) {
+  const supplied = req.header('x-worthrun-event-media-secret') || '';
+  if (!eventMediaSharedSecret || !safeEqual(supplied, eventMediaSharedSecret)) {
+    throw new HttpError(401, '媒体云函数认证失败');
+  }
+}
+
 function requireRole(req: Request, allowed: AdminRole[]) {
   const admin = getAdmin(req);
   if (!allowed.includes(admin.role)) {
@@ -1066,6 +1242,166 @@ async function validatePublish(event: Parameters<typeof eventPublishIssues>[0]) 
     issues.push('duplicate_published_event');
   }
   if (issues.length) throw new HttpError(400, `发布前检查未通过：${issues.join('、')}`);
+}
+
+const defaultEventCoverUrl =
+  process.env.EVENT_DEFAULT_COVER_URL || '/assets/images/event-cover-default.jpg';
+
+/**
+ * 为云存储图片 URL 追加阿里云 OSS 实时图片处理参数（支付宝云存储底层为 OSS）。
+ *
+ * 背景：早期上传的图片因云函数 sharp 未生效，hero/thumbnail 实际是未压缩原图（可达 ~900KB）。
+ * 在下载 URL 上追加 x-oss-process 参数可让 OSS 在返回时实时压缩，对存量与新增图片都立即生效，
+ * 无需重新上传文件。实测 900KB 原图 -> 列表缩略图约 17KB、详情大图约 49KB。
+ *
+ * 注意：临时 URL 已带 ?expire_at=&er_sign= 等查询参数，这里必须用 & 拼接。
+ * 仅对 http(s) 真实地址生效，本地默认封面路径直接原样返回。
+ */
+const IMAGE_PROCESS_PRESETS = {
+  // 列表/卡片小图：宽 640 + webp + 质量 75，实测约 16-18KB。
+  thumbnail: 'image/resize,w_640/format,webp/quality,q_75',
+  // 详情/焦点大图：宽 1600 + webp + 质量 80，实测约 48-50KB。
+  hero: 'image/resize,w_1600/format,webp/quality,q_80',
+} as const;
+
+function withImageProcess(url: string | undefined | null, preset: keyof typeof IMAGE_PROCESS_PRESETS): string | undefined {
+  if (!url || !/^https?:\/\//.test(url)) return url || undefined;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}x-oss-process=${IMAGE_PROCESS_PRESETS[preset]}`;
+}
+
+async function resolvePublicMedia(
+  event: { mediaAssets?: Array<Record<string, any>> },
+  temporaryUrls = new Map<string, string>(),
+) {
+  const primary = (event.mediaAssets || []).find(
+    (asset) => asset.reviewStatus === 'approved_for_display' && asset.isPrimary,
+  );
+  const fallback = (event.mediaAssets || []).find(
+    (asset) => asset.reviewStatus === 'approved_for_display',
+  );
+  const asset = primary || fallback;
+  const heroUrl = asset?.cloudbaseFileId ? temporaryUrls.get(asset.cloudbaseFileId) : undefined;
+  const thumbnailUrl = asset?.thumbnailFileId
+    ? temporaryUrls.get(asset.thumbnailFileId)
+    : undefined;
+  return {
+    coverImageUrl: withImageProcess(heroUrl, 'hero') || defaultEventCoverUrl,
+    coverThumbnailUrl:
+      withImageProcess(thumbnailUrl, 'thumbnail') ||
+      withImageProcess(heroUrl, 'hero') ||
+      defaultEventCoverUrl,
+    coverAttribution: asset?.attribution || null,
+    mediaAssetId: asset?.id || null,
+    coverImageMode: asset ? mediaDisplayMode(asset) : 'aspectFill',
+    coverImageWidth: asset?.width || null,
+    coverImageHeight: asset?.height || null,
+  };
+}
+
+async function resolvePublicMediaBatch(
+  events: Array<{ mediaAssets?: Array<Record<string, any>> }>,
+) {
+  const fileIds = events.flatMap(
+    (event) =>
+      (event.mediaAssets || [])
+        .filter((asset) => asset.reviewStatus === 'approved_for_display')
+        .flatMap((asset) =>
+          [asset.cloudbaseFileId, asset.thumbnailFileId].filter(Boolean),
+        ) as string[],
+  );
+  let temporaryUrls = new Map<string, string>();
+  if (fileIds.length && eventMediaClient.configured) {
+    try {
+      temporaryUrls = await eventMediaClient.temporaryUrls(fileIds);
+    } catch {
+      // 云函数暂不可用时公共接口继续返回真实存在的品牌默认封面。
+    }
+  }
+  return Promise.all(events.map((event) => resolvePublicMedia(event, temporaryUrls)));
+}
+
+async function resolveAdminMediaPreviewUrls(
+  items: Array<{
+    cloudbaseFileId?: string | null;
+    thumbnailFileId?: string | null;
+    originalUrl?: string | null;
+  }>,
+) {
+  const fileIds = items.flatMap(
+    (item) => [item.thumbnailFileId, item.cloudbaseFileId].filter(Boolean) as string[],
+  );
+  let temporaryUrls = new Map<string, string>();
+  if (fileIds.length && eventMediaClient.configured) {
+    try {
+      temporaryUrls = await eventMediaClient.temporaryUrls(fileIds);
+    } catch {
+      // 后台仍可查看原始来源地址，云函数恢复后再刷新临时预览地址。
+    }
+  }
+  return items.map((item) => ({
+    previewUrl:
+      (item.cloudbaseFileId && temporaryUrls.get(item.cloudbaseFileId)) || item.originalUrl || null,
+    thumbnailPreviewUrl:
+      (item.thumbnailFileId && temporaryUrls.get(item.thumbnailFileId)) || item.originalUrl || null,
+  }));
+}
+
+async function fetchMediaWithRedirectReview(imageUrl: string, allowedHosts: string[]) {
+  let resolution = await assertSafeImageUrlResolved(imageUrl, allowedHosts);
+  let current = resolution.url.toString();
+  for (let redirect = 0; redirect < 4; redirect += 1) {
+    const response = await fetchPinnedHttps(resolution.url, resolution.addresses[0]);
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.location;
+      if (!location) throw new HttpError(400, '图片重定向缺少目标地址');
+      resolution = await assertSafeImageUrlResolved(
+        new URL(location, current).toString(),
+        allowedHosts,
+      );
+      current = resolution.url.toString();
+      continue;
+    }
+    if (response.status < 200 || response.status >= 300)
+      throw new HttpError(400, `图片下载失败：HTTP ${response.status}`);
+    const mimeType = validateImagePayload({
+      buffer: response.buffer,
+      contentType: response.contentType,
+      contentLength: response.contentLength,
+    });
+    return { buffer: response.buffer, mimeType, finalUrl: current };
+  }
+  throw new HttpError(400, '图片重定向次数超过限制');
+}
+
+function homeMonthRange(month: string) {
+  const start = new Date(`${month}-01T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime())) throw new HttpError(400, 'month 必须是 YYYY-MM');
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+  return { start, end };
+}
+
+function homeEventScore(event: any, preference: any) {
+  const regionMatch =
+    (preference?.cityCodes || []).includes(event.cityCode) ||
+    (preference?.provinceCodes || []).includes(event.provinceCode) ||
+    (preference?.cities || []).includes(event.city);
+  const distanceMatch = (preference?.distances || []).some((item: string) =>
+    event.distanceItems.some(
+      (distance: string) => distance.includes(item) || item.includes(distance),
+    ),
+  );
+  const tagMatch = (preference?.focusTags || []).filter((tag: string) =>
+    event.tags.includes(tag),
+  ).length;
+  return (
+    (regionMatch ? 100 : 0) +
+    (distanceMatch ? 30 : 0) +
+    tagMatch * 10 +
+    (event.sourceLevel === 'official' ? 20 : event.sourceLevel === 'trusted' ? 10 : 0) +
+    (event.eventStartAt ? 5 : 0) +
+    (event.runJudgement === 'priority' ? 8 : 0)
+  );
 }
 
 async function writeOperationLog(params: {
@@ -1183,6 +1519,438 @@ function feedbackDuplicateKey(item: {
     normalizeFeedbackContent(item.content),
   ].join('\u0000');
 }
+
+app.get(
+  '/api/admin/media-assets',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const eventId = typeof req.query.eventId === 'string' ? req.query.eventId : undefined;
+    const candidateId =
+      typeof req.query.candidateId === 'string' ? req.query.candidateId : undefined;
+    const items = await prisma.eventMediaAsset.findMany({
+      where: { ...(eventId ? { eventId } : {}), ...(candidateId ? { candidateId } : {}) },
+      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
+    });
+    const previews = await resolveAdminMediaPreviewUrls(items);
+    res.json({
+      mediaServiceConfigured: eventMediaClient.configured,
+      items: items.map((item, index) => ({
+        ...item,
+        ...previews[index],
+        mediaUploadStatus: mediaUploadStatus(item, eventMediaClient.configured),
+      })),
+    });
+  }),
+);
+
+app.post(
+  '/api/admin/media-assets/discover',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(mediaDiscoverSchema, req.body);
+    const official = new URL(input.officialUrl);
+    const source = input.sourceUrl ? new URL(input.sourceUrl) : null;
+    const allowedHosts = [official.hostname, ...(source ? [source.hostname] : [])];
+    const pageResolution = await assertSafeImageUrlResolved(input.pageUrl, allowedHosts);
+    const pageUrl = pageResolution.url.toString();
+    const response = await fetchPinnedHttps(
+      pageResolution.url,
+      pageResolution.addresses[0],
+      12_000,
+      'text/html,application/xhtml+xml',
+    );
+    if (response.status < 200 || response.status >= 300)
+      throw new HttpError(400, `确认来源页面读取失败：HTTP ${response.status}`);
+    const html = response.buffer.toString('utf8');
+    res.json({ pageUrl, candidates: extractImageCandidates(html, pageUrl) });
+  }),
+);
+
+app.post(
+  '/api/admin/media-assets',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(mediaAssetCreateSchema, req.body);
+    if (Boolean(input.eventId) === Boolean(input.candidateId))
+      throw new HttpError(400, '媒体必须且只能关联一个候选或赛事');
+    if (!input.attribution?.trim()) throw new HttpError(400, '媒体必须填写图片署名');
+    const page = new URL(input.sourcePageUrl);
+    const owner = input.eventId
+      ? await prisma.event.findUnique({
+          where: { id: input.eventId },
+          select: { officialUrl: true, sourceUrl: true },
+        })
+      : await prisma.eventCandidate.findUnique({
+          where: { id: input.candidateId! },
+          select: { officialUrl: true, sourceUrl: true },
+        });
+    if (!owner) throw new HttpError(404, '关联赛事或候选不存在');
+    const allowedHosts = [
+      new URL(owner.officialUrl || owner.sourceUrl || input.sourcePageUrl).hostname,
+    ];
+    if (owner.sourceUrl) allowedHosts.push(new URL(owner.sourceUrl).hostname);
+    const fetched = await fetchMediaWithRedirectReview(input.imageUrl, allowedHosts);
+    const sha256 = mediaSha256(fetched.buffer);
+    const dimensions = imageDimensions(fetched.buffer, fetched.mimeType);
+    const existing = await prisma.eventMediaAsset.findFirst({
+      where: {
+        sha256,
+        ...(input.eventId ? { eventId: input.eventId } : { candidateId: input.candidateId }),
+      },
+    });
+    if (existing) {
+      res.json({
+        ...existing,
+        duplicate: true,
+        mediaUploadStatus: mediaUploadStatus(existing, eventMediaClient.configured),
+        mediaServiceConfigured: eventMediaClient.configured,
+      });
+      return;
+    }
+    const created = await prisma.eventMediaAsset.create({
+      data: {
+        eventId: input.eventId || null,
+        candidateId: input.candidateId || null,
+        originalUrl: fetched.finalUrl,
+        sourcePageUrl: page.toString(),
+        attribution: input.attribution || null,
+        reviewNote: input.rightsNote || null,
+        sha256,
+        mimeType: fetched.mimeType,
+        width: dimensions?.width || null,
+        height: dimensions?.height || null,
+        discoveredBy: admin.id,
+      },
+    });
+    let saved = created;
+    let uploadStatus: 'uploaded' | 'pending_configuration' | 'pending_retry' =
+      'pending_configuration';
+    if (eventMediaClient.configured) {
+      try {
+        const uploaded = await eventMediaClient.upload({
+          assetId: created.id,
+          buffer: fetched.buffer,
+          mimeType: fetched.mimeType,
+          filename: `event-cover.${fetched.mimeType.split('/')[1]}`,
+        });
+        saved = await prisma.eventMediaAsset.update({
+          where: { id: created.id },
+          data: {
+            originalFileId: uploaded.originalFileId || null,
+            cloudbaseFileId: uploaded.fileId,
+            thumbnailFileId: uploaded.thumbnailFileId,
+          },
+        });
+        uploadStatus = 'uploaded';
+      } catch (error) {
+        if (!(error instanceof EventMediaUnavailableError)) {
+          // 云函数网络故障不应让来源发现记录丢失，后台可在配置恢复后重试上传。
+        }
+        uploadStatus = 'pending_retry';
+      }
+    }
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_media.discover',
+      targetType: 'event_media_assets',
+      targetId: saved.id,
+      afterValue: saved,
+      note:
+        uploadStatus === 'uploaded'
+          ? '从确认的官网/主办方页面发现并上传 CloudBase，待人工审核'
+          : '从确认的官网/主办方页面发现图片，CloudBase 待配置或待重试',
+    });
+    res
+      .status(201)
+      .json({
+        ...saved,
+        mediaUploadStatus: uploadStatus,
+        mediaServiceConfigured: eventMediaClient.configured,
+      });
+  }),
+);
+
+// 直接上传本地图片文件（base64 over JSON，避免引入 multipart 依赖）。
+// body 限制已在全局 express.json 之前对该路径单独提高（见文件中部 app.use 处）。
+app.post(
+  '/api/admin/media-assets/upload',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(mediaAssetUploadSchema, req.body);
+    if (Boolean(input.eventId) === Boolean(input.candidateId))
+      throw new HttpError(400, '媒体必须且只能关联一个候选或赛事');
+    const owner = input.eventId
+      ? await prisma.event.findUnique({ where: { id: input.eventId }, select: { id: true } })
+      : await prisma.eventCandidate.findUnique({
+          where: { id: input.candidateId! },
+          select: { id: true },
+        });
+    if (!owner) throw new HttpError(404, '关联赛事或候选不存在');
+    // 去掉 dataURL 前缀（如有），还原二进制 buffer。
+    const base64Data = input.imageBase64.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const mimeType = validateImagePayload({ buffer });
+    const sha256 = mediaSha256(buffer);
+    const dimensions = imageDimensions(buffer, mimeType);
+    const existing = await prisma.eventMediaAsset.findFirst({
+      where: {
+        sha256,
+        ...(input.eventId ? { eventId: input.eventId } : { candidateId: input.candidateId }),
+      },
+    });
+    if (existing) {
+      res.json({
+        ...existing,
+        duplicate: true,
+        mediaUploadStatus: mediaUploadStatus(existing, eventMediaClient.configured),
+        mediaServiceConfigured: eventMediaClient.configured,
+      });
+      return;
+    }
+    const sourcePageUrl = 'https://worthrun.admin/local-upload';
+    const created = await prisma.eventMediaAsset.create({
+      data: {
+        eventId: input.eventId || null,
+        candidateId: input.candidateId || null,
+        originalUrl: `本地上传:${input.fileName}`,
+        sourcePageUrl,
+        attribution: input.attribution,
+        reviewNote: input.rightsNote || null,
+        sha256,
+        mimeType,
+        width: dimensions?.width || null,
+        height: dimensions?.height || null,
+        discoveredBy: admin.id,
+      },
+    });
+    let saved = created;
+    let uploadStatus: 'uploaded' | 'pending_configuration' | 'pending_retry' =
+      'pending_configuration';
+    if (eventMediaClient.configured) {
+      try {
+        const uploaded = await eventMediaClient.upload({
+          assetId: created.id,
+          buffer,
+          mimeType,
+          filename: `event-cover.${mimeType.split('/')[1]}`,
+        });
+        saved = await prisma.eventMediaAsset.update({
+          where: { id: created.id },
+          data: {
+            originalFileId: uploaded.originalFileId || null,
+            cloudbaseFileId: uploaded.fileId,
+            thumbnailFileId: uploaded.thumbnailFileId,
+          },
+        });
+        uploadStatus = 'uploaded';
+      } catch {
+        uploadStatus = 'pending_retry';
+      }
+    }
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_media.discover',
+      targetType: 'event_media_assets',
+      targetId: saved.id,
+      afterValue: saved,
+      note:
+        uploadStatus === 'uploaded'
+          ? '后台直接上传图片至 CloudBase，待人工审核'
+          : '后台直接上传图片，CloudBase 待配置或待重试',
+    });
+    res.status(201).json({
+      ...saved,
+      mediaUploadStatus: uploadStatus,
+      mediaServiceConfigured: eventMediaClient.configured,
+    });
+  }),
+);
+
+app.post(
+  '/api/admin/media-assets/:id/retry-upload',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    if (!eventMediaClient.configured)
+      throw new HttpError(503, '媒体云函数尚未配置，暂不能重试上传');
+    const asset = await prisma.eventMediaAsset.findUnique({ where: { id: req.params.id } });
+    if (!asset) throw new HttpError(404, '媒体不存在');
+    if (!asset.originalUrl) throw new HttpError(400, '媒体缺少原始图片地址，需重新发现');
+    const owner = asset.eventId
+      ? await prisma.event.findUnique({
+          where: { id: asset.eventId },
+          select: { officialUrl: true, sourceUrl: true },
+        })
+      : asset.candidateId
+        ? await prisma.eventCandidate.findUnique({
+            where: { id: asset.candidateId },
+            select: { officialUrl: true, sourceUrl: true },
+          })
+        : null;
+    if (!owner) throw new HttpError(404, '关联赛事或候选不存在');
+    const allowedHosts = [
+      new URL(owner.officialUrl || owner.sourceUrl || asset.sourcePageUrl).hostname,
+    ];
+    if (owner.sourceUrl) allowedHosts.push(new URL(owner.sourceUrl).hostname);
+    const fetched = await fetchMediaWithRedirectReview(asset.originalUrl, allowedHosts);
+    if (mediaSha256(fetched.buffer) !== asset.sha256)
+      throw new HttpError(400, '原始图片内容已变化，请重新发现并提交');
+    const uploaded = await eventMediaClient.upload({
+      assetId: asset.id,
+      buffer: fetched.buffer,
+      mimeType: fetched.mimeType,
+      filename: `event-cover.${fetched.mimeType.split('/')[1]}`,
+    });
+    const dimensions = imageDimensions(fetched.buffer, fetched.mimeType);
+    const saved = await prisma.eventMediaAsset.update({
+      where: { id: asset.id },
+      data: {
+        originalUrl: fetched.finalUrl,
+        originalFileId: uploaded.originalFileId || null,
+        cloudbaseFileId: uploaded.fileId,
+        thumbnailFileId: uploaded.thumbnailFileId,
+        mimeType: fetched.mimeType,
+        width: dimensions?.width || asset.width,
+        height: dimensions?.height || asset.height,
+      },
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'event_media.retry_upload',
+      targetType: 'event_media_assets',
+      targetId: saved.id,
+      beforeValue: asset,
+      afterValue: saved,
+      note: '媒体云函数配置恢复后重试上传主图和缩略图，仍待人工审核',
+    });
+    res.json({ ...saved, mediaUploadStatus: 'uploaded', mediaServiceConfigured: true });
+  }),
+);
+
+app.post(
+  '/api/admin/media-assets/:id/review',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(mediaReviewSchema, req.body);
+    const before = await prisma.eventMediaAsset.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new HttpError(404, '媒体不存在');
+    const approved = input.action !== 'reject';
+    if (approved) {
+      const issues = mediaReviewIssues(before);
+      if (issues.length) throw new HttpError(400, `媒体审核未通过：${issues.join('、')}`);
+    }
+    const updated = await prisma.$transaction(async (tx) => {
+      if (input.action === 'primary' && before.eventId) {
+        await tx.eventMediaAsset.updateMany({
+          where: { eventId: before.eventId },
+          data: { isPrimary: false },
+        });
+      }
+      if (input.action === 'primary' && before.candidateId) {
+        await tx.eventMediaAsset.updateMany({
+          where: { candidateId: before.candidateId },
+          data: { isPrimary: false },
+        });
+      }
+      return tx.eventMediaAsset.update({
+        where: { id: before.id },
+        data: {
+          reviewStatus: approved ? 'approved_for_display' : 'rejected',
+          isPrimary: input.action === 'primary',
+          reviewedBy: admin.id,
+          reviewedAt: new Date(),
+          reviewNote: input.note === undefined ? before.reviewNote : input.note || null,
+        },
+      });
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: `event_media.${input.action}`,
+      targetType: 'event_media_assets',
+      targetId: updated.id,
+      beforeValue: before,
+      afterValue: updated,
+      note: input.note || undefined,
+    });
+    res.json(updated);
+  }),
+);
+
+app.get(
+  '/api/admin/home-editorial',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator', 'content_reviewer', 'readonly']);
+    const month = String(req.query.month || new Date().toISOString().slice(0, 7));
+    const plan = await prisma.homeEditorialPlan.findUnique({
+      where: { month },
+      include: {
+        items: { include: { event: true }, orderBy: [{ section: 'asc' }, { rank: 'asc' }] },
+      },
+    });
+    res.json({ month, items: plan?.items || [] });
+  }),
+);
+
+app.put(
+  '/api/admin/home-editorial',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
+    const input = validateBody(editorialPlanSchema, req.body);
+    const ids = [...new Set(input.items.map((item) => item.eventId))];
+    const events = await prisma.event.findMany({
+      where: { id: { in: ids }, ...buildPublicEventWhere() },
+      select: { id: true },
+    });
+    if (events.length !== ids.length)
+      throw new HttpError(400, '首页编排只能选择已发布且在当前发现范围内的赛事');
+    const rankKeys = new Set<string>();
+    for (const item of input.items) {
+      const key = `${item.section}:${item.rank}`;
+      if (rankKeys.has(key))
+        throw new HttpError(400, `首页编排排序重复：${item.section} 第 ${item.rank + 1} 位`);
+      rankKeys.add(key);
+    }
+    const focusIds = [
+      ...new Set(
+        input.items.filter((item) => item.section === 'focus').map((item) => item.eventId),
+      ),
+    ];
+    if (focusIds.length) {
+      const approvedFocus = await prisma.eventMediaAsset.findMany({
+        where: {
+          eventId: { in: focusIds },
+          reviewStatus: 'approved_for_display',
+          cloudbaseFileId: { not: null },
+        },
+        select: { eventId: true },
+        distinct: ['eventId'],
+      });
+      if (approvedFocus.length !== focusIds.length)
+        throw new HttpError(400, '焦点赛事必须先完成 approved 图片审核和 CloudBase 上传');
+    }
+    const plan = await prisma.$transaction(async (tx) => {
+      const saved = await tx.homeEditorialPlan.upsert({
+        where: { month: input.month },
+        create: { month: input.month, createdBy: admin.id, updatedBy: admin.id },
+        update: { updatedBy: admin.id },
+      });
+      await tx.homeEditorialItem.deleteMany({ where: { planId: saved.id } });
+      if (input.items.length)
+        await tx.homeEditorialItem.createMany({
+          data: input.items.map((item) => ({ ...item, planId: saved.id })),
+        });
+      return tx.homeEditorialPlan.findUnique({ where: { id: saved.id }, include: { items: true } });
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'home_editorial.update',
+      targetType: 'home_editorial_plans',
+      targetId: plan?.id,
+      afterValue: plan,
+      note: `保存 ${input.month} 首页人工编排`,
+    });
+    res.json(plan);
+  }),
+);
 
 app.get(
   '/health',
@@ -1336,6 +2104,12 @@ app.delete(
 app.post(
   '/api/activity',
   asyncHandler(async (req, res) => {
+    // 本地开发或用户体系关闭时，小程序可能仍保留旧会话缓存。
+    // 日活动不是主业务：静默忽略，避免控制台出现 503；登录、头像和提醒接口仍保持 503 边界。
+    if (!userSystemEnabled) {
+      res.status(204).send();
+      return;
+    }
     requireUserFeature();
     const user = await getRequestUser(req, true);
     const input = validateBody(activitySchema, req.body);
@@ -1391,6 +2165,73 @@ app.delete(
       data: { status: 'cancelled', cancelledAt: new Date() },
     });
     res.status(204).send();
+  }),
+);
+
+app.post(
+  '/api/internal/event-media/orphan-check',
+  asyncHandler(async (req, res) => {
+    requireInternalEventMediaSecret(req);
+    const input = z.object({ fileIds: z.array(z.string().min(1)).max(500) }).parse(req.body);
+    const referenced = await prisma.eventMediaAsset.findMany({
+      where: {
+        OR: [
+          { originalFileId: { in: input.fileIds } },
+          { cloudbaseFileId: { in: input.fileIds } },
+          { thumbnailFileId: { in: input.fileIds } },
+        ],
+      },
+      select: { originalFileId: true, cloudbaseFileId: true, thumbnailFileId: true },
+    });
+    const used = new Set(
+      referenced.flatMap(
+        (item) =>
+          [item.originalFileId, item.cloudbaseFileId, item.thumbnailFileId].filter(
+            Boolean,
+          ) as string[],
+      ),
+    );
+    res.json({ orphanFileIds: input.fileIds.filter((fileId) => !used.has(fileId)) });
+  }),
+);
+
+app.post(
+  '/api/internal/event-media/complete',
+  asyncHandler(async (req, res) => {
+    requireInternalEventMediaSecret(req);
+    const input = z
+      .object({
+        assetId: z.string().min(1),
+        sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+        cloudbaseFileId: z.string().min(1),
+        originalFileId: z.string().min(1).nullable().optional(),
+        thumbnailFileId: z.string().min(1),
+        width: z.number().int().positive().nullable(),
+        height: z.number().int().positive().nullable(),
+        processedBySharp: z.boolean().optional(),
+        originalBytes: z.number().int().nonnegative().optional(),
+        heroBytes: z.number().int().nonnegative().optional(),
+        thumbnailBytes: z.number().int().nonnegative().optional(),
+      })
+      .parse(req.body);
+    const asset = await prisma.eventMediaAsset.update({
+      where: { id: input.assetId },
+      data: {
+        sha256: input.sha256,
+        mimeType: input.mimeType,
+        originalFileId: input.originalFileId || null,
+        cloudbaseFileId: input.cloudbaseFileId,
+        thumbnailFileId: input.thumbnailFileId,
+        width: input.width,
+        height: input.height,
+        processedBySharp: input.processedBySharp ?? false,
+        originalBytes: input.originalBytes,
+        heroBytes: input.heroBytes,
+        thumbnailBytes: input.thumbnailBytes,
+      },
+    });
+    res.json({ id: asset.id, registered: true });
   }),
 );
 
@@ -1552,6 +2393,7 @@ app.get(
         userSystem: { enabled: userSystemEnabled, configured: userSystemConfigured },
         avatar: { enabled: userSystemEnabled, configured: avatarConfigured },
         reminders: { enabled: reminderFeatureEnabled, configured: remindersConfigured },
+        radar: { enabled: radarFeatureEnabled, configured: true },
       },
       checkedAt: now.toISOString(),
     });
@@ -1762,6 +2604,292 @@ app.get(
   }),
 );
 
+// ===== V0.6 匿名访客增长 =====
+
+// 公开埋点：无需登录，不记录 IP/Cookie/指纹。失败不阻塞主业务。
+app.post(
+  '/api/growth/visitor-activity',
+  asyncHandler(async (req, res) => {
+    const input = validateBody(visitorActivitySchema, req.body);
+    const now = new Date();
+    const visitorKeyHashValue = userKeyHash(userHashSecret, input.userKey);
+
+    // 归因解析：Campaign 仅 active 且有效才采纳；分享 token 校验有效性
+    const resolvedCampaignId = await resolveCampaignId(input.campaign, now).catch(() => null);
+    let referralShareToken = input.referralShareToken;
+    if (referralShareToken) {
+      const share = await prisma.shareRecord
+        .findFirst({
+          where: { shareToken: referralShareToken, tokenExpiresAt: { gt: now } },
+          select: { shareToken: true },
+        })
+        .catch(() => null);
+      referralShareToken = share?.shareToken ?? undefined;
+    }
+
+    // 登录用户（可选）：复用现有 token 解析
+    let userId: string | undefined;
+    const token = getBearerToken(req);
+    if (token && userSystemEnabled) {
+      try {
+        userId = parseUserToken(token, userTokenSecret).userId;
+      } catch {
+        userId = undefined;
+      }
+    }
+
+    const mapped = input.action ? visitorActionMap[input.action] : undefined;
+    const actionField: VisitorAction | undefined =
+      mapped && mapped !== 'viewed_event_detail' && visitorActionFields.has(mapped)
+        ? mapped
+        : undefined;
+
+    // 仅 viewed_event_detail 带有效 eventId 时记录赛事浏览
+    const eventId = mapped === 'viewed_event_detail' && input.eventId ? input.eventId : null;
+
+    try {
+      await recordVisitorActivity({
+        visitorKeyHash: visitorKeyHashValue,
+        userId,
+        resolvedCampaignId,
+        referralShareToken: referralShareToken ?? null,
+        entryPage: input.entryPage,
+        channel: resolvedCampaignId ? 'campaign' : referralShareToken ? 'share' : 'direct',
+        action: actionField,
+        eventId,
+        now,
+      });
+    } catch {
+      // 埋点失败不阻塞主业务（交接文档 §8.2）；吞掉错误，不影响主流程
+    }
+    res.status(201).json({ recorded: true });
+  }),
+);
+
+// Campaign 管理（管理员）
+app.get(
+  '/api/admin/growth-campaigns',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator']);
+    const query = validateQuery(
+      z.object({
+        status: z.enum(['active', 'paused', 'archived']).optional(),
+        channelType: campaignChannelEnum.optional(),
+      }),
+      req.query,
+    );
+    const where: Prisma.GrowthCampaignWhereInput = {};
+    if (query.status) where.status = query.status;
+    if (query.channelType) where.channelType = query.channelType as GrowthCampaignType;
+    const items = await prisma.growthCampaign.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ items });
+  }),
+);
+
+app.post(
+  '/api/admin/growth-campaigns',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator']);
+    const input = validateBody(createCampaignSchema, req.body);
+    const codeError = validateCampaignCode(input.code);
+    if (codeError) throw new HttpError(400, codeError);
+    const dateError = validateDateRange(input.startsAt, input.endsAt);
+    if (dateError) throw new HttpError(400, dateError);
+    const existing = await prisma.growthCampaign.findUnique({ where: { code: input.code } });
+    if (existing) throw new HttpError(409, 'Campaign code 已存在');
+    const created = await createCampaign(
+      {
+        code: input.code,
+        name: input.name,
+        channelType: input.channelType as GrowthCampaignType,
+        partnerName: input.partnerName,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+      },
+      admin.id,
+    );
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'create',
+      targetType: 'growth_campaign',
+      targetId: created.id,
+      afterValue: { code: created.code, name: created.name },
+    });
+    res.status(201).json(created);
+  }),
+);
+
+app.get(
+  '/api/admin/growth-campaigns/:id',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator']);
+    const item = await prisma.growthCampaign.findUnique({ where: { id: req.params.id } });
+    if (!item) throw new HttpError(404, 'Campaign 不存在');
+    res.json(item);
+  }),
+);
+
+app.patch(
+  '/api/admin/growth-campaigns/:id',
+  asyncHandler(async (req, res) => {
+    const admin = requireRole(req, ['super_admin', 'event_operator']);
+    const input = validateBody(updateCampaignSchema, req.body);
+    // code 不在 updateCampaignSchema 中，因此天然不可修改
+    const dateError = validateDateRange(input.startsAt ?? undefined, input.endsAt ?? undefined);
+    if (dateError) throw new HttpError(400, dateError);
+    const before = await prisma.growthCampaign.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new HttpError(404, 'Campaign 不存在');
+    const updated = await updateCampaign(req.params.id, {
+      name: input.name,
+      channelType: input.channelType as GrowthCampaignType | undefined,
+      partnerName: input.partnerName,
+      startsAt: input.startsAt ?? undefined,
+      endsAt: input.endsAt ?? undefined,
+      status: input.status as GrowthCampaignStatus | undefined,
+    });
+    await writeOperationLog({
+      adminUserId: admin.id,
+      action: 'update',
+      targetType: 'growth_campaign',
+      targetId: updated.id,
+      beforeValue: { status: before.status, name: before.name },
+      afterValue: { status: updated.status, name: updated.name },
+    });
+    res.json(updated);
+  }),
+);
+
+app.get(
+  '/api/admin/growth-campaigns/:id/stats',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin', 'event_operator']);
+    const days = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(90)
+      .default(28)
+      .parse(req.query.days ?? undefined);
+    const campaign = await prisma.growthCampaign.findUnique({ where: { id: req.params.id } });
+    if (!campaign) throw new HttpError(404, 'Campaign 不存在');
+    const stats = await getCampaignStats(req.params.id, days);
+    // 不返回任何用户标识，仅匿名聚合
+    res.json({
+      campaign: {
+        id: campaign.id,
+        code: campaign.code,
+        name: campaign.name,
+        status: campaign.status,
+      },
+      days,
+      stats,
+    });
+  }),
+);
+
+// 总增长漏斗（按 Campaign / 分享 / direct 切换，分子分母都返回）
+app.get(
+  '/api/admin/growth-funnel',
+  asyncHandler(async (req, res) => {
+    requireRole(req, ['super_admin']);
+    const query = validateQuery(
+      z.object({
+        days: z.coerce.number().int().min(1).max(90).default(28),
+        campaign: z.string().trim().max(64).optional(),
+        source: z.enum(['all', 'campaign', 'share', 'direct']).optional(),
+      }),
+      req.query,
+    );
+    const now = new Date();
+    const today = visitorActivityDate(now);
+    const since = new Date(today.getTime() - ((query.days ?? 28) - 1) * 24 * 60 * 60 * 1000);
+    const where: Prisma.GrowthVisitorDailyWhereInput = { activityDate: { gte: since } };
+    if (query.campaign) {
+      const c = await prisma.growthCampaign.findUnique({ where: { code: query.campaign } });
+      if (c) where.campaignId = c.id;
+      else where.campaignId = '__none__'; // 不存在则空集
+    } else if (query.source === 'campaign') {
+      where.campaignId = { not: null };
+    } else if (query.source === 'share') {
+      where.referralShareToken = { not: null };
+    } else if (query.source === 'direct') {
+      where.AND = [{ campaignId: null }, { referralShareToken: null }];
+    }
+
+    const rows = await prisma.growthVisitorDaily.findMany({
+      where,
+      select: {
+        visitorKeyHash: true,
+        viewedRadar: true,
+        setPreference: true,
+        addedFavorite: true,
+        setChoice: true,
+        subscribedReminder: true,
+        copiedOfficial: true,
+        startedShare: true,
+        userId: true,
+      },
+    });
+    const unique = (pred: (r: (typeof rows)[number]) => boolean) =>
+      new Set(rows.filter(pred).map((r) => r.visitorKeyHash)).size;
+    const visitors = new Set(rows.map((r) => r.visitorKeyHash)).size;
+    const rate = (v: number, base: number) => ({
+      value: v,
+      base,
+      rate: base ? Number(((v / base) * 100).toFixed(1)) : 0,
+    });
+
+    // 查看两场以上不同赛事
+    const twoPlus = await prisma.growthVisitorEventViewDaily.groupBy({
+      by: ['visitorDailyId'],
+      where: { visitorDaily: where },
+      _count: { eventId: true },
+      having: { eventId: { _count: { gte: 2 } } },
+    });
+    const twoPlusVisitors = new Set(
+      (
+        await prisma.growthVisitorDaily.findMany({
+          where: { ...where, id: { in: twoPlus.map((t) => t.visitorDailyId) } },
+          select: { visitorKeyHash: true },
+        })
+      ).map((r) => r.visitorKeyHash),
+    ).size;
+
+    const coreAction = unique(
+      (r) => r.addedFavorite || r.setChoice || r.subscribedReminder || r.copiedOfficial,
+    );
+
+    res.json({
+      days: query.days,
+      since: since.toISOString(),
+      until: today.toISOString(),
+      filter: { campaign: query.campaign ?? null, source: query.source ?? 'all' },
+      funnel: {
+        visitors: rate(visitors, visitors),
+        radarVisitors: rate(
+          unique((r) => r.viewedRadar),
+          visitors,
+        ),
+        twoPlusEventVisitors: rate(twoPlusVisitors, visitors),
+        preferenceVisitors: rate(
+          unique((r) => r.setPreference),
+          visitors,
+        ),
+        coreActionVisitors: rate(coreAction, visitors),
+        shareVisitors: rate(
+          unique((r) => r.startedShare),
+          visitors,
+        ),
+      },
+      // D7 留存需注册日 cohort；未成熟 cohort 显示 —（此处返回 eligible 信息由后台判断）
+      d7Note: 'D7 留存沿用现有注册用户 cohort 口径，未成熟时显示 —',
+    });
+  }),
+);
+
 app.get(
   '/api/admin/reminder-stats',
   asyncHandler(async (req, res) => {
@@ -1961,7 +3089,9 @@ app.post(
   asyncHandler(async (req, res) => {
     const admin = requireRole(req, ['super_admin', 'event_operator', 'content_reviewer']);
     try {
-      res.status(201).json(await createSourceSummaryDraft(req.params.id, admin.id));
+      const result = await createSourceSummaryDraft(req.params.id, admin.id);
+      // 201 = 新建草稿；200 = 来源内容未变化，复用已有记录（仅刷新抓取时间）
+      res.status(result.reused ? 200 : 201).json(result);
     } catch (error) {
       sourceSummaryHttpError(error);
     }
@@ -2945,6 +4075,8 @@ app.put(
       data: {
         eventName: input.extractedData.eventName,
         city: input.extractedData.city,
+        provinceCode: input.extractedData.provinceCode,
+        cityCode: input.extractedData.cityCode,
         eventDate: input.extractedData.eventDate
           ? new Date(`${input.extractedData.eventDate}T00:00:00.000Z`)
           : null,
@@ -3423,6 +4555,162 @@ app.get(
   }),
 );
 
+// V0.6 公开雷达接口（无需登录）。开关关闭时返回稳定空结构。
+const radarQuerySchema = z.object({
+  cities: z.string().trim().max(200).optional(),
+  distances: z.string().trim().max(100).optional(),
+  focusTags: z.string().trim().max(200).optional(),
+  windowDays: z.coerce.number().int().optional(),
+  campaign: z.string().trim().max(64).optional(),
+  limitPerGroup: z.coerce.number().int().optional(),
+});
+
+app.get(
+  '/api/radar',
+  asyncHandler(async (req, res) => {
+    const query = validateQuery(radarQuerySchema, req.query);
+    // 开关关闭：稳定空结构，首页可回退
+    if (!radarFeatureEnabled) {
+      res.json(radarDisabledResponse());
+      return;
+    }
+    const { response, campaignId } = await queryRadar({
+      cities: query.cities,
+      distances: query.distances,
+      focusTags: query.focusTags,
+      windowDays: query.windowDays,
+      campaign: query.campaign,
+      limitPerGroup: query.limitPerGroup,
+    });
+    res.json(response);
+    // 归因记录（非阻塞，失败不影响响应）
+    void campaignId;
+  }),
+);
+
+app.get(
+  '/api/regions',
+  asyncHandler(async (_req, res) => {
+    res.json({
+      nationwideEnabled: isNationwideDiscoveryEnabled(),
+      provinces: getSupportedProvinces(),
+      provinceCodes: supportedProvinceCodes,
+    });
+  }),
+);
+
+app.get(
+  '/api/discovery/home',
+  asyncHandler(async (req, res) => {
+    const month = String(req.query.month || new Date().toISOString().slice(0, 7));
+    const { start, end } = homeMonthRange(month);
+    const userKey = typeof req.query.userKey === 'string' ? req.query.userKey : undefined;
+    const preference = userKey
+      ? await prisma.userPreference.findUnique({ where: { userKey } }).catch(() => null)
+      : null;
+    const where = {
+      ...buildPublicEventWhere(),
+      eventDate: { gte: start, lt: end },
+    } satisfies Prisma.EventWhereInput;
+    const events = await prisma.event.findMany({
+      where,
+      include: {
+        mediaAssets: {
+          where: { reviewStatus: 'approved_for_display' },
+          orderBy: [{ isPrimary: 'desc' }, { updatedAt: 'desc' }],
+          take: 3,
+        },
+      },
+      orderBy: [{ eventDate: 'asc' }, { updatedAt: 'desc' }],
+      take: 100,
+    });
+    const plan = await prisma.homeEditorialPlan.findUnique({
+      where: { month },
+      include: {
+        items: {
+          include: {
+            event: {
+              include: {
+                mediaAssets: { where: { reviewStatus: 'approved_for_display' }, take: 3 },
+              },
+            },
+          },
+          orderBy: [{ section: 'asc' }, { rank: 'asc' }],
+        },
+      },
+    });
+    const byId = new Map(events.map((event) => [event.id, event]));
+    const used = new Set<string>();
+    const manual = (section: string) =>
+      (plan?.items || [])
+        .filter((item) => item.section === section && byId.has(item.eventId))
+        .sort((a, b) => a.rank - b.rank)
+        .map((item) => byId.get(item.eventId)!)
+        .filter((event) => {
+          if (used.has(event.id)) return false;
+          used.add(event.id);
+          return true;
+        });
+    const automatic = [...events].sort((a, b) => {
+      const score = homeEventScore(b, preference) - homeEventScore(a, preference);
+      return (
+        score ||
+        a.eventDate.getTime() - b.eventDate.getTime() ||
+        a.eventName.localeCompare(b.eventName, 'zh-CN')
+      );
+    });
+    const fill = (items: any[], count: number) => {
+      for (const event of automatic) {
+        if (items.length >= count) break;
+        if (!used.has(event.id)) {
+          used.add(event.id);
+          items.push(event);
+        }
+      }
+      return items.slice(0, count);
+    };
+    const focus = fill(manual('focus'), 2);
+    const editorsPick = fill(manual('editors_pick'), 6);
+    const signupSoonManual = manual('signup_soon');
+    // 即将开报允许与其他分组重复：赛事总量少时，报名中的赛事值得同时出现在「即将开报」。
+    const signupSoon = [...signupSoonManual, ...events]
+      .filter((event) =>
+        ['not_started', 'unknown', 'signup_open'].includes(event.signupStatus),
+      )
+      .filter((event, index, arr) => arr.findIndex((e) => e.id === event.id) === index)
+      .sort(
+        (a, b) =>
+          (a.signupStartAt?.getTime() || Infinity) - (b.signupStartAt?.getTime() || Infinity),
+      )
+      .slice(0, 6);
+    // 推荐区允许与其他分组重复（赛事总量少时，focus/editorsPick 已占满，推荐区需独立取数）。
+    const recommendedManual = manual('recommended');
+    const recommended = [...recommendedManual, ...automatic]
+      .filter((event, index, arr) => arr.findIndex((e) => e.id === event.id) === index)
+      .slice(0, 6);
+    const selectedEvents = [...focus, ...editorsPick, ...signupSoon, ...recommended];
+    const selectedMedia = await resolvePublicMediaBatch(selectedEvents);
+    const mediaByEventId = new Map(
+      selectedEvents.map((event, index) => [event.id, selectedMedia[index]]),
+    );
+    const present = (items: any[]) =>
+      items.map((event) => ({
+        ...event,
+        ...mediaByEventId.get(event.id),
+        sourceReviewPending: false,
+      }));
+    res.json({
+      month,
+      focusEvents: present(focus),
+      editorsPicks: present(editorsPick),
+      signupSoon: present(signupSoon),
+      recommended: present(recommended),
+      complianceNotice,
+      officialActionText,
+    });
+  }),
+);
+
 app.get(
   '/api/events',
   asyncHandler(async (req, res) => {
@@ -3430,6 +4718,12 @@ app.get(
     const { page, pageSize } = query;
     const where: Prisma.EventWhereInput = buildPublicEventWhere();
     if (query.city) where.city = query.city;
+    if (query.provinceCode) where.provinceCode = query.provinceCode;
+    if (query.cityCode) where.cityCode = query.cityCode;
+    if (query.month) {
+      const { start, end } = homeMonthRange(query.month);
+      where.eventDate = { gte: start, lt: end };
+    }
     if (query.distance) where.distanceItems = { has: query.distance };
     if (query.signupStatus) where.signupStatus = query.signupStatus;
     if (query.runJudgement) where.runJudgement = query.runJudgement;
@@ -3442,6 +4736,8 @@ app.get(
           id: true,
           eventName: true,
           city: true,
+          provinceCode: true,
+          cityCode: true,
           eventDate: true,
           eventStartAt: true,
           distanceItems: true,
@@ -3460,16 +4756,28 @@ app.get(
             orderBy: { publishedAt: 'desc' },
             take: 1,
           },
+          mediaAssets: {
+            where: { reviewStatus: 'approved_for_display' },
+            orderBy: [{ isPrimary: 'desc' }, { updatedAt: 'desc' }],
+            take: 3,
+          },
         },
-        orderBy: [{ eventDate: 'asc' }],
+        orderBy:
+          query.sort === 'latest'
+            ? [{ updatedAt: 'desc' }]
+            : query.sort === 'signup_deadline'
+              ? [{ signupDeadline: 'asc' }, { eventDate: 'asc' }]
+              : [{ eventDate: 'asc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       prisma.event.count({ where }),
     ]);
+    const resolvedMedia = await resolvePublicMediaBatch(items);
     res.json({
-      items: items.map(({ changeAlerts, sourceSummaries, ...event }) => ({
+      items: items.map(({ changeAlerts, sourceSummaries, mediaAssets, ...event }, index) => ({
         ...event,
+        ...resolvedMedia[index],
         sourceReviewPending: changeAlerts.length > 0,
         hasSourceSummary: sourceSummaries.length > 0,
         sourceSummaryStale: Boolean(sourceSummaries[0]?.staleAt),
@@ -3499,10 +4807,15 @@ app.get(
           take: 1,
         },
         shareOverride: true,
+        mediaAssets: {
+          where: { reviewStatus: 'approved_for_display' },
+          orderBy: [{ isPrimary: 'desc' }, { updatedAt: 'desc' }],
+          take: 3,
+        },
       },
     });
     if (!event) throw new HttpError(404, '赛事不存在或未发布');
-    const { changeAlerts, sourceSummaries, shareOverride, ...publicEvent } = event;
+    const { changeAlerts, sourceSummaries, shareOverride, mediaAssets, ...publicEvent } = event;
     const [choiceCounts, shareSettings, reminderOptions] = await Promise.all([
       getEventChoiceCounts(event.id),
       getPublicShareSettings(),
@@ -3520,9 +4833,11 @@ app.get(
       },
       shareOverride || {},
     );
+    const [resolvedMedia] = await resolvePublicMediaBatch([{ mediaAssets }]);
     res.json({
       event: {
         ...publicEvent,
+        ...resolvedMedia,
         sourceReviewPending: changeAlerts.length > 0,
         hasSourceSummary: sourceSummaries.length > 0,
         sourceSummaryStale: Boolean(sourceSummaries[0]?.staleAt),
@@ -3617,6 +4932,8 @@ app.post(
           update: {
             userKey: input.userKey,
             cities: input.cities,
+            provinceCodes: input.provinceCodes,
+            cityCodes: input.cityCodes,
             distances: input.distances,
             focusTags: input.focusTags,
           },
@@ -3624,7 +4941,13 @@ app.post(
       : await prisma.userPreference.upsert({
           where: { userKey: input.userKey },
           create: input,
-          update: { cities: input.cities, distances: input.distances, focusTags: input.focusTags },
+          update: {
+            cities: input.cities,
+            provinceCodes: input.provinceCodes,
+            cityCodes: input.cityCodes,
+            distances: input.distances,
+            focusTags: input.focusTags,
+          },
         });
     res.status(201).json(preference);
   }),

@@ -2,7 +2,9 @@ import {
   greaterBayAreaCities,
   isGreaterBayAreaCity,
   normalizeGreaterBayAreaCity,
+  supportedProvinceCodes,
 } from '@worth-running/shared';
+import { isNationwideDiscoveryEnabled } from '../dataPolicy.js';
 import { z } from 'zod';
 
 export const CHINAATH_PUBLIC_LIST_URL = 'https://www.runchina.org.cn/#/race/v/list';
@@ -47,6 +49,8 @@ const baseEventSourceSchema = z.object({
   searchQuery: z.string().trim().optional().nullable().default(null),
   allowedDomains: z.array(z.string().trim().min(1)).default([]),
   cityHints: z.array(z.string().trim().min(1)).default([]),
+  provinceCodes: z.array(z.string().regex(/^\d{6}$/)).default([]),
+  cityCodes: z.array(z.string().regex(/^\d{6}$/)).default([]),
   sourceLevel: z
     .enum(['official', 'trusted', 'community', 'secondary', 'unknown'])
     .default('unknown'),
@@ -68,7 +72,7 @@ export const eventSourceSchema = baseEventSourceSchema
       });
     }
     input.cityHints.forEach((city, index) => {
-      if (!isGreaterBayAreaCity(city)) {
+      if (!isNationwideDiscoveryEnabled() && !isGreaterBayAreaCity(city)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['cityHints', index],
@@ -76,7 +80,18 @@ export const eventSourceSchema = baseEventSourceSchema
         });
       }
     });
-    if (input.sourceType === 'chinaath_api') {
+    if (input.sourceType === 'chinaath_api' && isNationwideDiscoveryEnabled()) {
+      if (
+        input.provinceCodes.length !== 1 ||
+        !supportedProvinceCodes.includes(input.provinceCodes[0])
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['provinceCodes'],
+          message: '全国中国田协来源必须选择一个首期省份',
+        });
+      }
+    } else if (input.sourceType === 'chinaath_api') {
       const normalizedCities = input.cityHints.map(normalizeGreaterBayAreaCity).filter(Boolean);
       if (
         normalizedCities.length !== 1 ||
@@ -95,7 +110,12 @@ export const eventSourceSchema = baseEventSourceSchema
   .transform((input) => {
     const normalized = {
       ...input,
-      cityHints: input.cityHints.map((city) => normalizeGreaterBayAreaCity(city) as string),
+      cityHints:
+        isNationwideDiscoveryEnabled() && input.sourceType === 'chinaath_api'
+          ? []
+          : isNationwideDiscoveryEnabled()
+            ? input.cityHints
+            : input.cityHints.map((city) => normalizeGreaterBayAreaCity(city) as string),
     };
     if (normalized.sourceType === 'page_url') {
       return { ...normalized, pageSize: 1, maxPagesPerRun: 1 };

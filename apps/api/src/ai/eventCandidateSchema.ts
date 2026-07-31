@@ -41,6 +41,8 @@ export const aiCandidateEvidenceSchema = z.object({
 export const aiEventCandidateSchema = z.object({
   eventName: z.string().trim().min(1),
   city: z.string().trim().min(1),
+  provinceCode: z.string().regex(/^\d{6}$/).nullable().optional(),
+  cityCode: z.string().regex(/^\d{6}$/).nullable().optional(),
   eventDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)

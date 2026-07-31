@@ -4,25 +4,25 @@
 }
 
 .theme-shell {
-  --wr-bg: #f4f5f7;
+  --wr-bg: #fbfaf7;
   --wr-surface: #ffffff;
-  --wr-surface-soft: #eef0f3;
-  --wr-text: #0f1923;
-  --wr-muted: #6b7a8d;
-  --wr-border: rgba(15, 25, 35, 0.08);
-  --wr-primary: #ff5c1a;
-  --wr-primary-soft: #fff1eb;
+  --wr-surface-soft: #f5f2ed;
+  --wr-text: #171512;
+  --wr-muted: #6c6861;
+  --wr-border: rgba(23, 21, 18, 0.12);
+  --wr-primary: #f2541b;
+  --wr-primary-soft: #fff0e9;
   --wr-hero: #ffffff;
-  --wr-hero-text: #0f1923;
-  --wr-hero-muted: #6b7a8d;
+  --wr-hero-text: #171512;
+  --wr-hero-muted: #6c6861;
   --wr-shadow: 0 8rpx 24rpx rgba(15, 25, 35, 0.05);
-  --wr-card-border: rgba(15, 25, 35, 0.08);
+  --wr-card-border: rgba(23, 21, 18, 0.12);
   --wr-tag-positive-bg: #ecfdf5;
   --wr-tag-positive-border: #a7f3d0;
   --wr-tag-positive-text: #059669;
   --wr-tag-primary-bg: #fff7ed;
   --wr-tag-primary-border: #fed7aa;
-  --wr-tag-primary-text: #ea580c;
+  --wr-tag-primary-text: #c8400d;
   --wr-banner-accent-width: 100%;
   --wr-banner-accent-height: 12rpx;
   --wr-banner-accent-margin: 0;
@@ -109,6 +109,31 @@
   right: calc(var(--wr-nav-action-right) + 176rpx);
 }
 
+.home-nav-brand {
+  position: absolute;
+  top: var(--wr-capsule-top);
+  left: 32rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 72rpx;
+  line-height: 1;
+}
+
+.home-nav-brand-en {
+  color: var(--wr-primary);
+  font-size: 30rpx;
+  font-weight: 800;
+  letter-spacing: 1rpx;
+}
+
+.home-nav-brand-cn {
+  margin-top: 5rpx;
+  color: var(--wr-text);
+  font-size: 33rpx;
+  font-weight: 900;
+}
+
 .theme-toggle,
 .nav-back,
 .nav-search {
@@ -148,7 +173,38 @@
 }
 
 .nav-search {
-  right: var(--wr-search-action-right);
+  right: var(--wr-nav-action-right);
+}
+
+.nav-region {
+  position: absolute;
+  top: var(--wr-capsule-top);
+  /* 紧跟搜索按钮左侧：搜索按钮宽 72rpx + 8rpx 间距 */
+  right: calc(var(--wr-nav-action-right) + 80rpx);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  width: 124rpx;
+  min-width: 124rpx;
+  height: 72rpx;
+  min-height: 72rpx;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--wr-text);
+  padding: 0;
+  font-size: 29rpx;
+  font-weight: 700;
+}
+
+.nav-region::after {
+  border: 0;
+}
+
+.nav-region-chevron {
+  width: 24rpx;
+  height: 24rpx;
 }
 
 .nav-icon {

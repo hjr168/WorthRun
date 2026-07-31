@@ -129,7 +129,9 @@ export async function generateEventSourceSummary(
     contentHash,
     promptVersion: SOURCE_SUMMARY_PROMPT_VERSION,
   });
-  if (existing) return { existing } as const;
+  // 命中缓存：来源内容未变化。返回 reused 信号，由调用方更新 fetchedAt 并如实反馈，
+  // 不假装生成新草稿（受 (eventId, contentHash, promptVersion) 唯一约束限制也无法新建）。
+  if (existing) return { reused: existing } as const;
   const config = resolveAiIngestConfig();
   const result = await (deps.completeJson ?? completeAiJson)({
     system:

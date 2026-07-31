@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import type {
   AdminReminderItem,
+  GrowthFunnelResponse,
+  GrowthFunnelSource,
   GrowthStats,
   ReminderDeliveryRunItem,
   ReminderReadiness,
@@ -34,6 +36,12 @@ export function GrowthPage() {
   const [reminderSearchDraft, setReminderSearchDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // V0.6 访客漏斗（独立口径：匿名独立访客，支持 source/campaign 切换）
+  const [funnelDays, setFunnelDays] = useState<7 | 28>(28);
+  const [funnelSource, setFunnelSource] = useState<GrowthFunnelSource>('all');
+  const [funnelCampaign, setFunnelCampaign] = useState('');
+  const [visitorFunnel, setVisitorFunnel] = useState<GrowthFunnelResponse>();
+  const [funnelLoading, setFunnelLoading] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -68,6 +76,23 @@ export function GrowthPage() {
     }
   }, [days, reminderSearch, reminderStatus, reminderType]);
   useEffect(() => void load(), [load]);
+  // 访客漏斗：独立加载（参数与 growth-stats 不同）
+  const loadFunnel = useCallback(async () => {
+    setFunnelLoading(true);
+    try {
+      const params = new URLSearchParams({ days: String(funnelDays), source: funnelSource });
+      if (funnelCampaign.trim()) params.set('campaign', funnelCampaign.trim());
+      setVisitorFunnel(
+        await apiGet<GrowthFunnelResponse>(`/api/admin/growth-funnel?${params.toString()}`),
+      );
+    } catch {
+      // 漏斗加载失败不阻塞整页
+      setVisitorFunnel(undefined);
+    } finally {
+      setFunnelLoading(false);
+    }
+  }, [funnelDays, funnelSource, funnelCampaign]);
+  useEffect(() => void loadFunnel(), [loadFunnel]);
   const funnel = data?.funnel;
   return (
     <main className="page growth-page">
@@ -176,6 +201,85 @@ export function GrowthPage() {
           />
         </Card>
       </div>
+      <h2 className="section-title">访客漏斗（匿名独立访客）</h2>
+      <Space style={{ marginBottom: 12 }}>
+        <Segmented
+          value={funnelDays}
+          onChange={(v) => setFunnelDays(v as 7 | 28)}
+          options={[
+            { value: 7, label: '近 7 天' },
+            { value: 28, label: '近 28 天' },
+          ]}
+        />
+        <Segmented
+          value={funnelSource}
+          onChange={(v) => setFunnelSource(v as GrowthFunnelSource)}
+          options={[
+            { value: 'all', label: '全部' },
+            { value: 'campaign', label: 'Campaign' },
+            { value: 'share', label: '分享' },
+            { value: 'direct', label: '直接' },
+          ]}
+        />
+        <Input
+          placeholder="Campaign code（可选）"
+          value={funnelCampaign}
+          onChange={(e) => setFunnelCampaign(e.target.value)}
+          style={{ width: 180 }}
+          allowClear
+        />
+        <Button icon={<ReloadOutlined />} loading={funnelLoading} onClick={() => void loadFunnel()}>
+          刷新
+        </Button>
+      </Space>
+      {visitorFunnel ? (
+        <div className="stat-grid growth-summary">
+          <Card>
+            <Statistic
+              title="独立访客"
+              value={visitorFunnel.funnel.visitors.value}
+              suffix={` / ${visitorFunnel.funnel.visitors.base}`}
+            />
+          </Card>
+          <Card>
+            <Statistic
+              title="雷达浏览"
+              value={visitorFunnel.funnel.radarVisitors.value}
+              suffix={` / ${visitorFunnel.funnel.radarVisitors.base} (${visitorFunnel.funnel.radarVisitors.rate}%)`}
+            />
+          </Card>
+          <Card>
+            <Statistic
+              title="查看两场以上"
+              value={visitorFunnel.funnel.twoPlusEventVisitors.value}
+              suffix={` / ${visitorFunnel.funnel.twoPlusEventVisitors.base} (${visitorFunnel.funnel.twoPlusEventVisitors.rate}%)`}
+            />
+          </Card>
+          <Card>
+            <Statistic
+              title="设置偏好"
+              value={visitorFunnel.funnel.preferenceVisitors.value}
+              suffix={` / ${visitorFunnel.funnel.preferenceVisitors.base} (${visitorFunnel.funnel.preferenceVisitors.rate}%)`}
+            />
+          </Card>
+          <Card>
+            <Statistic
+              title="任一核心动作"
+              value={visitorFunnel.funnel.coreActionVisitors.value}
+              suffix={` / ${visitorFunnel.funnel.coreActionVisitors.base} (${visitorFunnel.funnel.coreActionVisitors.rate}%)`}
+            />
+          </Card>
+          <Card>
+            <Statistic
+              title="分享发起"
+              value={visitorFunnel.funnel.shareVisitors.value}
+              suffix={` / ${visitorFunnel.funnel.shareVisitors.base} (${visitorFunnel.funnel.shareVisitors.rate}%)`}
+            />
+          </Card>
+        </div>
+      ) : (
+        <p>{funnelLoading ? '加载中…' : '暂无访客漏斗数据'}</p>
+      )}
       <h2 className="section-title">分享归因</h2>
       <div className="stat-grid growth-summary">
         <Card>

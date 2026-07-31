@@ -1,7 +1,13 @@
 import { InfoStatus, PublishStatus, RunJudgement, SignupStatus } from '@worth-running/shared';
-import type { ShareSettings } from '@worth-running/shared';
+import type {
+  ShareSettings,
+  GrowthCampaignType,
+  GrowthCampaignStatus,
+} from '@worth-running/shared';
+import { growthCampaignTypeValues } from '@worth-running/shared';
 
-export type { ShareSettings };
+export type { ShareSettings, GrowthCampaignType, GrowthCampaignStatus };
+export { growthCampaignTypeValues };
 
 export interface EventShareOverride {
   id: string;
@@ -40,6 +46,8 @@ export interface AdminEvent {
   id: string;
   eventName: string;
   city: string;
+  provinceCode?: string | null;
+  cityCode?: string | null;
   eventDate: string;
   eventStartAt?: string | null;
   distanceItems: string[];
@@ -176,6 +184,7 @@ export interface EventChangeAlertQuery {
   severity?: EventChangeSeverity | '';
   changedField?: EventChangeField | '';
   search?: string;
+  eventId?: string;
 }
 
 export interface EventChangeAlertSummary {
@@ -343,6 +352,8 @@ export interface EventSourceItem {
   searchQuery?: string | null;
   allowedDomains: string[];
   cityHints: string[];
+  provinceCodes: string[];
+  cityCodes: string[];
   sourceLevel: 'official' | 'trusted' | 'community' | 'secondary' | 'unknown';
   status: 'active' | 'paused';
   scheduleEnabled: boolean;
@@ -411,7 +422,8 @@ export type CandidateReviewIssue =
   | 'missing_official_url'
   | 'missing_source_url'
   | 'duplicate_event'
-  | 'source_date_conflict';
+  | 'source_date_conflict'
+  | 'missing_region_code';
 
 export interface EventCandidateStats {
   pending: number;
@@ -425,6 +437,8 @@ export interface EventCandidateItem {
   status: 'new' | 'needs_review' | 'accepted' | 'rejected' | 'merged';
   eventName: string;
   city: string;
+  provinceCode?: string | null;
+  cityCode?: string | null;
   eventDate?: string | null;
   sourceUrl?: string | null;
   officialUrl?: string | null;
@@ -691,4 +705,65 @@ export interface ReminderDeliveryRunItem {
   skippedCount: number;
   errorCategory?: string | null;
   release?: string | null;
+}
+
+// ===== V0.6 增长渠道与访客漏斗 =====
+
+export interface GrowthCampaign {
+  id: string;
+  code: string;
+  name: string;
+  channelType: GrowthCampaignType;
+  partnerName?: string | null;
+  status: GrowthCampaignStatus;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GrowthCampaignStats {
+  visitors: number;
+  newUsers: number;
+  radarVisitors: number;
+  twoPlusVisitors: number;
+  prefVisitors: number;
+  favoriteVisitors: number;
+  choiceVisitors: number;
+  reminderVisitors: number;
+  officialVisitors: number;
+  coreActionVisitors: number;
+  shareVisitors: number;
+  visitorToCoreRate: number;
+}
+
+export interface GrowthCampaignStatsResponse {
+  campaign: { id: string; code: string; name: string; status: GrowthCampaignStatus };
+  days: number;
+  stats: GrowthCampaignStats;
+}
+
+export interface FunnelStep {
+  value: number;
+  base: number;
+  rate: number;
+}
+
+export type GrowthFunnelSource = 'all' | 'campaign' | 'share' | 'direct';
+
+export interface GrowthFunnelResponse {
+  days: number;
+  since: string;
+  until: string;
+  filter: { campaign: string | null; source: GrowthFunnelSource };
+  funnel: {
+    visitors: FunnelStep;
+    radarVisitors: FunnelStep;
+    twoPlusEventVisitors: FunnelStep;
+    preferenceVisitors: FunnelStep;
+    coreActionVisitors: FunnelStep;
+    shareVisitors: FunnelStep;
+  };
+  d7Note: string;
 }

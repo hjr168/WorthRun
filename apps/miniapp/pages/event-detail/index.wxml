@@ -8,6 +8,10 @@
   </block>
 
   <block wx:elif="{{event}}">
+    <view class="detail-media {{event.coverImageMode === 'aspectFit' ? 'is-contained' : ''}}">
+      <image class="detail-cover" src="{{event.coverImageUrl}}" mode="{{event.coverImageMode || 'aspectFill'}}" binderror="onCoverImageError" aria-label="{{event.eventName}}赛事图片" />
+      <text wx:if="{{event.coverAttribution}}" class="detail-attribution">图片：{{event.coverAttribution}}</text>
+    </view>
     <view class="title-card">
       <view class="event-name">{{event.eventName}}</view>
       <view class="core-info-grid">

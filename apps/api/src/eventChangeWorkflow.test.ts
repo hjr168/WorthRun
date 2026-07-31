@@ -12,6 +12,8 @@ const event = {
   id: 'event-1',
   eventName: '广州马拉松',
   city: '广州市',
+  provinceCode: '440000',
+  cityCode: '440100',
   eventDate: new Date('2026-12-20T00:00:00.000Z'),
   distanceItems: ['马拉松'],
   signupStatus: 'signup_open',
@@ -63,6 +65,14 @@ describe('event change alert queries', () => {
         { event: { eventName: { contains: '广州', mode: 'insensitive' } } },
         { source: { name: { contains: '广州', mode: 'insensitive' } } },
       ],
+    });
+  });
+
+  it('filters by eventId so the verification page can deep-link into a specific event', () => {
+    expect(buildEventChangeAlertWhere({ eventId: 'event-1' })).toEqual({ eventId: 'event-1' });
+    expect(buildEventChangeAlertWhere({ status: 'open', eventId: 'event-1' })).toEqual({
+      status: 'open',
+      eventId: 'event-1',
     });
   });
 
@@ -238,5 +248,78 @@ describe('event change resolution', () => {
     );
     expect(tx.adminOperationLog.create).toHaveBeenCalledOnce();
     expect(result.sourceReviewPending).toBe(false);
+  });
+
+  it('presists resolved province/city codes when applying fields to an event missing them', async () => {
+    // 赛事城市可识别但省市行政区代码为空（历史数据），应用来源变更时应顺带补齐代码。
+    const row = alert({
+      event: {
+        ...event,
+        provinceCode: null,
+        cityCode: null,
+      },
+    });
+    const updatedEvent = {
+      ...row.event,
+      eventDate: new Date('2026-12-27T00:00:00.000Z'),
+      provinceCode: '440000',
+      cityCode: '440100',
+      updatedAt: new Date('2026-07-16T08:00:00.000Z'),
+    };
+    const tx = {
+      eventChangeAlert: {
+        findUnique: vi.fn().mockResolvedValue(row),
+        update: vi.fn().mockResolvedValue({ ...row, status: 'applied' }),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        count: vi.fn().mockResolvedValue(0),
+      },
+      event: { update: vi.fn().mockResolvedValue(updatedEvent) },
+      eventReminder: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      adminOperationLog: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const store = { $transaction: (callback: (value: typeof tx) => unknown) => callback(tx) };
+
+    await resolveEventChangeAlert(
+      'alert-1',
+      {
+        action: 'apply_fields',
+        fields: ['eventDate'],
+        note: '确认官方公告的新日期',
+        expected: {
+          alertUpdatedAt: '2026-07-16T02:00:00.000Z',
+          eventUpdatedAt: '2026-07-16T01:00:00.000Z',
+        },
+        adminUserId: 'admin-1',
+      },
+      new Date('2026-07-16T08:00:00.000Z'),
+      store as never,
+    );
+
+    expect(tx.event.update).toHaveBeenCalledWith({
+      where: { id: 'event-1' },
+      data: expect.objectContaining({
+        eventDate: new Date('2026-12-27T00:00:00.000Z'),
+        provinceCode: '440000',
+        cityCode: '440100',
+      }),
+    });
+  });
+
+  it('does not flag region issues in nationwide mode when the event already has correct codes', async () => {
+    // 回归测试：全国模式下，赛事已填正确省市代码时，变更复核预览不应误报 region 问题。
+    // 此前 publishBoundaryError 在此流程未被传入 region，导致即便代码正确也可能因解析路径不同而误报。
+    process.env.NATIONWIDE_DISCOVERY_ENABLED = 'true';
+    const store = { eventChangeAlert: { findUnique: vi.fn().mockResolvedValue(alert()) } };
+    const result = await previewEventChangeResolution(
+      'alert-1',
+      { action: 'apply_fields', fields: ['officialUrl'], note: '确认官方入口已变更' },
+      new Date('2026-07-16T08:00:00.000Z'),
+      store as never,
+    );
+    expect(result.ready).toBe(true);
+    expect(result.issues).not.toContain(
+      expect.stringMatching(/行政区代码|不在首期全国公路跑目录|待审核/),
+    );
+    delete process.env.NATIONWIDE_DISCOVERY_ENABLED;
   });
 });

@@ -214,6 +214,7 @@ async function runChinaAthPages(
       pageNo: currentPage,
       pageSize,
       cityHints: source.cityHints,
+      provinceCode: source.provinceCodes?.[0],
     });
     processedPages += 1;
     endPage = batch.pageNo ?? currentPage;

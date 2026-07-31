@@ -6,11 +6,15 @@ export function hasUnreadRelease(latestId?: string | null, lastReadId?: string |
   return Boolean(latestId && latestId !== lastReadId);
 }
 
+// tabBar 顺序（见 app.json）：0 首页 / 1 赛事 / 2 雷达 / 3 我的。
+// 版本更新入口在“我的”页，所以未读红点应标记在“我的”（index 3），不是雷达。
+const MINE_TAB_INDEX = 3;
+
 function updateTabBadge(hasNew: boolean) {
   if (hasNew) {
-    wx.setTabBarBadge({ index: 2, text: '新', fail: () => {} });
+    wx.setTabBarBadge({ index: MINE_TAB_INDEX, text: '新', fail: () => {} });
   } else {
-    wx.removeTabBarBadge({ index: 2, fail: () => {} });
+    wx.removeTabBarBadge({ index: MINE_TAB_INDEX, fail: () => {} });
   }
 }
 

@@ -1,7 +1,7 @@
 page {
   min-height: 100%;
-  background: #f4f5f7;
-  color: #0f1923;
+  background: #fbfaf7;
+  color: #171512;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 28rpx;
   line-height: 1.5;
@@ -38,8 +38,8 @@ button::after {
   min-height: 100vh;
   padding: 0 40rpx calc(56rpx + constant(safe-area-inset-bottom));
   padding: 0 40rpx calc(56rpx + env(safe-area-inset-bottom));
-  background: var(--wr-bg, #f4f5f7);
-  color: var(--wr-text, #0f1923);
+  background: var(--wr-bg, #fbfaf7);
+  color: var(--wr-text, #171512);
   overflow-x: hidden;
 }
 
@@ -49,7 +49,7 @@ button::after {
 
 .section-title {
   margin-bottom: 14rpx;
-  color: var(--wr-text, #0f1923);
+  color: var(--wr-text, #171512);
   font-size: 30rpx;
   font-weight: 800;
   line-height: 1.35;
@@ -57,7 +57,7 @@ button::after {
 
 .card {
   border: 2rpx solid var(--wr-card-border, rgba(15, 25, 35, 0.08));
-  border-radius: 32rpx;
+  border-radius: 24rpx;
   background: var(--wr-surface, #ffffff);
   padding: 24rpx;
   box-shadow: 0 3rpx 8rpx rgba(15, 25, 35, 0.035);
@@ -74,7 +74,7 @@ button::after {
   min-height: 88rpx;
   padding: 18rpx 24rpx;
   border-radius: 24rpx;
-  background: var(--wr-primary, #ff5c1a);
+  background: var(--wr-primary, #f2541b);
   color: #ffffff;
   font-weight: 700;
   line-height: 1.25;
@@ -87,7 +87,7 @@ button::after {
   min-height: 88rpx;
   padding: 18rpx 24rpx;
   border: 2rpx solid var(--wr-card-border, rgba(15, 25, 35, 0.08));
-  border-radius: 24rpx;
+  border-radius: 18rpx;
   background: var(--wr-surface, #ffffff);
   color: var(--wr-text, #0f1923);
   font-weight: 600;
@@ -102,7 +102,7 @@ button::after {
   padding: 18rpx 24rpx;
   border-radius: 14rpx;
   background: transparent;
-  color: var(--wr-primary, #ff5c1a);
+  color: var(--wr-primary, #f2541b);
   font-weight: 600;
   line-height: 1.25;
 }

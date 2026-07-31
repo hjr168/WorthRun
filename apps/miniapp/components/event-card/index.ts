@@ -1,9 +1,10 @@
-import {
-  formatDate,
-  formatDistance,
-  labelOf,
-  runJudgementLabels,
-} from '../../utils/format';
+import { formatDate, formatDistance, labelOf, runJudgementLabels } from '../../utils/format';
+
+const DEFAULT_EVENT_COVER = '/assets/images/event-cover-default.png';
+
+function coverUrl(value?: string | null) {
+  return value && !value.endsWith('event-cover-default.jpg') ? value : DEFAULT_EVENT_COVER;
+}
 
 Component({
   properties: {
@@ -19,22 +20,27 @@ Component({
   observers: {
     event(value) {
       this.setData({
+        coverUrl: coverUrl(value?.coverThumbnailUrl || value?.coverImageUrl),
+        coverMode: value?.coverImageMode === 'aspectFit' ? 'aspectFit' : 'aspectFill',
         dateText: formatDate(value?.eventDate),
         distanceText: formatDistance(value?.distanceItems),
         judgementText: labelOf(runJudgementLabels, value?.runJudgement),
-        reasons: (value?.judgementReasons || []).slice(0, 2),
         tags: (value?.tags || []).slice(0, 3),
       });
     },
   },
   data: {
+    coverUrl: DEFAULT_EVENT_COVER,
+    coverMode: 'aspectFill',
     dateText: '',
     distanceText: '',
     judgementText: '',
-    reasons: [] as string[],
     tags: [] as string[],
   },
   methods: {
+    onImageError() {
+      this.setData({ coverUrl: DEFAULT_EVENT_COVER, coverMode: 'aspectFill' });
+    },
     onOpen() {
       this.triggerEvent('open', { id: this.data.event.id });
     },

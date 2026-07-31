@@ -10,6 +10,41 @@
 .detail-page .section {
   margin-top: 24rpx;
 }
+.detail-media {
+  position: relative;
+  width: 100%;
+  height: 360rpx;
+  margin-bottom: 18rpx;
+  overflow: hidden;
+  border-radius: 24rpx;
+  background: var(--wr-surface-soft, #f5f2ed);
+}
+
+.detail-media.is-contained {
+  box-shadow: inset 0 0 0 1rpx rgba(23, 21, 18, .06);
+}
+
+.detail-cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.detail-attribution {
+  position: absolute;
+  right: 14rpx;
+  bottom: 12rpx;
+  max-width: calc(100% - 28rpx);
+  overflow: hidden;
+  border-radius: 8rpx;
+  background: rgba(15, 25, 35, .74);
+  color: rgba(255, 255, 255, .94);
+  padding: 6rpx 10rpx;
+  font-size: 19rpx;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .detail-page .card,
 .choice-panel,
@@ -585,3 +620,56 @@
 .reminder-desc { margin-top: 5rpx; color: #64748b; font-size: 22rpx; }
 .reminder-button { flex: 0 0 120rpx; min-height: 64rpx; border: 2rpx solid #ff5c1a; background: #fff; color: #ff5c1a; padding: 8rpx 14rpx; font-size: 23rpx; font-weight: 700; }
 .reminder-button.is-on { border-color: #b8d9d3; background: #eef8f6; color: #2a7f75; }
+
+/* V0.7 warm editorial surface: keep detail semantics, align its legacy states with the shared tokens. */
+.detail-page .event-notice,
+.detail-page .choice-panel,
+.detail-page .ai-card,
+.detail-page .info-card,
+.detail-page .title-card {
+  border-color: var(--wr-border, rgba(23, 21, 18, 0.12));
+}
+.detail-page .detail-entry-hover,
+.detail-page .ai-card-toggle-hover,
+.detail-page .feedback-link-hover {
+  background: var(--wr-primary-soft, #fff0e9);
+}
+.detail-page .choice-updating,
+.detail-page .ai-card-action,
+.detail-page .source-summary-action,
+.detail-page .reminder-button {
+  color: var(--wr-primary, #f2541b);
+}
+.detail-page .choice-empty,
+.detail-page .reminder-button.is-on {
+  background: var(--wr-primary-soft, #fff0e9);
+  color: var(--wr-primary, #f2541b);
+}
+.detail-page .choice-count,
+.detail-page .choice-option + .choice-option .choice-count,
+.detail-page .choice-option + .choice-option + .choice-option .choice-count {
+  color: var(--wr-primary, #f2541b);
+}
+.detail-page .ai-card-subtitle,
+.detail-page .verification-empty,
+.detail-page .ai-disclaimer,
+.detail-page .reminder-subtitle,
+.detail-page .reminder-desc {
+  color: var(--wr-muted, #6c6861);
+}
+.detail-page .verification-tag.confirmed {
+  background: var(--wr-primary-soft, #fff0e9);
+  color: var(--wr-primary, #f2541b);
+}
+.detail-page .verification-tag.pending {
+  background: var(--wr-surface-soft, #f5f2ed);
+  color: var(--wr-muted, #6c6861);
+}
+.detail-page .reminder-option {
+  border-color: var(--wr-border, rgba(23, 21, 18, 0.12));
+  background: var(--wr-surface, #fff);
+}
+.detail-page .reminder-name,
+.detail-page .verification-title {
+  color: var(--wr-text, #171512);
+}

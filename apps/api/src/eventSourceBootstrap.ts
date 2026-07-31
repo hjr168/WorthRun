@@ -1,5 +1,6 @@
 import { Prisma, prisma } from '@worth-running/database';
-import { greaterBayAreaCities } from '@worth-running/shared';
+import { greaterBayAreaCities, supportedProvinceCodes } from '@worth-running/shared';
+import { isNationwideDiscoveryEnabled } from './dataPolicy.js';
 import {
   CHINAATH_ALLOWED_DOMAINS,
   CHINAATH_MAINLAND_CITIES,
@@ -17,6 +18,7 @@ interface SourceDefinition {
   entryUrl: string;
   allowedDomains: string[];
   cityHints: string[];
+  provinceCodes?: string[];
   sourceLevel: 'official' | 'community';
   scheduleIntervalHours: number;
   pageSize: number;
@@ -24,19 +26,50 @@ interface SourceDefinition {
   notes: string;
 }
 
+export function nationwideChinaAthSourceDefinitions(): SourceDefinition[] {
+  const provinceNames: Record<string, string> = {
+    '110000': '北京',
+    '310000': '上海',
+    '320000': '江苏',
+    '330000': '浙江',
+    '440000': '广东',
+    '510000': '四川',
+    '500000': '重庆',
+    '420000': '湖北',
+    '350000': '福建',
+  };
+  return supportedProvinceCodes
+    .filter((code) => provinceNames[code])
+    .map((provinceCode, index) => ({
+      name: `中国田协官方赛事目录·${provinceNames[provinceCode]}`,
+      sourceType: 'chinaath_api' as const,
+      entryUrl: CHINAATH_PUBLIC_LIST_URL,
+      allowedDomains: [...CHINAATH_ALLOWED_DOMAINS],
+      cityHints: [],
+      provinceCodes: [provinceCode],
+      sourceLevel: 'official' as const,
+      scheduleIntervalHours: 72,
+      pageSize: 20,
+      maxPagesPerRun: 2,
+      notes: `按${provinceNames[provinceCode]}省级行政区分页抓取；与其他省份错峰 ${index * 15} 分钟，候选仍需人工审核。`,
+    }));
+}
+
 export function v042EventSourceDefinitions(): SourceDefinition[] {
-  const chinaAthSources = CHINAATH_MAINLAND_CITIES.map((city) => ({
-    name: `中国田协官方赛事目录·${city}`,
-    sourceType: 'chinaath_api' as const,
-    entryUrl: CHINAATH_PUBLIC_LIST_URL,
-    allowedDomains: [...CHINAATH_ALLOWED_DOMAINS],
-    cityHints: [city],
-    sourceLevel: 'official' as const,
-    scheduleIntervalHours: 24,
-    pageSize: 20,
-    maxPagesPerRun: 2,
-    notes: `固定按${city}行政区划编码查询，每次最多2页。`,
-  }));
+  const chinaAthSources = isNationwideDiscoveryEnabled()
+    ? nationwideChinaAthSourceDefinitions()
+    : CHINAATH_MAINLAND_CITIES.map((city) => ({
+        name: `中国田协官方赛事目录·${city}`,
+        sourceType: 'chinaath_api' as const,
+        entryUrl: CHINAATH_PUBLIC_LIST_URL,
+        allowedDomains: [...CHINAATH_ALLOWED_DOMAINS],
+        cityHints: [city],
+        sourceLevel: 'official' as const,
+        scheduleIntervalHours: 24,
+        pageSize: 20,
+        maxPagesPerRun: 2,
+        notes: `固定按${city}行政区划编码查询，每次最多2页。`,
+      }));
   return [
     ...chinaAthSources,
     {
@@ -132,10 +165,12 @@ export async function bootstrapV042EventSources(options: { dryRun: boolean; now?
     }
     await tx.adminOperationLog.create({
       data: {
-        action: 'event_source.bootstrap_v0_4_2',
+        action: isNationwideDiscoveryEnabled()
+          ? 'event_source.bootstrap_nationwide'
+          : 'event_source.bootstrap_v0_4_2',
         targetType: 'event_sources',
         afterValue: preview as unknown as Prisma.InputJsonValue,
-        note: `初始化 V0.4.2 赛事源：目标 ${definitions.length}，暂停旧来源 ${obsolete.length}`,
+        note: `${isNationwideDiscoveryEnabled() ? '初始化全国赛事源' : '初始化 V0.4.2 赛事源'}：目标 ${definitions.length}，暂停旧来源 ${obsolete.length}`,
       },
     });
   });

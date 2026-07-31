@@ -20,6 +20,7 @@ const issueLabels: Record<CandidateReviewIssue, string> = {
   missing_source_url: '缺少来源链接',
   duplicate_event: '疑似重复赛事',
   source_date_conflict: '来源年份与日期冲突',
+  missing_region_code: '缺少六位省市行政区代码',
 };
 
 export function candidateIssueLabel(issue: CandidateReviewIssue) {

@@ -3,7 +3,9 @@ import {
   isFutureChinaDate,
   isGreaterBayAreaCity,
   normalizeGreaterBayAreaCity,
+  resolveSupportedRegion,
 } from '@worth-running/shared';
+import { isNationwideDiscoveryEnabled } from './dataPolicy.js';
 import { aiEventCandidateSchema, type AiEventCandidate } from './ai/eventCandidateSchema.js';
 import { classifyCandidate } from './ai/eventSourceOperations.js';
 import { hasOfficialEvidence } from './sourceAuthority.js';
@@ -47,7 +49,20 @@ export function candidateAcceptIssues(item: CandidateWorkflowItem, now = new Dat
   }
   if (!data.eventDate) issues.push('missing_event_date');
   else if (!isFutureChinaDate(data.eventDate, now)) issues.push('expired_event_date');
-  if (!isGreaterBayAreaCity(data.city)) issues.push('outside_greater_bay_area');
+  if (isNationwideDiscoveryEnabled()) {
+    const regionByCity = resolveSupportedRegion(data.city);
+    if (
+      !regionByCity ||
+      !data.provinceCode ||
+      !data.cityCode ||
+      data.provinceCode !== regionByCity.provinceCode ||
+      data.cityCode !== regionByCity.cityCode
+    ) {
+      issues.push('missing_region_code');
+    }
+  } else if (!isGreaterBayAreaCity(data.city)) {
+    issues.push('outside_greater_bay_area');
+  }
   if (!data.distanceItems.length) issues.push('missing_distance_items');
   if (!data.officialUrl) issues.push('missing_official_url');
   if (!data.sourceUrl) issues.push('missing_source_url');
@@ -59,6 +74,7 @@ export function candidateAcceptIssues(item: CandidateWorkflowItem, now = new Dat
   }
   if (item.reviewIssues.includes('duplicate_event')) issues.push('duplicate_event');
   if (item.reviewIssues.includes('source_date_conflict')) issues.push('source_date_conflict');
+  if (item.reviewIssues.includes('missing_region_code')) issues.push('missing_region_code');
   return [...new Set(issues)];
 }
 
@@ -69,7 +85,10 @@ export function buildCandidateDuplicateGroups(items: CandidateWorkflowItem[]) {
   );
   const buckets = new Map<string, CandidateWorkflowItem[]>();
   for (const item of pending) {
-    const city = normalizeGreaterBayAreaCity(item.city);
+    const city =
+      resolveSupportedRegion(item.city)?.cityCode ||
+      normalizeGreaterBayAreaCity(item.city) ||
+      item.city.replace(/\s|市$/g, '');
     if (!city || !item.eventDate) continue;
     const key = `${city}|${item.eventDate.toISOString().slice(0, 10)}`;
     buckets.set(key, [...(buckets.get(key) || []), item]);
@@ -250,7 +269,12 @@ export async function mergeEventCandidates(input: {
 
 function sameCityAndDate(a: CandidateWorkflowItem, b: CandidateWorkflowItem) {
   return (
-    normalizeGreaterBayAreaCity(a.city) === normalizeGreaterBayAreaCity(b.city) &&
+    (resolveSupportedRegion(a.city)?.cityCode ||
+      normalizeGreaterBayAreaCity(a.city) ||
+      a.city.replace(/\s|市$/g, '')) ===
+      (resolveSupportedRegion(b.city)?.cityCode ||
+        normalizeGreaterBayAreaCity(b.city) ||
+        b.city.replace(/\s|市$/g, '')) &&
     a.eventDate?.toISOString().slice(0, 10) === b.eventDate?.toISOString().slice(0, 10)
   );
 }

@@ -48,6 +48,7 @@ export function buildEventChangeQuery(query: EventChangeAlertQuery) {
   if (query.status) params.set('status', query.status);
   if (query.severity) params.set('severity', query.severity);
   if (query.changedField) params.set('changedField', query.changedField);
+  if (query.eventId) params.set('eventId', query.eventId);
   if (query.search?.trim()) params.set('search', query.search.trim());
   return params.toString();
 }

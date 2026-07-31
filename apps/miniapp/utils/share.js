@@ -40,6 +40,10 @@ exports.defaultShareSettings = {
             titleTemplate: '哪场值得跑更新了｜{latestVersion}',
             imageUrl: '/assets/share/share-release.jpg',
         },
+        radar: {
+            titleTemplate: '未来 90 天大湾区赛事雷达｜哪场值得跑',
+            imageUrl: '/assets/share/share-brand.jpg',
+        },
     },
 };
 let memorySettings = null;
